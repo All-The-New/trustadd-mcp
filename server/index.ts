@@ -60,16 +60,8 @@ const adminLimiter = rateLimit({
 app.use("/api/admin", adminLimiter);
 app.use("/api", apiLimiter);
 
-export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-  console.log(`${formattedTime} [${source}] ${message}`);
-}
+import { log } from "./lib/log";
+export { log };
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -160,7 +152,7 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
       log(`Auto-sync check failed: ${(err as Error).message}`, "sync");
     }
   }
-  await registerRoutes(httpServer, app);
+  await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { createServer, type Server } from "http";
+import { type Server } from "http";
 import { storage } from "./storage";
 import { runSync } from "../scripts/sync-prod-to-dev";
 import { getAllChains, getEnabledChains, getChain } from "@shared/chains";
@@ -16,9 +16,9 @@ function parseChainId(raw: unknown): number | undefined {
 }
 
 export async function registerRoutes(
-  httpServer: Server,
-  app: Express
-): Promise<Server> {
+  app: Express,
+  httpServer?: Server,
+): Promise<void> {
   app.get("/sitemap-agents.xml", async (_req, res) => {
     try {
       const agentEntries = await storage.getAgentIdsForSitemap();
@@ -906,5 +906,4 @@ export async function registerRoutes(
     }
   });
 
-  return httpServer;
 }

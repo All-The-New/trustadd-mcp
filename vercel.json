@@ -1,0 +1,16 @@
+{
+  "buildCommand": "npm run build:client",
+  "outputDirectory": "dist/public",
+  "installCommand": "npm install",
+  "framework": null,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/sitemap-agents.xml", "destination": "/api/sitemap-agents.xml" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 30
+    }
+  }
+}

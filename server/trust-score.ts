@@ -2,7 +2,7 @@ import { type Agent, type CommunityFeedbackSummary, agents } from "@shared/schem
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq, isNull, sql } from "drizzle-orm";
-import { log } from "./index";
+import { log } from "./lib/log";
 
 function looksLikeImageUrl(url: string): boolean {
   if (!url || url.length < 5) return false;
