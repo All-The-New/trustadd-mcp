@@ -1,8 +1,8 @@
-import { type Agent, type CommunityFeedbackSummary, agents } from "../shared/schema";
-import { storage } from "./storage";
-import { db } from "./db";
+import { type Agent, type CommunityFeedbackSummary, agents } from "../shared/schema.js";
+import { storage } from "./storage.js";
+import { db } from "./db.js";
 import { eq, isNull, sql } from "drizzle-orm";
-import { log } from "./lib/log";
+import { log } from "./lib/log.js";
 
 function looksLikeImageUrl(url: string): boolean {
   if (!url || url.length < 5) return false;

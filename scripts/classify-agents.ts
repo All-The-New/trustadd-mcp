@@ -1,5 +1,5 @@
 import pg from "pg";
-import { classifyAgent, computeFingerprint } from "../server/quality-classifier";
+import { classifyAgent, computeFingerprint } from "../server/quality-classifier.js";
 
 const connString = process.env.PROD_DATABASE_URL;
 if (!connString) {

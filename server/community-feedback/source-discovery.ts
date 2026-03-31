@@ -1,4 +1,4 @@
-import { storage } from "../storage";
+import { storage } from "../storage.js";
 
 function log(message: string) {
   const time = new Date().toLocaleTimeString("en-US", {

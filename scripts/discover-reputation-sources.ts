@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
-import { CHAIN_CONFIGS, getRpcUrls } from "../shared/chains";
-import { db } from "../server/db";
-import { agents } from "../shared/schema";
+import { CHAIN_CONFIGS, getRpcUrls } from "../shared/chains.js";
+import { db } from "../server/db.js";
+import { agents } from "../shared/schema.js";
 import { sql, desc, eq } from "drizzle-orm";
 
 const REPUTATION_REGISTRY = "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63";

@@ -1,7 +1,7 @@
-import { storage } from "../storage";
-import type { FeedbackSourceAdapter, ScraperConfig } from "./types";
-import { DEFAULT_SCRAPER_CONFIG } from "./types";
-import { recalculateScore } from "../trust-score";
+import { storage } from "../storage.js";
+import type { FeedbackSourceAdapter, ScraperConfig } from "./types.js";
+import { DEFAULT_SCRAPER_CONFIG } from "./types.js";
+import { recalculateScore } from "../trust-score.js";
 
 function log(message: string) {
   const time = new Date().toLocaleTimeString("en-US", {

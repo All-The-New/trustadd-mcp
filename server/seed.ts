@@ -1,5 +1,5 @@
-import { storage } from "./storage";
-import { log } from "./lib/log";
+import { storage } from "./storage.js";
+import { log } from "./lib/log.js";
 
 const SEED_AGENTS = [
   {

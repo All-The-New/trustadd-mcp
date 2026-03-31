@@ -1,10 +1,10 @@
-import { storage } from "./storage";
-import type { InsertX402Probe } from "../shared/schema";
+import { storage } from "./storage.js";
+import type { InsertX402Probe } from "../shared/schema.js";
 import {
   runWithConcurrency,
   sleep,
   createLogger,
-} from "./lib/indexer-utils";
+} from "./lib/indexer-utils.js";
 
 const log = createLogger("x402-prober");
 

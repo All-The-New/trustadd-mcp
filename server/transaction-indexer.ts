@@ -1,12 +1,12 @@
-import { storage } from "./storage";
-import type { InsertAgentTransaction } from "../shared/schema";
+import { storage } from "./storage.js";
+import type { InsertAgentTransaction } from "../shared/schema.js";
 import {
   retryWithBackoff,
   runWithConcurrency,
   sleep,
   createLogger,
   isTransientError,
-} from "./lib/indexer-utils";
+} from "./lib/indexer-utils.js";
 
 const log = createLogger("tx-indexer");
 

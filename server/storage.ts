@@ -29,8 +29,8 @@ import {
   transactionSyncState,
   type AgentTransaction,
   type InsertAgentTransaction,
-} from "../shared/schema";
-import { db } from "./db";
+} from "../shared/schema.js";
+import { db } from "./db.js";
 import { eq, desc, sql, ilike, or, and, isNotNull, count, gt, lt, isNull, lte, asc, inArray } from "drizzle-orm";
 
 export interface AgentQueryOptions {

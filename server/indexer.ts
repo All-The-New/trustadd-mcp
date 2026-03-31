@@ -1,9 +1,9 @@
 import { ethers } from "ethers";
-import { storage } from "./storage";
-import { log } from "./lib/log";
-import { type ChainConfig, getEnabledChains, getRpcUrls } from "../shared/chains";
-import { recalculateScore } from "./trust-score";
-import { classifyAgent } from "./quality-classifier";
+import { storage } from "./storage.js";
+import { log } from "./lib/log.js";
+import { type ChainConfig, getEnabledChains, getRpcUrls } from "../shared/chains.js";
+import { recalculateScore } from "./trust-score.js";
+import { classifyAgent } from "./quality-classifier.js";
 
 const POLL_INTERVAL_MS = 60_000;         // 1 min between cycles
 const POLL_JITTER_MS = 10_000;           // ±10s jitter

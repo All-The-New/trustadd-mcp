@@ -1,5 +1,5 @@
-import type { CommunityFeedbackSource } from "../../../shared/schema";
-import type { FeedbackSourceAdapter, ScrapeResult } from "../types";
+import type { CommunityFeedbackSource } from "../../../shared/schema.js";
+import type { FeedbackSourceAdapter, ScrapeResult } from "../types.js";
 
 function log(message: string) {
   const time = new Date().toLocaleTimeString("en-US", {

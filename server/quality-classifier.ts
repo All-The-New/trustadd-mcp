@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { Agent } from "../shared/schema";
+import type { Agent } from "../shared/schema.js";
 
 export type QualityTier = "high" | "medium" | "low" | "spam" | "archived" | "unclassified";
 export type LifecycleStatus = "active" | "dormant" | "archived";

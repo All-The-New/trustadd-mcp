@@ -1,13 +1,13 @@
 import type { Express } from "express";
 import { type Server } from "http";
-import { storage } from "./storage";
-import { runSync } from "../scripts/sync-prod-to-dev";
-import { getAllChains, getEnabledChains, getChain } from "../shared/chains";
-import { evaluateAlerts } from "./alerts";
-import { getCommunityFeedbackScheduler, discoverAllSources } from "./community-feedback";
-import { recalculateScore } from "./trust-score";
-import { probeAllAgents } from "./x402-prober";
-import { syncAllAgentTransactions } from "./transaction-indexer";
+import { storage } from "./storage.js";
+import { runSync } from "../scripts/sync-prod-to-dev.js";
+import { getAllChains, getEnabledChains, getChain } from "../shared/chains.js";
+import { evaluateAlerts } from "./alerts.js";
+import { getCommunityFeedbackScheduler, discoverAllSources } from "./community-feedback/index.js";
+import { recalculateScore } from "./trust-score.js";
+import { probeAllAgents } from "./x402-prober.js";
+import { syncAllAgentTransactions } from "./transaction-indexer.js";
 
 function parseChainId(raw: unknown): number | undefined {
   if (raw === undefined || raw === null || raw === "") return undefined;

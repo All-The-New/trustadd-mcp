@@ -9,17 +9,17 @@ process.on("unhandledRejection", (reason) => {
 
 import express, { type Request, Response, NextFunction } from "express";
 import rateLimit from "express-rate-limit";
-import { registerRoutes } from "./routes";
-import { serveStatic } from "./static";
+import { registerRoutes } from "./routes.js";
+import { serveStatic } from "./static.js";
 import { createServer } from "http";
-import { startIndexer, stopIndexer } from "./indexer";
-import { runSync } from "../scripts/sync-prod-to-dev";
-import { storage } from "./storage";
-import { initCommunityFeedback } from "./community-feedback";
-import { ensureScoresCalculated } from "./trust-score";
-import { ensureSlugsGenerated } from "./slugs";
-import { initProber, stopProber } from "./x402-prober";
-import { initTransactionIndexer, stopTransactionIndexer } from "./transaction-indexer";
+import { startIndexer, stopIndexer } from "./indexer.js";
+import { runSync } from "../scripts/sync-prod-to-dev.js";
+import { storage } from "./storage.js";
+import { initCommunityFeedback } from "./community-feedback/index.js";
+import { ensureScoresCalculated } from "./trust-score.js";
+import { ensureSlugsGenerated } from "./slugs.js";
+import { initProber, stopProber } from "./x402-prober.js";
+import { initTransactionIndexer, stopTransactionIndexer } from "./transaction-indexer.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -60,7 +60,7 @@ const adminLimiter = rateLimit({
 app.use("/api/admin", adminLimiter);
 app.use("/api", apiLimiter);
 
-import { log } from "./lib/log";
+import { log } from "./lib/log.js";
 export { log };
 
 app.use((req, res, next) => {

@@ -1,8 +1,8 @@
-import { CommunityFeedbackScheduler } from "./scheduler";
-import { GitHubAdapter } from "./adapters/github";
-import { FarcasterAdapter } from "./adapters/farcaster";
-import { discoverAllSources } from "./source-discovery";
-import { storage } from "../storage";
+import { CommunityFeedbackScheduler } from "./scheduler.js";
+import { GitHubAdapter } from "./adapters/github.js";
+import { FarcasterAdapter } from "./adapters/farcaster.js";
+import { discoverAllSources } from "./source-discovery.js";
+import { storage } from "../storage.js";
 
 const RETRY_DELAY_MS = 5 * 60 * 1000;
 
@@ -80,4 +80,4 @@ export function getCommunityFeedbackScheduler(): CommunityFeedbackScheduler | nu
   return scheduler;
 }
 
-export { discoverAllSources } from "./source-discovery";
+export { discoverAllSources } from "./source-discovery.js";
