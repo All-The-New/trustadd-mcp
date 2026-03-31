@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { agents } from "@shared/schema";
+import { agents } from "../shared/schema";
 import { isNull, eq } from "drizzle-orm";
 
 export function generateSlug(name: string | null, erc8004Id: string, chainId: number): string {

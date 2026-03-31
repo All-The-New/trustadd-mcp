@@ -29,7 +29,7 @@ import {
   transactionSyncState,
   type AgentTransaction,
   type InsertAgentTransaction,
-} from "@shared/schema";
+} from "../shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, ilike, or, and, isNotNull, count, gt, lt, isNull, lte, asc, inArray } from "drizzle-orm";
 

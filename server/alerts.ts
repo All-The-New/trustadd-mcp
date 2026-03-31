@@ -1,5 +1,5 @@
 import { storage } from "./storage";
-import { getEnabledChains } from "@shared/chains";
+import { getEnabledChains } from "../shared/chains";
 
 export interface Alert {
   id: string;

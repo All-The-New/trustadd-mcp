@@ -1,4 +1,4 @@
-import type { CommunityFeedbackSource } from "@shared/schema";
+import type { CommunityFeedbackSource } from "../../../shared/schema";
 import type { FeedbackSourceAdapter, ScrapeResult } from "../types";
 
 function log(message: string) {

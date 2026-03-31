@@ -1,5 +1,5 @@
 import { storage } from "./storage";
-import type { InsertX402Probe } from "@shared/schema";
+import type { InsertX402Probe } from "../shared/schema";
 import {
   runWithConcurrency,
   sleep,

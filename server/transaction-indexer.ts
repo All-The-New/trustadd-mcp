@@ -1,5 +1,5 @@
 import { storage } from "./storage";
-import type { InsertAgentTransaction } from "@shared/schema";
+import type { InsertAgentTransaction } from "../shared/schema";
 import {
   retryWithBackoff,
   runWithConcurrency,

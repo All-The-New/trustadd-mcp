@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 import { storage } from "./storage";
 import { log } from "./lib/log";
-import { type ChainConfig, getEnabledChains, getRpcUrls } from "@shared/chains";
+import { type ChainConfig, getEnabledChains, getRpcUrls } from "../shared/chains";
 import { recalculateScore } from "./trust-score";
 import { classifyAgent } from "./quality-classifier";
 

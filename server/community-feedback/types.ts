@@ -1,4 +1,4 @@
-import type { CommunityFeedbackSource, InsertCommunityFeedbackItem, InsertCommunityFeedbackSummary } from "@shared/schema";
+import type { CommunityFeedbackSource, InsertCommunityFeedbackItem, InsertCommunityFeedbackSummary } from "../../shared/schema";
 
 export interface ScrapeResult {
   items: Omit<InsertCommunityFeedbackItem, "agentId" | "sourceId">[];

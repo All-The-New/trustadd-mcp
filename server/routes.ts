@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { type Server } from "http";
 import { storage } from "./storage";
 import { runSync } from "../scripts/sync-prod-to-dev";
-import { getAllChains, getEnabledChains, getChain } from "@shared/chains";
+import { getAllChains, getEnabledChains, getChain } from "../shared/chains";
 import { evaluateAlerts } from "./alerts";
 import { getCommunityFeedbackScheduler, discoverAllSources } from "./community-feedback";
 import { recalculateScore } from "./trust-score";

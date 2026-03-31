@@ -1,4 +1,4 @@
-import { type Agent, type CommunityFeedbackSummary, agents } from "@shared/schema";
+import { type Agent, type CommunityFeedbackSummary, agents } from "../shared/schema";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq, isNull, sql } from "drizzle-orm";
