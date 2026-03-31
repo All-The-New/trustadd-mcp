@@ -1,6 +1,12 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { app, initPromise } from "../server/app";
 
-// Ensure routes are registered before handling any request
-await initPromise;
+let initialized = false;
 
-export default app;
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (!initialized) {
+    await initPromise;
+    initialized = true;
+  }
+  return app(req, res);
+}
