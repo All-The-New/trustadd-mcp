@@ -3,8 +3,7 @@
   "outputDirectory": "dist/public",
   "installCommand": "npm install",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/sitemap-agents.xml", "destination": "/api/sitemap-agents.xml" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/:path((?!api/).*)", "destination": "/index.html" }
   ]
 }
