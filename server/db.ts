@@ -27,7 +27,7 @@ let _pool: pg.Pool | null = null;
 export function getDbPool(): pg.Pool {
   if (!_pool) {
     _pool = getPool();
-    _pool.on("error", (err) => {
+    _pool.on("error", (err: Error) => {
       console.error(`[db] Pool client error (handled): ${err.message}`);
     });
   }

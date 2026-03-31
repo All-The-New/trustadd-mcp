@@ -856,7 +856,7 @@ export class DatabaseStorage implements IStorage {
     overall: Array<{ scheme: string; count: number }>;
     byChain: Array<{ chainId: number; scheme: string; count: number }>;
   }> {
-    const schemeCase = sql`case
+    const schemeCase = sql<string>`case
       when ${agents.metadataUri} like 'data:%' then 'data:'
       when ${agents.metadataUri} like 'https://%' then 'https://'
       when ${agents.metadataUri} like 'ipfs://%' then 'ipfs://'
@@ -883,7 +883,7 @@ export class DatabaseStorage implements IStorage {
     overall: Array<{ category: string; count: number }>;
     byChain: Array<{ chainId: number; category: string; count: number }>;
   }> {
-    const categoryCase = sql`case
+    const categoryCase = sql<string>`case
       when lower(${agents.description}) like '%trading%' or lower(${agents.description}) like '%trade%' or lower(${agents.description}) like '%swap%' then 'Trading/DeFi'
       when lower(${agents.description}) like '%data%' or lower(${agents.description}) like '%analytics%' then 'Data/Analytics'
       when lower(${agents.description}) like '%chat%' or lower(${agents.description}) like '%assistant%' or lower(${agents.description}) like '%conversation%' then 'Chatbot/Assistant'

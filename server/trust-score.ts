@@ -132,7 +132,7 @@ export async function recalculateScore(agentId: string): Promise<TrustScoreBreak
 
   let feedback: CommunityFeedbackSummary | null = null;
   try {
-    feedback = await storage.getCommunityFeedbackSummary(agentId);
+    feedback = (await storage.getCommunityFeedbackSummary(agentId)) ?? null;
   } catch {}
 
   const breakdown = calculateTrustScore(agent, feedback, eventCount, crossChainCount);
