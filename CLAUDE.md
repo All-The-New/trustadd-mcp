@@ -37,7 +37,7 @@ DATABASE_URL=postgresql://...    # PostgreSQL connection string
 PORT=5000                        # Server port
 ```
 
-See `bootstrap.md` for the full list of 13 environment variables including API keys and feature flags.
+See `bootstrap.md` for the full list of 12 environment variables including API keys and feature flags.
 
 ## Build & Deploy
 

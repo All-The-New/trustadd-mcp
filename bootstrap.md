@@ -447,6 +447,8 @@ These are Replit-specific and should be adapted for the new host:
 
 5. **Post-merge script** — `scripts/post-merge.sh` is Replit-specific for automated CI. Replace with your CI/CD pipeline's equivalent.
 
+6. **Replit-only npm packages** — `@replit/connectors-sdk`, `@replit/vite-plugin-cartographer`, `@replit/vite-plugin-dev-banner`, and `@replit/vite-plugin-runtime-error-modal` are Replit-specific dev/integration packages. They are not needed at runtime on a non-Replit host. Remove them from `package.json` when setting up the new environment.
+
 ---
 
 ## User Preferences
