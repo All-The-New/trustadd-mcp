@@ -1,0 +1,27 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+
+# Replit internals
+.replit
+.config/
+.upm/
+.cache/
+.local/
+.agents/
+replit.md
+generated-icon.png
+attached_assets/
+
+# Environment
+.env
+.env.*
+
+# Build
+*.tsbuildinfo
+
+# OS
+Thumbs.db
