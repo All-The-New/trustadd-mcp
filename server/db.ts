@@ -19,6 +19,7 @@ function getPool() {
     allowExitOnIdle: false,
     keepAlive: true,
     keepAliveInitialDelayMillis: 10000,
+    ssl: { rejectUnauthorized: false },
   });
 }
 
