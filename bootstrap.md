@@ -155,7 +155,7 @@ Use `drizzle-kit push` to sync schema to database (no migration files needed).
 |----------|-------------|
 | `API_KEY_INFURA` | Infura API key (fallback RPC provider) |
 | `GITHUB_TOKEN` | GitHub personal access token (community feedback scraping) |
-| `API_KEY_NEYNAR` | Neynar API key (Farcaster community feedback) |
+| `API_KEY_NEYNAR` | Neynar API key (Farcaster community feedback). Alias: `NEYNAR_API_KEY` also checked. |
 | `ADMIN_SECRET` | Secret for admin endpoints (e.g., manual sync trigger) |
 | `PROD_DATABASE_URL` | Production DB URL (used for dev-to-prod sync feature) |
 
@@ -447,7 +447,14 @@ These are Replit-specific and should be adapted for the new host:
 
 5. **Post-merge script** — `scripts/post-merge.sh` is Replit-specific for automated CI. Replace with your CI/CD pipeline's equivalent.
 
-6. **Replit-only npm packages** — `@replit/connectors-sdk`, `@replit/vite-plugin-cartographer`, `@replit/vite-plugin-dev-banner`, and `@replit/vite-plugin-runtime-error-modal` are Replit-specific dev/integration packages. They are not needed at runtime on a non-Replit host. Remove them from `package.json` when setting up the new environment.
+6. **Replit-only npm packages (REMOVE from `package.json`)** — The following packages are Replit-specific and must be removed when setting up the new environment:
+   - `@replit/connectors-sdk` (was used only for the GitHub push during migration)
+   - `@replit/vite-plugin-cartographer` (devDependency, gated by `process.env.REPL_ID`)
+   - `@replit/vite-plugin-dev-banner` (devDependency, gated by `process.env.REPL_ID`)
+   - `@replit/vite-plugin-runtime-error-modal` (devDependency, gated by `process.env.REPL_ID`)
+   - `@octokit/rest` (was used only for GitHub integration during migration, not used by app code)
+   
+   After removing, also clean up the conditional import block in `vite.config.ts` that references these plugins (the `if (process.env.REPL_ID)` block can be deleted entirely).
 
 ---
 
