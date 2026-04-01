@@ -35,19 +35,19 @@ const adminLimiter = rateLimit({
 app.use("/api/admin", adminLimiter);
 app.use("/api", apiLimiter);
 
-// Error handler
-app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
-  const status = err.status || err.statusCode || 500;
-  const message = err.message || "Internal Server Error";
-  console.error("Internal Server Error:", err);
-  if (res.headersSent) {
-    return next(err);
-  }
-  return res.status(status).json({ message });
-});
-
+// Register routes FIRST, then error handler
 let initialized = false;
 const initPromise = registerRoutes(app).then(() => {
+  // Error handler must come AFTER routes
+  app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
+    console.error("API Error:", err.message, err.stack?.split("\n").slice(0, 3).join("\n"));
+    if (res.headersSent) {
+      return next(err);
+    }
+    return res.status(status).json({ message });
+  });
   initialized = true;
 });
 
