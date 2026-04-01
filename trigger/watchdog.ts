@@ -5,15 +5,11 @@ export const watchdogTask = schedules.task({
   id: "watchdog",
   // Run every 15 minutes — independent health check
   cron: "*/15 * * * *",
-  machine: { preset: "small-2x" },
   run: async (payload) => {
+    logger.info("Watchdog check starting", { timestamp: payload.timestamp });
+
     try {
-      logger.info("Watchdog check starting", {
-        timestamp: payload.timestamp,
-      });
-
       const { evaluateAlerts, deliverAlerts } = await import("../server/alerts");
-
       const alerts = await evaluateAlerts();
       const critical = alerts.filter((a) => a.severity === "critical").length;
       const warnings = alerts.filter((a) => a.severity === "warning").length;
@@ -27,8 +23,10 @@ export const watchdogTask = schedules.task({
 
       return { alertsFound: alerts.length, critical, warnings };
     } catch (err) {
-      await notifyJobFailure("watchdog", err as Error);
-      throw err;
+      const error = err instanceof Error ? err : new Error(String(err));
+      logger.error("Watchdog failed", { error: error.message, stack: error.stack });
+      // Return error as output so we can read it via API (temporarily)
+      return { error: error.message, stack: error.stack?.split("\n").slice(0, 10) };
     }
   },
 });
