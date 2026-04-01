@@ -91,7 +91,7 @@ npx trigger.dev@4.4.3 deploy --local-build   # Manual deploy from local machine
 - **Vercel Deployment Protection**: Must remain **OFF** — enabling it breaks API calls from the frontend
 - **`server/db.ts`**: Both `pool` and `db` are lazy Proxies — this is intentional. Prevents `DATABASE_URL` check at import time (required for Trigger.dev build container indexing)
 - **Trigger.dev config**: `trigger.config.ts` must include `maxDuration` (v4 requirement). Project ref: `proj_nabhtdcabmsfzbmlifqh`
-- **GitHub Actions**: `TRIGGER_SECRET_KEY` secret must be set in repo for auto-deploy workflow to function
+- **GitHub Actions**: `TRIGGER_ACCESS_TOKEN` secret must be set in repo for auto-deploy workflow to function (v4 CLI requires this env var name)
 
 ## Style & Conventions
 
