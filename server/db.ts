@@ -14,8 +14,8 @@ function getPool() {
   const isPooler = process.env.DATABASE_URL.includes("pooler.supabase.com");
   return new Pool({
     connectionString: process.env.DATABASE_URL,
-    max: isPooler ? 3 : 8,
-    idleTimeoutMillis: isPooler ? 5000 : 15000,
+    max: isPooler ? 2 : 8,
+    idleTimeoutMillis: isPooler ? 3000 : 15000,
     connectionTimeoutMillis: 10000,
     statement_timeout: 30000,
     allowExitOnIdle: true,

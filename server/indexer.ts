@@ -134,7 +134,7 @@ function createMetricsAccumulator(): MetricsAccumulator {
   };
 }
 
-const METRICS_FLUSH_INTERVAL_MS = 60 * 60 * 1000;
+const METRICS_FLUSH_INTERVAL_MS = 15 * 60 * 1000;
 
 export class ERC8004Indexer {
   private chainConfig: ChainConfig;
@@ -659,15 +659,13 @@ export class ERC8004Indexer {
     const identityIface = new ethers.Interface(IDENTITY_ABI);
     const reputationIface = new ethers.Interface(REPUTATION_ABI);
 
-    this.metrics.rpcRequests++;
-    const transferLogs = await this.getLogsWithRetry(
-      this.chainConfig.identityRegistry, identityIface.getEvent("Transfer")!.topicHash, fromBlock, toBlock,
-    );
-    await sleep(REQUEST_DELAY_MS);
+    const transferTopic = identityIface.getEvent("Transfer")!.topicHash;
+    const uriTopic = identityIface.getEvent("AgentURISet")!.topicHash;
 
+    // Batch Transfer + URI into one RPC call using topic OR
     this.metrics.rpcRequests++;
-    const uriLogs = await this.getLogsWithRetry(
-      this.chainConfig.identityRegistry, identityIface.getEvent("AgentURISet")!.topicHash, fromBlock, toBlock,
+    const identityLogs = await this.getLogsWithRetry(
+      this.chainConfig.identityRegistry, [transferTopic, uriTopic], fromBlock, toBlock,
     );
     await sleep(REQUEST_DELAY_MS);
 
@@ -675,6 +673,10 @@ export class ERC8004Indexer {
     const feedbackLogs = await this.getLogsWithRetry(
       this.chainConfig.reputationRegistry, reputationIface.getEvent("FeedbackPosted")!.topicHash, fromBlock, toBlock,
     );
+
+    // Split identity logs by event type
+    const transferLogs = identityLogs.filter((l) => l.topics[0] === transferTopic);
+    const uriLogs = identityLogs.filter((l) => l.topics[0] === uriTopic);
 
     const mintLogs = transferLogs.filter(
       (l) => l.topics[1] === ethers.zeroPadValue(ethers.ZeroAddress, 32),
@@ -714,12 +716,13 @@ export class ERC8004Indexer {
 
   private async getLogsWithRetry(
     address: string,
-    topic0: string,
+    topic0: string | string[],
     fromBlock: number,
     toBlock: number,
     retries = 3,
   ): Promise<ethers.Log[]> {
-    const filter = { address, topics: [topic0], fromBlock, toBlock };
+    const topics: (string | string[])[] = Array.isArray(topic0) ? [topic0] : [topic0];
+    const filter = { address, topics, fromBlock, toBlock };
 
     for (let attempt = 1; attempt <= retries; attempt++) {
       const provider = this.getProviderForAttempt(attempt);
