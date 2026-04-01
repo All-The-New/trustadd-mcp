@@ -5,6 +5,7 @@ export const watchdogTask = schedules.task({
   id: "watchdog",
   // Run every 15 minutes — independent health check
   cron: "*/15 * * * *",
+  machine: { preset: "small-2x" },
   run: async (payload) => {
     try {
       logger.info("Watchdog check starting", {
