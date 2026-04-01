@@ -11,6 +11,51 @@ export interface Alert {
   lastSeen: Date;
 }
 
+// Track already-delivered alerts to avoid spamming (in-memory, resets on restart)
+const deliveredAlerts = new Map<string, number>();
+const REDELIVER_INTERVAL_MS = 6 * 60 * 60 * 1000; // re-alert every 6h for persistent issues
+
+export async function deliverAlerts(alerts: Alert[]): Promise<void> {
+  const webhookUrl = process.env.ALERT_WEBHOOK_URL;
+  if (!webhookUrl) return;
+
+  const now = Date.now();
+  const toDeliver = alerts.filter((a) => {
+    if (a.severity === "info") return false; // only deliver warning + critical
+    const lastDelivered = deliveredAlerts.get(a.id);
+    if (lastDelivered && now - lastDelivered < REDELIVER_INTERVAL_MS) return false;
+    return true;
+  });
+
+  if (toDeliver.length === 0) return;
+
+  const criticalCount = toDeliver.filter((a) => a.severity === "critical").length;
+  const prefix = criticalCount > 0 ? "🚨" : "⚠️";
+  const text = `${prefix} **TrustAdd Alert** (${toDeliver.length} issue${toDeliver.length > 1 ? "s" : ""})\n\n` +
+    toDeliver
+      .map((a) => `[${a.severity.toUpperCase()}] **${a.title}**: ${a.message}`)
+      .join("\n");
+
+  try {
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, blocks: undefined }),
+      signal: AbortSignal.timeout(10000),
+    });
+    for (const a of toDeliver) {
+      deliveredAlerts.set(a.id, now);
+    }
+  } catch (err) {
+    console.error(`[alerts] Failed to deliver webhook: ${(err as Error).message}`);
+  }
+
+  // Clean up old entries
+  deliveredAlerts.forEach((ts, id) => {
+    if (now - ts > REDELIVER_INTERVAL_MS * 2) deliveredAlerts.delete(id);
+  });
+}
+
 const STALL_THRESHOLD_MINUTES = 60;
 const HIGH_ERROR_RATE_THRESHOLD = 0.5;
 const PROBER_WARN_HOURS = 25;

@@ -374,7 +374,8 @@ export class ERC8004Indexer {
         message,
         metadata: metadata || null,
       });
-    } catch {
+    } catch (err) {
+      console.error(`[${this.logPrefix}] Failed to emit indexer event (${eventType}): ${(err as Error).message}`);
     }
   }
 

@@ -247,7 +247,9 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (options.search?.trim()) {
-      const q = `%${options.search.trim().toLowerCase()}%`;
+      const escaped = options.search.trim().toLowerCase()
+        .replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+      const q = `%${escaped}%`;
       conditions.push(
         or(
           ilike(agents.name, q),

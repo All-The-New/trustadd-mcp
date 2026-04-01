@@ -40,6 +40,9 @@ export const agents = pgTable("agents", {
   index("idx_agents_chain_id").on(table.chainId),
   index("idx_agents_chain_erc8004").on(table.chainId, table.erc8004Id),
   index("idx_agents_slug").on(table.slug),
+  index("idx_agents_quality_tier").on(table.qualityTier),
+  index("idx_agents_trust_score").on(table.trustScore),
+  index("idx_agents_lifecycle_status").on(table.lifecycleStatus),
 ]);
 
 export const agentMetadataEvents = pgTable("agent_metadata_events", {
@@ -186,6 +189,7 @@ export const x402Probes = pgTable("x402_probes", {
 }, (table) => [
   index("idx_probes_agent_id").on(table.agentId),
   index("idx_probes_probed_at").on(table.probedAt),
+  index("idx_probes_agent_probed").on(table.agentId, table.probedAt),
 ]);
 
 export const agentTransactions = pgTable("agent_transactions", {

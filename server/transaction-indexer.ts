@@ -14,7 +14,7 @@ const MAX_CONCURRENT = 3;                          // parallel address syncing
 const SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;      // every 6 hours
 const ALCHEMY_PAGE_SIZE = 1000;
 const INTER_REQUEST_DELAY_MS = 300;                // 300ms between Alchemy calls
-const MAX_PAGES_PER_DIRECTION = 50;
+const MAX_PAGES_PER_DIRECTION = 20;
 const MAX_CHAIN_CONSECUTIVE_ERRORS = 5;
 const ETH_DUST_THRESHOLD = 0.001;
 

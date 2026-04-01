@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import express, { type Request, Response, NextFunction } from "express";
+import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "../server/routes.js";
 
@@ -15,6 +16,20 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+
+app.use(cors({
+  origin: process.env.CORS_ORIGIN?.split(",") || ["https://trustadd.com"],
+  methods: ["GET", "POST"],
+  credentials: false,
+}));
+
+app.use((_req: any, res: any, next: any) => {
+  res.set("X-Frame-Options", "DENY");
+  res.set("X-Content-Type-Options", "nosniff");
+  res.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  next();
+});
 
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,

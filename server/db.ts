@@ -17,6 +17,7 @@ function getPool() {
     max: isPooler ? 3 : 8,
     idleTimeoutMillis: isPooler ? 5000 : 15000,
     connectionTimeoutMillis: 10000,
+    statement_timeout: 30000,
     allowExitOnIdle: true,
     keepAlive: !isPooler,
     keepAliveInitialDelayMillis: 10000,

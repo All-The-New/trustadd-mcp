@@ -1,13 +1,23 @@
 import type { Express } from "express";
 import { type Server } from "http";
+import crypto from "crypto";
 import { storage } from "./storage.js";
 import { runSync } from "../scripts/sync-prod-to-dev.js";
 import { getAllChains, getEnabledChains, getChain } from "../shared/chains.js";
-import { evaluateAlerts } from "./alerts.js";
+import { evaluateAlerts, deliverAlerts } from "./alerts.js";
 import { getCommunityFeedbackScheduler, discoverAllSources } from "./community-feedback/index.js";
 import { recalculateScore } from "./trust-score.js";
 import { probeAllAgents } from "./x402-prober.js";
 import { syncAllAgentTransactions } from "./transaction-indexer.js";
+
+function verifyAdminSecret(provided: unknown, expected: string): boolean {
+  if (typeof provided !== "string" || provided.length === 0) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
 
 // Lightweight in-memory TTL cache for expensive query results.
 // Serverless functions are ephemeral, so memory is naturally bounded.
@@ -189,9 +199,9 @@ export async function registerRoutes(
     }
   });
 
-  // Analytics endpoints — cached 60s in-memory + 60s at Vercel edge
-  const ANALYTICS_CACHE = "public, s-maxage=60, stale-while-revalidate=120";
-  const ANALYTICS_TTL = 60_000;
+  // Analytics endpoints — cached 300s in-memory + 300s at Vercel edge
+  const ANALYTICS_CACHE = "public, s-maxage=300, stale-while-revalidate=600";
+  const ANALYTICS_TTL = 300_000;
 
   app.get("/api/analytics/overview", async (_req, res) => {
     try {
@@ -344,8 +354,8 @@ export async function registerRoutes(
       return res.status(503).json({ message: "Sync not configured (ADMIN_SECRET not set)" });
     }
 
-    const provided = req.headers["x-admin-secret"] || req.body?.secret;
-    if (provided !== adminSecret) {
+    const provided = req.headers["x-admin-secret"];
+    if (!verifyAdminSecret(provided, adminSecret)) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
@@ -378,6 +388,7 @@ export async function registerRoutes(
     try {
       const enabledChains = getEnabledChains();
       const alerts = await evaluateAlerts();
+      deliverAlerts(alerts).catch(() => {});
 
       const chains = [];
       let chainsRunning = 0;
@@ -407,8 +418,9 @@ export async function registerRoutes(
       }
 
       const activeAlerts = alerts.length;
+      const httpStatus = status === "unhealthy" ? 503 : 200;
 
-      res.status(200).json({
+      res.status(httpStatus).json({
         status,
         chains,
         activeAlerts,
@@ -416,7 +428,7 @@ export async function registerRoutes(
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
-      res.status(200).json({ status: "unknown", error: "Health check failed" });
+      res.status(503).json({ status: "unknown", error: "Health check failed" });
     }
   });
 
@@ -486,6 +498,7 @@ export async function registerRoutes(
   app.get("/api/status/alerts", async (_req, res) => {
     try {
       const alerts = await evaluateAlerts();
+      deliverAlerts(alerts).catch(() => {});
       res.json({ alerts });
     } catch (err) {
       res.status(500).json({ error: "Failed to evaluate alerts" });
@@ -596,8 +609,8 @@ export async function registerRoutes(
   app.post("/api/admin/community-feedback/scrape", async (req, res) => {
     const adminSecret = process.env.ADMIN_SECRET;
     if (!adminSecret) return res.status(503).json({ message: "Admin not configured" });
-    const provided = req.headers["x-admin-secret"] || req.body?.secret;
-    if (provided !== adminSecret) return res.status(401).json({ message: "Unauthorized" });
+    const provided = req.headers["x-admin-secret"];
+    if (!verifyAdminSecret(provided, adminSecret)) return res.status(401).json({ message: "Unauthorized" });
 
     const scheduler = getCommunityFeedbackScheduler();
     if (!scheduler) return res.status(503).json({ message: "Community feedback not initialized" });
@@ -806,8 +819,8 @@ export async function registerRoutes(
   app.post("/api/admin/transactions/sync", async (req, res) => {
     const adminSecret = process.env.ADMIN_SECRET;
     if (!adminSecret) return res.status(503).json({ message: "Admin not configured" });
-    const provided = req.headers["x-admin-secret"] || req.body?.secret;
-    if (provided !== adminSecret) return res.status(401).json({ message: "Unauthorized" });
+    const provided = req.headers["x-admin-secret"];
+    if (!verifyAdminSecret(provided, adminSecret)) return res.status(401).json({ message: "Unauthorized" });
 
     try {
       res.json({ message: "Transaction sync started", status: "running" });
@@ -822,8 +835,8 @@ export async function registerRoutes(
   app.post("/api/admin/probes/run", async (req, res) => {
     const adminSecret = process.env.ADMIN_SECRET;
     if (!adminSecret) return res.status(503).json({ message: "Admin not configured" });
-    const provided = req.headers["x-admin-secret"] || req.body?.secret;
-    if (provided !== adminSecret) return res.status(401).json({ message: "Unauthorized" });
+    const provided = req.headers["x-admin-secret"];
+    if (!verifyAdminSecret(provided, adminSecret)) return res.status(401).json({ message: "Unauthorized" });
 
     try {
       res.json({ message: "Probe run started", status: "running" });
@@ -858,8 +871,8 @@ export async function registerRoutes(
   app.post("/api/admin/community-feedback/discover", async (req, res) => {
     const adminSecret = process.env.ADMIN_SECRET;
     if (!adminSecret) return res.status(503).json({ message: "Admin not configured" });
-    const provided = req.headers["x-admin-secret"] || req.body?.secret;
-    if (provided !== adminSecret) return res.status(401).json({ message: "Unauthorized" });
+    const provided = req.headers["x-admin-secret"];
+    if (!verifyAdminSecret(provided, adminSecret)) return res.status(401).json({ message: "Unauthorized" });
 
     try {
       const result = await discoverAllSources();

@@ -8,6 +8,7 @@ process.on("unhandledRejection", (reason) => {
 });
 
 import express, { type Request, Response, NextFunction } from "express";
+import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes.js";
 import { serveStatic } from "./static.js";
@@ -40,6 +41,20 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+
+app.use(cors({
+  origin: process.env.CORS_ORIGIN?.split(",") || ["https://trustadd.com"],
+  methods: ["GET", "POST"],
+  credentials: false,
+}));
+
+app.use((_req, res, next) => {
+  res.set("X-Frame-Options", "DENY");
+  res.set("X-Content-Type-Options", "nosniff");
+  res.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  next();
+});
 
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
