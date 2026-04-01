@@ -5,6 +5,7 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
   const hasDb = !!dbUrl;
   const dbHost = dbUrl ? new URL(dbUrl).hostname : "not set";
   const dbPort = dbUrl ? new URL(dbUrl).port : "not set";
+  const dbUser = dbUrl ? new URL(dbUrl).username : "not set";
 
   let dbStatus = "not tested";
   if (hasDb) {
@@ -22,6 +23,6 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
   res.status(200).json({
     status: "ok",
     timestamp: new Date().toISOString(),
-    database: { hasUrl: hasDb, host: dbHost, port: dbPort, status: dbStatus },
+    database: { hasUrl: hasDb, host: dbHost, port: dbPort, user: dbUser, status: dbStatus },
   });
 }
