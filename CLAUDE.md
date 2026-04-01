@@ -6,7 +6,6 @@ Read `bootstrap.md` for the complete project documentation including architectur
 
 ```bash
 npm install
-npx drizzle-kit push          # sync schema to PostgreSQL
 npm run dev                    # Express + Vite HMR on port 5000
 ```
 
@@ -82,8 +81,8 @@ npx vercel deploy --prod         # Manual deploy if needed
 npx trigger.dev@4.4.3 deploy --local-build   # Manual deploy from local machine
 # Note: --local-build required locally (depot.dev has network timeout); GitHub Actions uses default
 
-# Schema changes
-npx drizzle-kit push             # Run manually when schema changes
+# Schema changes — must use Supabase SQL directly (trustadd_app doesn't own tables)
+# drizzle-kit push will fail; run DDL in Supabase SQL editor instead
 ```
 
 ## Critical Infrastructure Notes

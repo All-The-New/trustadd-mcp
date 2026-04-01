@@ -1,11 +1,20 @@
 node_modules
 dist
-.DS_Store
-server/public
-vite.config.ts.*
+*.tsbuildinfo
 *.tar.gz
 
-# Replit internals
+# Environment
+.env
+.env.*
+
+# Vercel
+.vercel
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Replit (legacy)
 .replit
 .config/
 .upm/
@@ -16,12 +25,6 @@ replit.md
 generated-icon.png
 attached_assets/
 
-# Environment
-.env
-.env.*
-
-# Build
-*.tsbuildinfo
-
-# OS
-Thumbs.db
+# Build artifacts
+server/public
+vite.config.ts.*
