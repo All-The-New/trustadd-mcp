@@ -138,6 +138,7 @@ export const communityFeedbackItems = pgTable("community_feedback_items", {
   indexedAt: timestamp("indexed_at").notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("uq_feedback_source_external").on(table.sourceId, table.externalId),
+  index("idx_community_feedback_items_agent_id").on(table.agentId),
 ]);
 
 export const communityFeedbackSummaries = pgTable("community_feedback_summaries", {
@@ -205,6 +206,7 @@ export const agentTransactions = pgTable("agent_transactions", {
   metadata: jsonb("metadata"),
 }, (table) => [
   uniqueIndex("uq_transfer_id_chain").on(table.transferId, table.chainId),
+  index("idx_agent_transactions_agent_id").on(table.agentId),
 ]);
 
 export const transactionSyncState = pgTable("transaction_sync_state", {
