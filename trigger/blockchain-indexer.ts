@@ -1,16 +1,13 @@
 import { schedules, logger } from "@trigger.dev/sdk/v3";
-import { notifyJobFailure } from "./alert";
 
 export const blockchainIndexerTask = schedules.task({
   id: "blockchain-indexer",
   // Run every 2 minutes — each cycle polls all enabled chains
   cron: "*/2 * * * *",
   run: async (payload) => {
-    try {
-      logger.info("Starting blockchain indexer cycle", {
-        timestamp: payload.timestamp,
-      });
+    logger.info("Starting blockchain indexer cycle", { timestamp: payload.timestamp });
 
+    try {
       const { startIndexer, stopIndexer } = await import("../server/indexer");
       const indexers = startIndexer();
       logger.info(`Started ${indexers.length} chain indexer(s)`);
@@ -20,11 +17,11 @@ export const blockchainIndexerTask = schedules.task({
 
       stopIndexer();
       logger.info("Blockchain indexer cycle complete");
-
       return { chainsIndexed: indexers.length };
     } catch (err) {
-      await notifyJobFailure("blockchain-indexer", err as Error);
-      throw err;
+      const error = err instanceof Error ? err : new Error(String(err));
+      logger.error("blockchain-indexer failed", { error: error.message, stack: error.stack });
+      return { error: error.message };
     }
   },
 });

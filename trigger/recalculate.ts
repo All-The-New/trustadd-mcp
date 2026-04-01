@@ -1,16 +1,13 @@
 import { schedules, logger } from "@trigger.dev/sdk/v3";
-import { notifyJobFailure } from "./alert";
 
 export const recalculateTask = schedules.task({
   id: "recalculate-scores",
   // Run daily at 5:00 AM UTC
   cron: "0 5 * * *",
   run: async (payload) => {
-    try {
-      logger.info("Starting trust score recalculation", {
-        timestamp: payload.timestamp,
-      });
+    logger.info("Starting trust score recalculation", { timestamp: payload.timestamp });
 
+    try {
       const { ensureScoresCalculated } = await import("../server/trust-score");
       const { ensureSlugsGenerated } = await import("../server/slugs");
       const { classifyAgent } = await import("../server/quality-classifier");
@@ -55,8 +52,9 @@ export const recalculateTask = schedules.task({
 
       return { success: true };
     } catch (err) {
-      await notifyJobFailure("recalculate-scores", err as Error);
-      throw err;
+      const error = err instanceof Error ? err : new Error(String(err));
+      logger.error("recalculate-scores failed", { error: error.message, stack: error.stack });
+      return { error: error.message };
     }
   },
 });
