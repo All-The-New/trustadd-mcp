@@ -1,10 +1,10 @@
 process.on("uncaughtException", (err) => {
-  console.error(`[FATAL] Uncaught exception: ${err.message}`);
-  console.error(err.stack);
+  process.stderr.write(JSON.stringify({ timestamp: new Date().toISOString(), level: "error", source: "process", message: `Uncaught exception: ${err.message}`, stack: err.stack }) + "\n");
 });
 process.on("unhandledRejection", (reason) => {
-  console.error(`[FATAL] Unhandled rejection: ${reason}`);
-  if (reason instanceof Error) console.error(reason.stack);
+  const msg = reason instanceof Error ? reason.message : String(reason);
+  const stack = reason instanceof Error ? reason.stack : undefined;
+  process.stderr.write(JSON.stringify({ timestamp: new Date().toISOString(), level: "error", source: "process", message: `Unhandled rejection: ${msg}`, stack }) + "\n");
 });
 
 import express, { type Request, Response, NextFunction } from "express";
@@ -76,29 +76,34 @@ app.use("/api/admin", adminLimiter);
 app.use("/api", apiLimiter);
 
 import { log } from "./lib/log.js";
+import { createLogger } from "./lib/logger.js";
+import { requestStore, generateRequestId } from "./lib/request-context.js";
 export { log };
 
+const reqLog = createLogger("http");
+
+// Request ID + context middleware (must be early in chain)
+app.use((req, res, next) => {
+  const requestId = (req.headers["x-request-id"] as string) || generateRequestId();
+  res.setHeader("X-Request-ID", requestId);
+  requestStore.run({ requestId, startTime: Date.now() }, () => next());
+});
+
+// Request logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
 
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        const str = JSON.stringify(capturedJsonResponse);
-        logLine += ` :: ${str.length > 200 ? str.slice(0, 200) + "..." : str}`;
-      }
-
-      log(logLine);
+      reqLog.info(`${req.method} ${path} ${res.statusCode} in ${duration}ms`, {
+        method: req.method,
+        path,
+        statusCode: res.statusCode,
+        durationMs: duration,
+        ip: req.ip,
+      });
     }
   });
 
@@ -173,7 +178,7 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    console.error("Internal Server Error:", err);
+    reqLog.error("Internal Server Error", { error: (err as Error).message, stack: (err as Error).stack });
 
     if (res.headersSent) {
       return next(err);

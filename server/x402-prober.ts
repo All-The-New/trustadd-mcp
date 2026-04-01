@@ -271,7 +271,7 @@ export async function probeAllAgents(): Promise<{ total: number; probed: number;
         totalProbed += count;
       } catch (err) {
         errors++;
-        log.error(`Error probing agent ${agentId}`, err);
+        log.error(`Error probing agent ${agentId}`, { error: (err as Error).message });
       }
     },
     MAX_CONCURRENT,
@@ -334,7 +334,7 @@ export function initProber() {
       await probeAllAgents();
       scheduleNext(PROBE_INTERVAL_MS);
     } catch (err) {
-      log.error("Probe cycle failed", err);
+      log.error("Probe cycle failed", { error: (err as Error).message });
       log.info(`Retrying in ${PROBE_RETRY_INTERVAL_MS / 60000} min...`);
       scheduleNext(PROBE_RETRY_INTERVAL_MS);
     }

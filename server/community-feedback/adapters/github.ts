@@ -1,14 +1,11 @@
 import type { CommunityFeedbackSource } from "../../../shared/schema.js";
 import type { FeedbackSourceAdapter, ScrapeResult } from "../types.js";
+import { createLogger } from "../../lib/logger.js";
+
+const logger = createLogger("github-adapter");
 
 function log(message: string) {
-  const time = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-  console.log(`${time} [github-adapter] ${message}`);
+  logger.info(message);
 }
 
 interface GitHubRepoData {

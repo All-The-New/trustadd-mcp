@@ -1,6 +1,7 @@
 import { ethers } from "ethers";
 import { storage } from "./storage.js";
 import { log } from "./lib/log.js";
+import { createLogger } from "./lib/logger.js";
 import { type ChainConfig, getEnabledChains, getRpcUrls } from "../shared/chains.js";
 import { recalculateScore } from "./trust-score.js";
 import { classifyAgent } from "./quality-classifier.js";
@@ -375,7 +376,7 @@ export class ERC8004Indexer {
         metadata: metadata || null,
       });
     } catch (err) {
-      console.error(`[${this.logPrefix}] Failed to emit indexer event (${eventType}): ${(err as Error).message}`);
+      createLogger(this.logPrefix).error(`Failed to emit indexer event (${eventType})`, { error: (err as Error).message });
     }
   }
 
@@ -1011,9 +1012,6 @@ export class ERC8004Indexer {
 }
 
 const indexerInstances: Map<number, ERC8004Indexer> = new Map();
-let watchdogTimer: ReturnType<typeof setInterval> | null = null;
-const WATCHDOG_INTERVAL_MS = 30 * 60 * 1000;
-const WATCHDOG_STALE_MS = 90 * 60 * 1000;
 
 export function startIndexer(): ERC8004Indexer[] {
   const enabledChains = getEnabledChains();
@@ -1068,32 +1066,7 @@ export function startIndexer(): ERC8004Indexer[] {
     log("Metadata re-resolution disabled (set ENABLE_RERESOLVE=true to enable)", "startup");
   }
 
-  if (!watchdogTimer) {
-    watchdogTimer = setInterval(async () => {
-      const chains = getEnabledChains();
-      for (const chain of chains) {
-        const indexer = indexerInstances.get(chain.chainId);
-        if (!indexer) continue;
-        try {
-          const state = await storage.getIndexerState(chain.chainId);
-          if (!state || !state.isRunning) continue;
-          const ageMs = Date.now() - new Date(state.updatedAt).getTime();
-          if (ageMs > WATCHDOG_STALE_MS) {
-            const ageMins = Math.round(ageMs / 60000);
-            log(`${chain.name} has is_running=true but stale for ${ageMins}min — watchdog forcing reconnect`, "watchdog");
-            await indexer.stop();
-            await sleep(5000);
-            indexer.start(0).catch((e) => {
-              log(`Watchdog restart error for ${chain.name}: ${(e as Error).message}`, "watchdog");
-            });
-          }
-        } catch (err) {
-          log(`Watchdog check error for ${chain.name}: ${(err as Error).message}`, "watchdog");
-        }
-      }
-    }, WATCHDOG_INTERVAL_MS);
-    log(`Watchdog started — checks every ${WATCHDOG_INTERVAL_MS / 60000}min, stale threshold ${WATCHDOG_STALE_MS / 60000}min`, "startup");
-  }
+  // Watchdog is now an out-of-process Trigger.dev task (trigger/watchdog.ts)
 
   log(`${started.length}/${enabledChains.length} chain indexers running`, "startup");
   return started;
@@ -1112,10 +1085,6 @@ export function getAllIndexers(): Map<number, ERC8004Indexer> {
 }
 
 export function stopIndexer() {
-  if (watchdogTimer) {
-    clearInterval(watchdogTimer);
-    watchdogTimer = null;
-  }
   for (const [chainId, indexer] of indexerInstances) {
     indexer.stop().catch((err) => {
       log(`Error stopping indexer for chain ${chainId}: ${(err as Error).message}`, "shutdown");

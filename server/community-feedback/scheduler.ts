@@ -2,15 +2,12 @@ import { storage } from "../storage.js";
 import type { FeedbackSourceAdapter, ScraperConfig } from "./types.js";
 import { DEFAULT_SCRAPER_CONFIG } from "./types.js";
 import { recalculateScore } from "../trust-score.js";
+import { createLogger } from "../lib/logger.js";
+
+const logger = createLogger("community-feedback");
 
 function log(message: string) {
-  const time = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-  console.log(`${time} [community-feedback] ${message}`);
+  logger.info(message);
 }
 
 function sleep(ms: number) {

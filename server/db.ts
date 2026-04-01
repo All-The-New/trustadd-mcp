@@ -1,6 +1,9 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "../shared/schema.js";
+import { createLogger } from "./lib/logger.js";
+
+const logger = createLogger("db");
 
 const { Pool } = pg;
 
@@ -47,7 +50,7 @@ export function getDbPool(): pg.Pool {
   if (!_pool) {
     _pool = getPool();
     _pool.on("error", (err: Error) => {
-      console.error(`[db] Pool client error (handled): ${err.message}`);
+      logger.error("Pool client error (handled)", { error: err.message });
     });
 
     // Wrap pool.query with single retry on transient connection errors
@@ -57,7 +60,7 @@ export function getDbPool(): pg.Pool {
         return await (originalQuery as any)(...args);
       } catch (err) {
         if (isTransientError(err)) {
-          console.warn(`[db] Transient error, retrying in 500ms: ${(err as Error).message}`);
+          logger.warn("Transient error, retrying in 500ms", { error: (err as Error).message });
           await new Promise(r => setTimeout(r, 500));
           return (originalQuery as any)(...args);
         }

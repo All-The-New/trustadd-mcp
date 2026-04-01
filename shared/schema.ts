@@ -223,6 +223,37 @@ export const transactionSyncState = pgTable("transaction_sync_state", {
   uniqueIndex("uq_sync_addr_chain").on(table.paymentAddress, table.chainId),
 ]);
 
+// Admin audit trail
+export const adminAuditLog = pgTable("admin_audit_log", {
+  id: serial("id").primaryKey(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+  endpoint: text("endpoint").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  success: boolean("success").notNull(),
+  failureReason: text("failure_reason"),
+  parameters: jsonb("parameters"),
+  durationMs: integer("duration_ms"),
+  requestId: text("request_id"),
+}, (table) => [
+  index("idx_audit_log_timestamp").on(table.timestamp),
+]);
+
+// Alert delivery deduplication (for stateless watchdog)
+export const alertDeliveries = pgTable("alert_deliveries", {
+  alertId: text("alert_id").primaryKey(),
+  lastDeliveredAt: timestamp("last_delivered_at").notNull().defaultNow(),
+});
+
+// Rate limit sliding window entries
+export const rateLimitEntries = pgTable("rate_limit_entries", {
+  key: text("key").notNull(),
+  windowStart: timestamp("window_start").notNull(),
+  hitCount: integer("hit_count").notNull().default(1),
+}, (table) => [
+  uniqueIndex("uq_rate_limit_key_window").on(table.key, table.windowStart),
+]);
+
 export const insertAgentSchema = createInsertSchema(agents).omit({
   id: true,
   createdAt: true,

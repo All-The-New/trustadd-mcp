@@ -1,7 +1,11 @@
 import type { Express } from "express";
 import { type Server } from "http";
-import crypto from "crypto";
+import { createLogger } from "./lib/logger.js";
+import { requireAdmin } from "./lib/admin-audit.js";
+import { pool } from "./db.js";
 import { storage } from "./storage.js";
+
+const logger = createLogger("routes");
 import { runSync } from "../scripts/sync-prod-to-dev.js";
 import { getAllChains, getEnabledChains, getChain } from "../shared/chains.js";
 import { evaluateAlerts, deliverAlerts } from "./alerts.js";
@@ -9,15 +13,6 @@ import { getCommunityFeedbackScheduler, discoverAllSources } from "./community-f
 import { recalculateScore } from "./trust-score.js";
 import { probeAllAgents } from "./x402-prober.js";
 import { syncAllAgentTransactions } from "./transaction-indexer.js";
-
-function verifyAdminSecret(provided: unknown, expected: string): boolean {
-  if (typeof provided !== "string" || provided.length === 0) return false;
-  try {
-    return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
-  } catch {
-    return false;
-  }
-}
 
 // Lightweight in-memory TTL cache for expensive query results.
 // Serverless functions are ephemeral, so memory is naturally bounded.
@@ -56,7 +51,7 @@ export async function registerRoutes(
       res.set("Cache-Control", "public, max-age=3600");
       res.send(xml);
     } catch (err) {
-      console.error("sitemap-agents error:", err);
+      logger.error("Sitemap generation failed", { error: (err as Error).message });
       res.status(500).send("Error generating sitemap");
     }
   });
@@ -92,7 +87,7 @@ export async function registerRoutes(
       res.set("Cache-Control", "public, s-maxage=30, stale-while-revalidate=60");
       res.json(result);
     } catch (err) {
-      console.error("Error fetching chains:", err);
+      logger.error("Error fetching chains", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch chains" });
     }
   });
@@ -121,7 +116,7 @@ export async function registerRoutes(
       res.set("Cache-Control", "public, s-maxage=10, stale-while-revalidate=30");
       res.json({ ...result, communityFeedback: feedbackMap });
     } catch (err) {
-      console.error("Error fetching agents:", err);
+      logger.error("Error fetching agents", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch agents" });
     }
   });
@@ -135,7 +130,7 @@ export async function registerRoutes(
       res.set("Cache-Control", "public, s-maxage=10, stale-while-revalidate=30");
       res.json(agent);
     } catch (err) {
-      console.error("Error fetching agent:", err);
+      logger.error("Error fetching agent", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch agent" });
     }
   });
@@ -149,7 +144,7 @@ export async function registerRoutes(
       const events = await storage.getAgentEvents(agent.id);
       res.json(events);
     } catch (err) {
-      console.error("Error fetching agent history:", err);
+      logger.error("Error fetching agent history", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch agent history" });
     }
   });
@@ -162,7 +157,7 @@ export async function registerRoutes(
       const events = await storage.getRecentEvents(limit, chainId);
       res.json(events);
     } catch (err) {
-      console.error("Error fetching recent events:", err);
+      logger.error("Error fetching recent events", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch recent events" });
     }
   });
@@ -176,7 +171,7 @@ export async function registerRoutes(
       const summary = await storage.getAgentFeedbackSummary(agent.id, agent.controllerAddress);
       res.json(summary);
     } catch (err) {
-      console.error("Error fetching agent feedback:", err);
+      logger.error("Error fetching agent feedback", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch agent feedback" });
     }
   });
@@ -194,7 +189,7 @@ export async function registerRoutes(
       res.set("Cache-Control", "public, s-maxage=30, stale-while-revalidate=60");
       res.json(stats);
     } catch (err) {
-      console.error("Error fetching stats:", err);
+      logger.error("Error fetching stats", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch stats" });
     }
   });
@@ -209,7 +204,7 @@ export async function registerRoutes(
       res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
-      console.error("Error fetching analytics overview:", err);
+      logger.error("Error fetching analytics overview", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch analytics overview" });
     }
   });
@@ -220,7 +215,7 @@ export async function registerRoutes(
       res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
-      console.error("Error fetching protocol stats:", err);
+      logger.error("Error fetching protocol stats", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch protocol stats" });
     }
   });
@@ -231,7 +226,7 @@ export async function registerRoutes(
       res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
-      console.error("Error fetching chain distribution:", err);
+      logger.error("Error fetching chain distribution", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch chain distribution" });
     }
   });
@@ -242,7 +237,7 @@ export async function registerRoutes(
       res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
-      console.error("Error fetching registrations:", err);
+      logger.error("Error fetching registrations", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch registrations" });
     }
   });
@@ -253,7 +248,7 @@ export async function registerRoutes(
       res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
-      console.error("Error fetching metadata quality:", err);
+      logger.error("Error fetching metadata quality", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch metadata quality" });
     }
   });
@@ -264,7 +259,7 @@ export async function registerRoutes(
       res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
-      console.error("Error fetching x402 by chain:", err);
+      logger.error("Error fetching x402 by chain", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch x402 by chain" });
     }
   });
@@ -275,7 +270,7 @@ export async function registerRoutes(
       res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
-      console.error("Error fetching controller concentration:", err);
+      logger.error("Error fetching controller concentration", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch controller concentration" });
     }
   });
@@ -286,7 +281,7 @@ export async function registerRoutes(
       res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
-      console.error("Error fetching URI schemes:", err);
+      logger.error("Error fetching URI schemes", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch URI schemes" });
     }
   });
@@ -297,7 +292,7 @@ export async function registerRoutes(
       res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
-      console.error("Error fetching categories:", err);
+      logger.error("Error fetching categories", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch categories" });
     }
   });
@@ -308,7 +303,7 @@ export async function registerRoutes(
       res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
-      console.error("Error fetching image domains:", err);
+      logger.error("Error fetching image domains", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch image domains" });
     }
   });
@@ -319,7 +314,7 @@ export async function registerRoutes(
       res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
-      console.error("Error fetching models:", err);
+      logger.error("Error fetching models", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch models" });
     }
   });
@@ -330,7 +325,7 @@ export async function registerRoutes(
       res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
-      console.error("Error fetching endpoints coverage:", err);
+      logger.error("Error fetching endpoints coverage", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch endpoints coverage" });
     }
   });
@@ -341,24 +336,14 @@ export async function registerRoutes(
       res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
-      console.error("Error fetching top agents:", err);
+      logger.error("Error fetching top agents", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch top agents" });
     }
   });
 
   let syncInProgress = false;
 
-  app.post("/api/admin/sync", async (req, res) => {
-    const adminSecret = process.env.ADMIN_SECRET;
-    if (!adminSecret) {
-      return res.status(503).json({ message: "Sync not configured (ADMIN_SECRET not set)" });
-    }
-
-    const provided = req.headers["x-admin-secret"];
-    if (!verifyAdminSecret(provided, adminSecret)) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
+  app.post("/api/admin/sync", requireAdmin(), async (req, res) => {
     if (!process.env.PROD_DATABASE_URL || !process.env.DATABASE_URL) {
       return res.status(503).json({ message: "Database URLs not configured" });
     }
@@ -373,12 +358,12 @@ export async function registerRoutes(
     runSync(
       process.env.PROD_DATABASE_URL,
       process.env.DATABASE_URL,
-      (msg) => console.log(`[sync] ${msg}`),
+      (msg) => logger.info(msg, { source: "sync" }),
     ).then(async (result) => {
       await storage.updateIndexerState(1, { lastSyncedAt: new Date() });
-      console.log(`[sync] Complete: ${result.agents} agents, ${result.events} events`);
+      logger.info("Sync complete", { agents: result.agents, events: result.events });
     }).catch((err) => {
-      console.error(`[sync] Failed: ${(err as Error).message}`);
+      logger.error("Sync failed", { error: (err as Error).message });
     }).finally(() => {
       syncInProgress = false;
     });
@@ -606,12 +591,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/community-feedback/scrape", async (req, res) => {
-    const adminSecret = process.env.ADMIN_SECRET;
-    if (!adminSecret) return res.status(503).json({ message: "Admin not configured" });
-    const provided = req.headers["x-admin-secret"];
-    if (!verifyAdminSecret(provided, adminSecret)) return res.status(401).json({ message: "Unauthorized" });
-
+  app.post("/api/admin/community-feedback/scrape", requireAdmin(), async (req, res) => {
     const scheduler = getCommunityFeedbackScheduler();
     if (!scheduler) return res.status(503).json({ message: "Community feedback not initialized" });
     if (scheduler.isRunning()) return res.status(409).json({ message: "Scrape already in progress" });
@@ -620,7 +600,7 @@ export async function registerRoutes(
     res.json({ message: `Scrape started for ${platform}`, status: "running" });
 
     scheduler.runPlatformScrape(platform).catch((err) => {
-      console.error(`[community-feedback] Manual scrape failed: ${(err as Error).message}`);
+      logger.error("Manual community feedback scrape failed", { error: (err as Error).message });
     });
   });
 
@@ -643,7 +623,7 @@ export async function registerRoutes(
         updatedAt: agent.trustScoreUpdatedAt,
       });
     } catch (err) {
-      console.error("Error fetching trust score:", err);
+      logger.error("Error fetching trust score", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch trust score" });
     }
   });
@@ -655,7 +635,7 @@ export async function registerRoutes(
       const leaderboard = await storage.getTrustScoreLeaderboard(limit, chainId);
       res.json(leaderboard);
     } catch (err) {
-      console.error("Error fetching trust score leaderboard:", err);
+      logger.error("Error fetching trust score leaderboard", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch leaderboard" });
     }
   });
@@ -666,7 +646,7 @@ export async function registerRoutes(
       const distribution = await storage.getTrustScoreDistribution(chainId);
       res.json(distribution);
     } catch (err) {
-      console.error("Error fetching trust score distribution:", err);
+      logger.error("Error fetching trust score distribution", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch distribution" });
     }
   });
@@ -680,7 +660,7 @@ export async function registerRoutes(
       ]);
       res.json({ distribution, byChain, topAgents: top });
     } catch (err) {
-      console.error("Error fetching trust score analytics:", err);
+      logger.error("Error fetching trust score analytics", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch trust score analytics" });
     }
   });
@@ -690,7 +670,7 @@ export async function registerRoutes(
       const overview = await storage.getEconomyOverview();
       res.json(overview);
     } catch (err) {
-      console.error("Error fetching economy overview:", err);
+      logger.error("Error fetching economy overview", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch economy overview" });
     }
   });
@@ -702,7 +682,7 @@ export async function registerRoutes(
       const topAgents = await storage.getTopX402Agents(limit, chainId);
       res.json(topAgents);
     } catch (err) {
-      console.error("Error fetching top x402 agents:", err);
+      logger.error("Error fetching top x402 agents", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch top agents" });
     }
   });
@@ -712,7 +692,7 @@ export async function registerRoutes(
       const analysis = await storage.getEndpointAnalysis();
       res.json(analysis);
     } catch (err) {
-      console.error("Error fetching endpoint analysis:", err);
+      logger.error("Error fetching endpoint analysis", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch endpoint analysis" });
     }
   });
@@ -722,7 +702,7 @@ export async function registerRoutes(
       const breakdown = await storage.getX402AdoptionByChain();
       res.json(breakdown);
     } catch (err) {
-      console.error("Error fetching chain breakdown:", err);
+      logger.error("Error fetching chain breakdown", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch chain breakdown" });
     }
   });
@@ -732,7 +712,7 @@ export async function registerRoutes(
       const stats = await storage.getProbeStats();
       res.json(stats);
     } catch (err) {
-      console.error("Error fetching probe stats:", err);
+      logger.error("Error fetching probe stats", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch probe stats" });
     }
   });
@@ -742,7 +722,7 @@ export async function registerRoutes(
       const addresses = await storage.getAgentsWithPaymentAddresses();
       res.json(addresses);
     } catch (err) {
-      console.error("Error fetching payment addresses:", err);
+      logger.error("Error fetching payment addresses", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch payment addresses" });
     }
   });
@@ -752,7 +732,7 @@ export async function registerRoutes(
       const stats = await storage.getTransactionStats();
       res.json(stats);
     } catch (err) {
-      console.error("Error fetching transaction stats:", err);
+      logger.error("Error fetching transaction stats", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch transaction stats" });
     }
   });
@@ -763,7 +743,7 @@ export async function registerRoutes(
       const transactions = await storage.getTransactions({ limit });
       res.json(transactions);
     } catch (err) {
-      console.error("Error fetching recent transactions:", err);
+      logger.error("Error fetching recent transactions", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch recent transactions" });
     }
   });
@@ -774,7 +754,7 @@ export async function registerRoutes(
       const volume = await storage.getTransactionVolume(period);
       res.json(volume);
     } catch (err) {
-      console.error("Error fetching transaction volume:", err);
+      logger.error("Error fetching transaction volume", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch transaction volume" });
     }
   });
@@ -785,7 +765,7 @@ export async function registerRoutes(
       const topEarners = await storage.getTopEarningAgents(limit);
       res.json(topEarners);
     } catch (err) {
-      console.error("Error fetching top earners:", err);
+      logger.error("Error fetching top earners", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch top earners" });
     }
   });
@@ -799,7 +779,7 @@ export async function registerRoutes(
       const transactions = await storage.getTransactions({ agentId: agent.id, limit, offset });
       res.json(transactions);
     } catch (err) {
-      console.error("Error fetching agent transactions:", err);
+      logger.error("Error fetching agent transactions", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch agent transactions" });
     }
   });
@@ -811,37 +791,27 @@ export async function registerRoutes(
       const stats = await storage.getAgentTransactionStats(agent.id);
       res.json(stats);
     } catch (err) {
-      console.error("Error fetching agent transaction stats:", err);
+      logger.error("Error fetching agent transaction stats", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch agent transaction stats" });
     }
   });
 
-  app.post("/api/admin/transactions/sync", async (req, res) => {
-    const adminSecret = process.env.ADMIN_SECRET;
-    if (!adminSecret) return res.status(503).json({ message: "Admin not configured" });
-    const provided = req.headers["x-admin-secret"];
-    if (!verifyAdminSecret(provided, adminSecret)) return res.status(401).json({ message: "Unauthorized" });
-
+  app.post("/api/admin/transactions/sync", requireAdmin(), async (req, res) => {
     try {
       res.json({ message: "Transaction sync started", status: "running" });
       syncAllAgentTransactions().catch((err) => {
-        console.error("Manual transaction sync failed:", err);
+        logger.error("Manual transaction sync failed", { error: (err as Error).message });
       });
     } catch (err) {
       res.status(500).json({ error: "Failed to start transaction sync" });
     }
   });
 
-  app.post("/api/admin/probes/run", async (req, res) => {
-    const adminSecret = process.env.ADMIN_SECRET;
-    if (!adminSecret) return res.status(503).json({ message: "Admin not configured" });
-    const provided = req.headers["x-admin-secret"];
-    if (!verifyAdminSecret(provided, adminSecret)) return res.status(401).json({ message: "Unauthorized" });
-
+  app.post("/api/admin/probes/run", requireAdmin(), async (req, res) => {
     try {
       res.json({ message: "Probe run started", status: "running" });
       probeAllAgents().catch((err) => {
-        console.error("Manual probe run failed:", err);
+        logger.error("Manual probe run failed", { error: (err as Error).message });
       });
     } catch (err) {
       res.status(500).json({ error: "Failed to start probe run" });
@@ -853,7 +823,7 @@ export async function registerRoutes(
       const summary = await storage.getQualitySummary();
       res.json(summary);
     } catch (err) {
-      console.error("Error fetching quality summary:", err);
+      logger.error("Error fetching quality summary", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch quality summary" });
     }
   });
@@ -863,17 +833,12 @@ export async function registerRoutes(
       const data = await storage.getQualityOffenders();
       res.json(data);
     } catch (err) {
-      console.error("Error fetching quality offenders:", err);
+      logger.error("Error fetching quality offenders", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch quality offenders" });
     }
   });
 
-  app.post("/api/admin/community-feedback/discover", async (req, res) => {
-    const adminSecret = process.env.ADMIN_SECRET;
-    if (!adminSecret) return res.status(503).json({ message: "Admin not configured" });
-    const provided = req.headers["x-admin-secret"];
-    if (!verifyAdminSecret(provided, adminSecret)) return res.status(401).json({ message: "Unauthorized" });
-
+  app.post("/api/admin/community-feedback/discover", requireAdmin(), async (req, res) => {
     try {
       const result = await discoverAllSources();
       res.json({ message: "Discovery complete", ...result });
@@ -882,12 +847,25 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/admin/audit-log", requireAdmin(), async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+      const result = await pool.query(
+        `SELECT * FROM admin_audit_log ORDER BY timestamp DESC LIMIT $1`,
+        [limit],
+      );
+      res.json({ entries: result.rows });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch audit log" });
+    }
+  });
+
   app.get("/api/skills/summary", async (_req, res) => {
     try {
       const data = await storage.getSkillsSummary();
       res.json(data);
     } catch (err) {
-      console.error("Error fetching skills summary:", err);
+      logger.error("Error fetching skills summary", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch skills summary" });
     }
   });
@@ -897,7 +875,7 @@ export async function registerRoutes(
       const data = await storage.getSkillsChainDistribution();
       res.json(data);
     } catch (err) {
-      console.error("Error fetching skills chain distribution:", err);
+      logger.error("Error fetching skills chain distribution", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch skills chain distribution" });
     }
   });
@@ -908,7 +886,7 @@ export async function registerRoutes(
       const data = await storage.getSkillsTopCapabilities(limit);
       res.json(data);
     } catch (err) {
-      console.error("Error fetching top capabilities:", err);
+      logger.error("Error fetching top capabilities", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch top capabilities" });
     }
   });
@@ -918,7 +896,7 @@ export async function registerRoutes(
       const data = await storage.getSkillsCategoryBreakdown();
       res.json(data);
     } catch (err) {
-      console.error("Error fetching category breakdown:", err);
+      logger.error("Error fetching category breakdown", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch category breakdown" });
     }
   });
@@ -928,7 +906,7 @@ export async function registerRoutes(
       const data = await storage.getSkillsTrustCorrelation();
       res.json(data);
     } catch (err) {
-      console.error("Error fetching trust correlation:", err);
+      logger.error("Error fetching trust correlation", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch trust correlation" });
     }
   });
@@ -938,7 +916,7 @@ export async function registerRoutes(
       const data = await storage.getSkillsOasfOverview();
       res.json(data);
     } catch (err) {
-      console.error("Error fetching OASF overview:", err);
+      logger.error("Error fetching OASF overview", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch OASF overview" });
     }
   });
@@ -949,7 +927,7 @@ export async function registerRoutes(
       const data = await storage.getSkillsNotableAgents(limit);
       res.json(data);
     } catch (err) {
-      console.error("Error fetching notable agents:", err);
+      logger.error("Error fetching notable agents", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch notable agents" });
     }
   });

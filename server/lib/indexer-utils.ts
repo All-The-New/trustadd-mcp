@@ -64,24 +64,7 @@ export async function runWithConcurrency<T>(
   await Promise.all(workers);
 }
 
-export function createLogger(prefix: string) {
-  const fmt = () =>
-    new Date().toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-    });
-
-  return {
-    info: (msg: string) => console.log(`${fmt()} [${prefix}] ${msg}`),
-    warn: (msg: string) => console.warn(`${fmt()} [${prefix}] WARN: ${msg}`),
-    error: (msg: string, err?: unknown) => {
-      const errMsg = err instanceof Error ? err.message : err ? String(err) : "";
-      console.error(`${fmt()} [${prefix}] ERROR: ${msg}${errMsg ? ` — ${errMsg}` : ""}`);
-    },
-  };
-}
+export { createLogger } from "./logger.js";
 
 export function isTransientError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;

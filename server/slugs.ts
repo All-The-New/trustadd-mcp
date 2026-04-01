@@ -1,6 +1,9 @@
 import { db } from "./db.js";
 import { agents } from "../shared/schema.js";
 import { isNull, eq } from "drizzle-orm";
+import { createLogger } from "./lib/logger.js";
+
+const logger = createLogger("slugs");
 
 export function generateSlug(name: string | null, erc8004Id: string, chainId: number): string {
   const chainPrefix: Record<number, string> = {
@@ -37,11 +40,11 @@ export async function ensureSlugsGenerated(): Promise<void> {
     .limit(1);
 
   if (unsluggedCount.length === 0) {
-    console.log("[slugs] All agents have slugs");
+    logger.info("All agents have slugs");
     return;
   }
 
-  console.log("[slugs] Generating slugs for agents without them...");
+  logger.info("Generating slugs for agents without them...");
   const batch = 500;
   let processed = 0;
 
@@ -68,5 +71,5 @@ export async function ensureSlugsGenerated(): Promise<void> {
     processed += rows.length;
   }
 
-  console.log(`[slugs] Generated slugs for ${processed} agents`);
+  logger.info(`Generated slugs for ${processed} agents`);
 }

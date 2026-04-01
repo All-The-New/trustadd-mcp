@@ -1,5 +1,9 @@
 import { storage } from "./storage.js";
 import { getEnabledChains } from "../shared/chains.js";
+import { createLogger } from "./lib/logger.js";
+import { getDbPool } from "./db.js";
+
+const logger = createLogger("alerts");
 
 export interface Alert {
   id: string;
@@ -11,19 +15,54 @@ export interface Alert {
   lastSeen: Date;
 }
 
-// Track already-delivered alerts to avoid spamming (in-memory, resets on restart)
-const deliveredAlerts = new Map<string, number>();
 const REDELIVER_INTERVAL_MS = 6 * 60 * 60 * 1000; // re-alert every 6h for persistent issues
+
+async function getLastDelivered(alertIds: string[]): Promise<Map<string, Date>> {
+  const result = new Map<string, Date>();
+  if (alertIds.length === 0) return result;
+  try {
+    const pool = getDbPool();
+    const placeholders = alertIds.map((_, i) => `$${i + 1}`).join(",");
+    const rows = await pool.query(
+      `SELECT alert_id, last_delivered_at FROM alert_deliveries WHERE alert_id IN (${placeholders})`,
+      alertIds,
+    );
+    for (const row of rows.rows) {
+      result.set(row.alert_id, new Date(row.last_delivered_at));
+    }
+  } catch {
+    // DB might not have the table yet — fall through (deliver all)
+  }
+  return result;
+}
+
+async function recordDeliveries(alertIds: string[]): Promise<void> {
+  if (alertIds.length === 0) return;
+  try {
+    const pool = getDbPool();
+    const values = alertIds.map((_, i) => `($${i + 1}, NOW())`).join(",");
+    await pool.query(
+      `INSERT INTO alert_deliveries (alert_id, last_delivered_at) VALUES ${values}
+       ON CONFLICT (alert_id) DO UPDATE SET last_delivered_at = NOW()`,
+      alertIds,
+    );
+  } catch {
+    // Non-critical — worst case we re-deliver
+  }
+}
 
 export async function deliverAlerts(alerts: Alert[]): Promise<void> {
   const webhookUrl = process.env.ALERT_WEBHOOK_URL;
   if (!webhookUrl) return;
 
   const now = Date.now();
-  const toDeliver = alerts.filter((a) => {
-    if (a.severity === "info") return false; // only deliver warning + critical
-    const lastDelivered = deliveredAlerts.get(a.id);
-    if (lastDelivered && now - lastDelivered < REDELIVER_INTERVAL_MS) return false;
+  const candidates = alerts.filter((a) => a.severity !== "info");
+  if (candidates.length === 0) return;
+
+  const lastDelivered = await getLastDelivered(candidates.map((a) => a.id));
+  const toDeliver = candidates.filter((a) => {
+    const last = lastDelivered.get(a.id);
+    if (last && now - last.getTime() < REDELIVER_INTERVAL_MS) return false;
     return true;
   });
 
@@ -43,17 +82,10 @@ export async function deliverAlerts(alerts: Alert[]): Promise<void> {
       body: JSON.stringify({ text, blocks: undefined }),
       signal: AbortSignal.timeout(10000),
     });
-    for (const a of toDeliver) {
-      deliveredAlerts.set(a.id, now);
-    }
+    await recordDeliveries(toDeliver.map((a) => a.id));
   } catch (err) {
-    console.error(`[alerts] Failed to deliver webhook: ${(err as Error).message}`);
+    logger.error("Failed to deliver webhook", { error: (err as Error).message });
   }
-
-  // Clean up old entries
-  deliveredAlerts.forEach((ts, id) => {
-    if (now - ts > REDELIVER_INTERVAL_MS * 2) deliveredAlerts.delete(id);
-  });
 }
 
 const STALL_THRESHOLD_MINUTES = 60;

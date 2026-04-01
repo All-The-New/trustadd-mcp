@@ -3,17 +3,13 @@ import { GitHubAdapter } from "./adapters/github.js";
 import { FarcasterAdapter } from "./adapters/farcaster.js";
 import { discoverAllSources } from "./source-discovery.js";
 import { storage } from "../storage.js";
+import { createLogger } from "../lib/logger.js";
 
+const logger = createLogger("community-feedback");
 const RETRY_DELAY_MS = 5 * 60 * 1000;
 
 function log(message: string) {
-  const time = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-  console.log(`${time} [community-feedback] ${message}`);
+  logger.info(message);
 }
 
 let scheduler: CommunityFeedbackScheduler | null = null;

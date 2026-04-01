@@ -1,13 +1,10 @@
 import { storage } from "../storage.js";
+import { createLogger } from "../lib/logger.js";
+
+const logger = createLogger("source-discovery");
 
 function log(message: string) {
-  const time = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-  console.log(`${time} [source-discovery] ${message}`);
+  logger.info(message);
 }
 
 const GITHUB_URL_REGEX = /(?:https?:\/\/)?(?:www\.)?github\.com\/([a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)?)/gi;

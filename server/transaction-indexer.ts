@@ -323,7 +323,7 @@ export async function syncAllAgentTransactions(): Promise<{
         errors++;
         chainErrors[chainId] = (chainErrors[chainId] ?? 0) + 1;
         const level = isTransientError(err) ? "warn" : "error";
-        log[level](`Sync failed for ${address.slice(0, 10)}... on chain ${chainId}`, err);
+        log[level](`Sync failed for ${address.slice(0, 10)}... on chain ${chainId}`, { error: (err as Error).message });
       }
     },
     MAX_CONCURRENT,
@@ -395,7 +395,7 @@ export function initTransactionIndexer() {
         scheduleNext(SYNC_INTERVAL_MS);
       }
     } catch (err) {
-      log.error("Sync cycle failed", err);
+      log.error("Sync cycle failed", { error: (err as Error).message });
       log.info(`Retrying in ${RETRY_INTERVAL_MS / 60000} min...`);
       scheduleNext(RETRY_INTERVAL_MS);
     }

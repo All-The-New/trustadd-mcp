@@ -1,8 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
-import rateLimit from "express-rate-limit";
 import { registerRoutes } from "../server/routes.js";
+import { createLogger } from "../server/lib/logger.js";
+import { requestStore, generateRequestId } from "../server/lib/request-context.js";
+import { createRateLimiter } from "../server/lib/rate-limiter.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -31,24 +33,41 @@ app.use((_req: any, res: any, next: any) => {
   next();
 });
 
-const apiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 100,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  message: { message: "Too many requests, please try again later.", retryAfter: 60 },
+// DB-backed rate limiting (shared across all Vercel serverless instances)
+app.use("/api/admin", createRateLimiter({ prefix: "admin", windowMs: 60 * 60 * 1000, limit: 2 }));
+app.use("/api", createRateLimiter({ prefix: "api", windowMs: 60 * 1000, limit: 100 }));
+
+const reqLog = createLogger("http");
+
+// Request ID + context middleware
+app.use((req: any, res: any, next: any) => {
+  const requestId = (req.headers["x-request-id"] as string) || generateRequestId();
+  res.setHeader("X-Request-ID", requestId);
+  requestStore.run({ requestId, startTime: Date.now() }, () => next());
 });
 
-const adminLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  limit: 2,
-  standardHeaders: "draft-7",
-  legacyHeaders: false,
-  message: { message: "Admin endpoint rate limit exceeded. Try again later." },
+// Request logging middleware
+app.use((req: any, res: any, next: any) => {
+  const start = Date.now();
+  const path = req.path;
+
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    if (path.startsWith("/api")) {
+      reqLog.info(`${req.method} ${path} ${res.statusCode} in ${duration}ms`, {
+        method: req.method,
+        path,
+        statusCode: res.statusCode,
+        durationMs: duration,
+        ip: req.ip,
+      });
+    }
+  });
+
+  next();
 });
 
-app.use("/api/admin", adminLimiter);
-app.use("/api", apiLimiter);
+const errLog = createLogger("api");
 
 // Register routes FIRST, then error handler
 let initialized = false;
@@ -57,7 +76,7 @@ const initPromise = registerRoutes(app).then(() => {
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-    console.error("API Error:", err.message, err.stack?.split("\n").slice(0, 3).join("\n"));
+    errLog.error(`API Error: ${err.message}`, { status, stack: err.stack?.split("\n").slice(0, 3).join("\n") });
     if (res.headersSent) {
       return next(err);
     }

@@ -1,5 +1,8 @@
 import { storage } from "./storage.js";
 import { log } from "./lib/log.js";
+import { createLogger } from "./lib/logger.js";
+
+const logger = createLogger("seed");
 
 const SEED_AGENTS = [
   {
@@ -201,6 +204,6 @@ export async function seedDatabase() {
 
     log("Database seeding complete", "seed");
   } catch (err) {
-    console.error("Error seeding database:", err);
+    logger.error("Error seeding database", { error: (err as Error).message });
   }
 }
