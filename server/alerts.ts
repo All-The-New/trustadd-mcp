@@ -1,3 +1,4 @@
+import { Resend } from "resend";
 import { storage } from "./storage.js";
 import { getEnabledChains } from "../shared/chains.js";
 import { createLogger } from "./lib/logger.js";
@@ -51,9 +52,76 @@ async function recordDeliveries(alertIds: string[]): Promise<void> {
   }
 }
 
-export async function deliverAlerts(alerts: Alert[]): Promise<void> {
+async function sendEmailAlert(toDeliver: Alert[]): Promise<boolean> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const alertEmail = process.env.ALERT_EMAIL;
+  if (!apiKey || !alertEmail) return false;
+
+  const criticalCount = toDeliver.filter((a) => a.severity === "critical").length;
+  const subject = criticalCount > 0
+    ? `[CRITICAL] TrustAdd: ${criticalCount} critical alert${criticalCount > 1 ? "s" : ""}`
+    : `[WARNING] TrustAdd: ${toDeliver.length} alert${toDeliver.length > 1 ? "s" : ""}`;
+
+  const rows = toDeliver.map((a) => {
+    const color = a.severity === "critical" ? "#dc2626" : "#f59e0b";
+    return `<tr><td style="padding:8px;border-bottom:1px solid #eee"><span style="color:${color};font-weight:bold">${a.severity.toUpperCase()}</span></td><td style="padding:8px;border-bottom:1px solid #eee"><strong>${a.title}</strong></td><td style="padding:8px;border-bottom:1px solid #eee">${a.message}</td></tr>`;
+  }).join("");
+
+  const html = `
+    <div style="font-family:sans-serif;max-width:600px">
+      <h2 style="color:#1e40af">TrustAdd Alert</h2>
+      <p>${toDeliver.length} issue${toDeliver.length > 1 ? "s" : ""} detected at ${new Date().toISOString()}</p>
+      <table style="width:100%;border-collapse:collapse">
+        <tr style="background:#f8fafc"><th style="padding:8px;text-align:left">Severity</th><th style="padding:8px;text-align:left">Alert</th><th style="padding:8px;text-align:left">Details</th></tr>
+        ${rows}
+      </table>
+      <p style="color:#6b7280;font-size:12px;margin-top:16px">Alerts re-send every 6 hours while active. <a href="https://trustadd.com/status">View status page</a></p>
+    </div>`;
+
+  try {
+    const resend = new Resend(apiKey);
+    await resend.emails.send({
+      from: "TrustAdd Alerts <alerts@trustadd.com>",
+      to: alertEmail.split(",").map((e) => e.trim()),
+      subject,
+      html,
+    });
+    return true;
+  } catch (err) {
+    logger.error("Failed to send alert email", { error: (err as Error).message });
+    return false;
+  }
+}
+
+async function sendWebhookAlert(toDeliver: Alert[]): Promise<boolean> {
   const webhookUrl = process.env.ALERT_WEBHOOK_URL;
-  if (!webhookUrl) return;
+  if (!webhookUrl) return false;
+
+  const criticalCount = toDeliver.filter((a) => a.severity === "critical").length;
+  const prefix = criticalCount > 0 ? "🚨" : "⚠️";
+  const text = `${prefix} **TrustAdd Alert** (${toDeliver.length} issue${toDeliver.length > 1 ? "s" : ""})\n\n` +
+    toDeliver
+      .map((a) => `[${a.severity.toUpperCase()}] **${a.title}**: ${a.message}`)
+      .join("\n");
+
+  try {
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(10000),
+    });
+    return true;
+  } catch (err) {
+    logger.error("Failed to deliver webhook", { error: (err as Error).message });
+    return false;
+  }
+}
+
+export async function deliverAlerts(alerts: Alert[]): Promise<void> {
+  const hasEmail = process.env.RESEND_API_KEY && process.env.ALERT_EMAIL;
+  const hasWebhook = !!process.env.ALERT_WEBHOOK_URL;
+  if (!hasEmail && !hasWebhook) return;
 
   const now = Date.now();
   const candidates = alerts.filter((a) => a.severity !== "info");
@@ -68,23 +136,13 @@ export async function deliverAlerts(alerts: Alert[]): Promise<void> {
 
   if (toDeliver.length === 0) return;
 
-  const criticalCount = toDeliver.filter((a) => a.severity === "critical").length;
-  const prefix = criticalCount > 0 ? "🚨" : "⚠️";
-  const text = `${prefix} **TrustAdd Alert** (${toDeliver.length} issue${toDeliver.length > 1 ? "s" : ""})\n\n` +
-    toDeliver
-      .map((a) => `[${a.severity.toUpperCase()}] **${a.title}**: ${a.message}`)
-      .join("\n");
+  // Try email first, fall back to webhook
+  let delivered = false;
+  if (hasEmail) delivered = await sendEmailAlert(toDeliver);
+  if (hasWebhook) delivered = (await sendWebhookAlert(toDeliver)) || delivered;
 
-  try {
-    await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, blocks: undefined }),
-      signal: AbortSignal.timeout(10000),
-    });
+  if (delivered) {
     await recordDeliveries(toDeliver.map((a) => a.id));
-  } catch (err) {
-    logger.error("Failed to deliver webhook", { error: (err as Error).message });
   }
 }
 
