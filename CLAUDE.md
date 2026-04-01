@@ -45,13 +45,29 @@ npm run dev                    # Express + Vite HMR on port 5000
 
 ## Required Environment Variables
 
-Set in **Vercel Dashboard > Project Settings > Environment Variables**:
+Managed via Vercel CLI (project is linked at `.vercel/project.json`):
 
-```
-DATABASE_URL=postgresql://...    # Supabase transaction-mode pooler (port 6543)
+```bash
+# View current env vars
+npx vercel env ls
+
+# Update a value (e.g. DATABASE_URL)
+npx vercel env rm DATABASE_URL production --yes
+printf 'postgresql://...' | npx vercel env add DATABASE_URL production
+
+# Then redeploy
+npx vercel deploy --prod
 ```
 
-See `bootstrap.md` for the full list of 12 environment variables including API keys and feature flags.
+Key variables:
+```
+DATABASE_URL=postgresql://trustadd_app.agfyfdhvgekekliujoxc:...@aws-1-us-east-2.pooler.supabase.com:6543/postgres
+```
+- Must use **transaction-mode pooler** (port 6543), NOT direct connection (port 5432)
+- DB user is `trustadd_app` (not `postgres`) — has full privileges on all tables
+- Supabase project: `agfyfdhvgekekliujoxc` (us-east-2)
+
+See `bootstrap.md` for the full list of environment variables including API keys and feature flags.
 
 ## Build & Deploy
 
@@ -59,11 +75,24 @@ See `bootstrap.md` for the full list of 12 environment variables including API k
 # Local development
 npm run dev                      # Express + Vite HMR on port 5000
 
-# Production (Vercel auto-deploys from main branch)
-# Frontend: npm run build:client (Vite → dist/public)
-# API: Vercel compiles api/*.ts as serverless functions
-# Schema: npx drizzle-kit push (run manually when schema changes)
+# Production (Vercel auto-deploys from main branch on push)
+npx vercel deploy --prod         # Manual deploy if needed
+
+# Trigger.dev jobs (auto-deploy via GitHub Actions on push to trigger/ or server/)
+npx trigger.dev@4.4.3 deploy --local-build   # Manual deploy from local machine
+# Note: --local-build required locally (depot.dev has network timeout); GitHub Actions uses default
+
+# Schema changes
+npx drizzle-kit push             # Run manually when schema changes
 ```
+
+## Critical Infrastructure Notes
+
+- **Cloudflare DNS**: Must be set to **DNS-only (grey cloud)** — orange cloud proxy causes SSL 525 with Vercel
+- **Vercel Deployment Protection**: Must remain **OFF** — enabling it breaks API calls from the frontend
+- **`server/db.ts`**: Both `pool` and `db` are lazy Proxies — this is intentional. Prevents `DATABASE_URL` check at import time (required for Trigger.dev build container indexing)
+- **Trigger.dev config**: `trigger.config.ts` must include `maxDuration` (v4 requirement). Project ref: `proj_nabhtdcabmsfzbmlifqh`
+- **GitHub Actions**: `TRIGGER_SECRET_KEY` secret must be set in repo for auto-deploy workflow to function
 
 ## Style & Conventions
 
