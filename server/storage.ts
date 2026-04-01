@@ -632,21 +632,23 @@ export class DatabaseStorage implements IStorage {
     const anyRunning = allStates.some(s => s.isRunning);
     const errors = allStates.filter(s => s.lastError).map(s => s.lastError);
 
-    const chainBreakdown = await Promise.all(
-      allStates.map(async (s) => {
-        const [chainAgentStats] = await db
-          .select({ total: sql<number>`count(*)::int` })
-          .from(agents)
-          .where(eq(agents.chainId, s.chainId));
-        return {
-          chainId: s.chainId,
-          totalAgents: chainAgentStats?.total ?? 0,
-          lastProcessedBlock: s.lastProcessedBlock,
-          isRunning: s.isRunning,
-          lastError: s.lastError,
-        };
+    const chainAgentCounts = await db
+      .select({
+        chainId: agents.chainId,
+        total: sql<number>`count(*)::int`,
       })
-    );
+      .from(agents)
+      .groupBy(agents.chainId);
+
+    const countsByChain = new Map(chainAgentCounts.map(c => [c.chainId, c.total]));
+
+    const chainBreakdown = allStates.map((s) => ({
+      chainId: s.chainId,
+      totalAgents: countsByChain.get(s.chainId) ?? 0,
+      lastProcessedBlock: s.lastProcessedBlock,
+      isRunning: s.isRunning,
+      lastError: s.lastError,
+    }));
 
     return {
       totalAgents: agentStats?.totalAgents ?? 0,

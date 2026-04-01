@@ -9,6 +9,19 @@ import { recalculateScore } from "./trust-score.js";
 import { probeAllAgents } from "./x402-prober.js";
 import { syncAllAgentTransactions } from "./transaction-indexer.js";
 
+// Lightweight in-memory TTL cache for expensive query results.
+// Serverless functions are ephemeral, so memory is naturally bounded.
+const responseCache = new Map<string, { data: unknown; expiresAt: number }>();
+
+async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
+  const now = Date.now();
+  const entry = responseCache.get(key);
+  if (entry && entry.expiresAt > now) return entry.data as T;
+  const data = await fn();
+  responseCache.set(key, { data, expiresAt: now + ttlMs });
+  return data;
+}
+
 function parseChainId(raw: unknown): number | undefined {
   if (raw === undefined || raw === null || raw === "") return undefined;
   const parsed = parseInt(raw as string, 10);
@@ -66,6 +79,7 @@ export async function registerRoutes(
         };
       });
 
+      res.set("Cache-Control", "public, s-maxage=30, stale-while-revalidate=60");
       res.json(result);
     } catch (err) {
       console.error("Error fetching chains:", err);
@@ -94,6 +108,7 @@ export async function registerRoutes(
         feedbackMap[s.agentId] = { githubStars: s.githubStars, githubHealthScore: s.githubHealthScore, farcasterFollowers: s.farcasterFollowers };
       }
 
+      res.set("Cache-Control", "public, s-maxage=10, stale-while-revalidate=30");
       res.json({ ...result, communityFeedback: feedbackMap });
     } catch (err) {
       console.error("Error fetching agents:", err);
@@ -107,6 +122,7 @@ export async function registerRoutes(
       if (!agent) {
         return res.status(404).json({ message: "Agent not found" });
       }
+      res.set("Cache-Control", "public, s-maxage=10, stale-while-revalidate=30");
       res.json(agent);
     } catch (err) {
       console.error("Error fetching agent:", err);
@@ -163,7 +179,9 @@ export async function registerRoutes(
   app.get("/api/stats", async (req, res) => {
     try {
       const chainId = parseChainId(req.query.chainId);
-      const stats = await storage.getStats(chainId);
+      const cacheKey = `stats:${chainId ?? "all"}`;
+      const stats = await cached(cacheKey, 30_000, () => storage.getStats(chainId));
+      res.set("Cache-Control", "public, s-maxage=30, stale-while-revalidate=60");
       res.json(stats);
     } catch (err) {
       console.error("Error fetching stats:", err);
@@ -171,9 +189,14 @@ export async function registerRoutes(
     }
   });
 
+  // Analytics endpoints — cached 60s in-memory + 60s at Vercel edge
+  const ANALYTICS_CACHE = "public, s-maxage=60, stale-while-revalidate=120";
+  const ANALYTICS_TTL = 60_000;
+
   app.get("/api/analytics/overview", async (_req, res) => {
     try {
-      const data = await storage.getAnalyticsOverview();
+      const data = await cached("analytics:overview", ANALYTICS_TTL, () => storage.getAnalyticsOverview());
+      res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
       console.error("Error fetching analytics overview:", err);
@@ -183,7 +206,8 @@ export async function registerRoutes(
 
   app.get("/api/analytics/protocol-stats", async (_req, res) => {
     try {
-      const data = await storage.getProtocolStats();
+      const data = await cached("analytics:protocol-stats", ANALYTICS_TTL, () => storage.getProtocolStats());
+      res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
       console.error("Error fetching protocol stats:", err);
@@ -193,7 +217,8 @@ export async function registerRoutes(
 
   app.get("/api/analytics/chain-distribution", async (_req, res) => {
     try {
-      const data = await storage.getAnalyticsChainDistribution();
+      const data = await cached("analytics:chain-distribution", ANALYTICS_TTL, () => storage.getAnalyticsChainDistribution());
+      res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
       console.error("Error fetching chain distribution:", err);
@@ -203,7 +228,8 @@ export async function registerRoutes(
 
   app.get("/api/analytics/registrations", async (_req, res) => {
     try {
-      const data = await storage.getAnalyticsRegistrations();
+      const data = await cached("analytics:registrations", ANALYTICS_TTL, () => storage.getAnalyticsRegistrations());
+      res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
       console.error("Error fetching registrations:", err);
@@ -213,7 +239,8 @@ export async function registerRoutes(
 
   app.get("/api/analytics/metadata-quality", async (_req, res) => {
     try {
-      const data = await storage.getAnalyticsMetadataQuality();
+      const data = await cached("analytics:metadata-quality", ANALYTICS_TTL, () => storage.getAnalyticsMetadataQuality());
+      res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
       console.error("Error fetching metadata quality:", err);
@@ -223,7 +250,8 @@ export async function registerRoutes(
 
   app.get("/api/analytics/x402-by-chain", async (_req, res) => {
     try {
-      const data = await storage.getAnalyticsX402ByChain();
+      const data = await cached("analytics:x402-by-chain", ANALYTICS_TTL, () => storage.getAnalyticsX402ByChain());
+      res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
       console.error("Error fetching x402 by chain:", err);
@@ -233,7 +261,8 @@ export async function registerRoutes(
 
   app.get("/api/analytics/controller-concentration", async (_req, res) => {
     try {
-      const data = await storage.getAnalyticsControllerConcentration();
+      const data = await cached("analytics:controller-concentration", ANALYTICS_TTL, () => storage.getAnalyticsControllerConcentration());
+      res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
       console.error("Error fetching controller concentration:", err);
@@ -243,7 +272,8 @@ export async function registerRoutes(
 
   app.get("/api/analytics/uri-schemes", async (_req, res) => {
     try {
-      const data = await storage.getAnalyticsUriSchemes();
+      const data = await cached("analytics:uri-schemes", ANALYTICS_TTL, () => storage.getAnalyticsUriSchemes());
+      res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
       console.error("Error fetching URI schemes:", err);
@@ -253,7 +283,8 @@ export async function registerRoutes(
 
   app.get("/api/analytics/categories", async (_req, res) => {
     try {
-      const data = await storage.getAnalyticsCategories();
+      const data = await cached("analytics:categories", ANALYTICS_TTL, () => storage.getAnalyticsCategories());
+      res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
       console.error("Error fetching categories:", err);
@@ -263,7 +294,8 @@ export async function registerRoutes(
 
   app.get("/api/analytics/image-domains", async (_req, res) => {
     try {
-      const data = await storage.getAnalyticsImageDomains();
+      const data = await cached("analytics:image-domains", ANALYTICS_TTL, () => storage.getAnalyticsImageDomains());
+      res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
       console.error("Error fetching image domains:", err);
@@ -273,7 +305,8 @@ export async function registerRoutes(
 
   app.get("/api/analytics/models", async (_req, res) => {
     try {
-      const data = await storage.getAnalyticsModels();
+      const data = await cached("analytics:models", ANALYTICS_TTL, () => storage.getAnalyticsModels());
+      res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
       console.error("Error fetching models:", err);
@@ -283,7 +316,8 @@ export async function registerRoutes(
 
   app.get("/api/analytics/endpoints-coverage", async (_req, res) => {
     try {
-      const data = await storage.getAnalyticsEndpointsCoverage();
+      const data = await cached("analytics:endpoints-coverage", ANALYTICS_TTL, () => storage.getAnalyticsEndpointsCoverage());
+      res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
       console.error("Error fetching endpoints coverage:", err);
@@ -293,7 +327,8 @@ export async function registerRoutes(
 
   app.get("/api/analytics/top-agents", async (_req, res) => {
     try {
-      const data = await storage.getAnalyticsTopAgents();
+      const data = await cached("analytics:top-agents", ANALYTICS_TTL, () => storage.getAnalyticsTopAgents());
+      res.set("Cache-Control", ANALYTICS_CACHE);
       res.json(data);
     } catch (err) {
       console.error("Error fetching top agents:", err);

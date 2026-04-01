@@ -24,6 +24,22 @@ function getPool() {
   });
 }
 
+const TRANSIENT_ERRORS = new Set([
+  "ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "EPIPE",
+  "CONNECTION_CLOSED", "CONNECTION_ENDED",
+]);
+
+function isTransientError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const code = (err as any).code;
+  if (code && TRANSIENT_ERRORS.has(code)) return true;
+  const msg = err.message.toLowerCase();
+  return msg.includes("connection terminated") ||
+    msg.includes("connection reset") ||
+    msg.includes("socket hang up") ||
+    msg.includes("client has encountered a connection error");
+}
+
 let _pool: pg.Pool | null = null;
 
 export function getDbPool(): pg.Pool {
@@ -32,6 +48,21 @@ export function getDbPool(): pg.Pool {
     _pool.on("error", (err: Error) => {
       console.error(`[db] Pool client error (handled): ${err.message}`);
     });
+
+    // Wrap pool.query with single retry on transient connection errors
+    const originalQuery = _pool.query.bind(_pool);
+    (_pool as any).query = async function retryQuery(...args: any[]) {
+      try {
+        return await (originalQuery as any)(...args);
+      } catch (err) {
+        if (isTransientError(err)) {
+          console.warn(`[db] Transient error, retrying in 500ms: ${(err as Error).message}`);
+          await new Promise(r => setTimeout(r, 500));
+          return (originalQuery as any)(...args);
+        }
+        throw err;
+      }
+    };
   }
   return _pool;
 }
