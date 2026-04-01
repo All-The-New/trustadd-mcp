@@ -1,5 +1,4 @@
 import { schedules, logger } from "@trigger.dev/sdk/v3";
-import { syncAllAgentTransactions } from "../server/transaction-indexer";
 import { notifyJobFailure } from "./alert";
 
 export const transactionIndexerTask = schedules.task({
@@ -12,6 +11,7 @@ export const transactionIndexerTask = schedules.task({
         timestamp: payload.timestamp,
       });
 
+      const { syncAllAgentTransactions } = await import("../server/transaction-indexer");
       const result = await syncAllAgentTransactions();
       logger.info("Transaction sync complete", { result });
 

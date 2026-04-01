@@ -1,5 +1,4 @@
 import { schedules, logger } from "@trigger.dev/sdk/v3";
-import { probeAllAgents } from "../server/x402-prober";
 import { notifyJobFailure } from "./alert";
 
 export const x402ProberTask = schedules.task({
@@ -12,6 +11,7 @@ export const x402ProberTask = schedules.task({
         timestamp: payload.timestamp,
       });
 
+      const { probeAllAgents } = await import("../server/x402-prober");
       const result = await probeAllAgents();
       logger.info("x402 probing complete", { result });
 

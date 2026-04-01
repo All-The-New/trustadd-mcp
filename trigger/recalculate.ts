@@ -1,10 +1,4 @@
 import { schedules, logger } from "@trigger.dev/sdk/v3";
-import { ensureScoresCalculated } from "../server/trust-score";
-import { ensureSlugsGenerated } from "../server/slugs";
-import { classifyAgent, computeFingerprint } from "../server/quality-classifier";
-import { db } from "../server/db";
-import { agents } from "../shared/schema";
-import { eq } from "drizzle-orm";
 import { notifyJobFailure } from "./alert";
 
 export const recalculateTask = schedules.task({
@@ -16,6 +10,13 @@ export const recalculateTask = schedules.task({
       logger.info("Starting trust score recalculation", {
         timestamp: payload.timestamp,
       });
+
+      const { ensureScoresCalculated } = await import("../server/trust-score");
+      const { ensureSlugsGenerated } = await import("../server/slugs");
+      const { classifyAgent } = await import("../server/quality-classifier");
+      const { db } = await import("../server/db");
+      const { agents } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
 
       await ensureScoresCalculated();
       logger.info("Trust scores recalculated");

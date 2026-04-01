@@ -1,5 +1,4 @@
 import { schedules, logger } from "@trigger.dev/sdk/v3";
-import { startIndexer, stopIndexer } from "../server/indexer";
 import { notifyJobFailure } from "./alert";
 
 export const blockchainIndexerTask = schedules.task({
@@ -12,6 +11,7 @@ export const blockchainIndexerTask = schedules.task({
         timestamp: payload.timestamp,
       });
 
+      const { startIndexer, stopIndexer } = await import("../server/indexer");
       const indexers = startIndexer();
       logger.info(`Started ${indexers.length} chain indexer(s)`);
 

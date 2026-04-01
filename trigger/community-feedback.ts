@@ -1,5 +1,4 @@
 import { schedules, logger } from "@trigger.dev/sdk/v3";
-import { discoverAllSources } from "../server/community-feedback";
 import { notifyJobFailure } from "./alert";
 
 export const communityFeedbackTask = schedules.task({
@@ -12,14 +11,14 @@ export const communityFeedbackTask = schedules.task({
         timestamp: payload.timestamp,
       });
 
+      const { discoverAllSources, getCommunityFeedbackScheduler } = await import(
+        "../server/community-feedback"
+      );
+
       // Discover new sources (GitHub repos, Farcaster profiles)
       const discovered = await discoverAllSources();
       logger.info("Source discovery complete", { discovered });
 
-      // Import the scheduler dynamically to avoid circular deps
-      const { getCommunityFeedbackScheduler } = await import(
-        "../server/community-feedback"
-      );
       const scheduler = getCommunityFeedbackScheduler();
       if (scheduler) {
         await scheduler.runAllScrapes();
