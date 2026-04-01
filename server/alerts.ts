@@ -1,4 +1,3 @@
-import { Resend } from "resend";
 import { storage } from "./storage.js";
 import { getEnabledChains } from "../shared/chains.js";
 import { createLogger } from "./lib/logger.js";
@@ -79,6 +78,7 @@ async function sendEmailAlert(toDeliver: Alert[]): Promise<boolean> {
     </div>`;
 
   try {
+    const { Resend } = await import("resend");
     const resend = new Resend(apiKey);
     await resend.emails.send({
       from: "TrustAdd Alerts <alerts@trustadd.com>",
