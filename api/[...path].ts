@@ -60,13 +60,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // Ensure Express sees the original URL path, not the rewritten one
-  const originalUrl = req.headers["x-vercel-forwarded-for"]
-    ? req.url
-    : req.url;
-
-  // Log what Express receives
-  console.log(`[catch-all] ${req.method} url=${req.url} originalUrl=${req.headers["x-original-url"] || "none"}`);
-
   return app(req, res);
 }
