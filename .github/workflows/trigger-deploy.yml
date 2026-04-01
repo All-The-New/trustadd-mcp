@@ -1,6 +1,7 @@
 name: Deploy Trigger.dev Jobs
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -9,6 +10,7 @@ on:
       - "trigger.config.ts"
       - "server/**"
       - "shared/**"
+      - ".github/workflows/trigger-deploy.yml"
 
 jobs:
   deploy:
