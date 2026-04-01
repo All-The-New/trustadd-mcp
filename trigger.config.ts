@@ -1,6 +1,6 @@
-import type { TriggerConfig } from "@trigger.dev/sdk/v3";
+import { defineConfig } from "@trigger.dev/sdk/v3";
 
-export const config: TriggerConfig = {
+export default defineConfig({
   project: "proj_nabhtdcabmsfzbmlifqh",
   runtime: "node",
   logLevel: "log",

@@ -94,8 +94,8 @@ export async function registerRoutes(
 
   app.get("/api/agents", async (req, res) => {
     try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
-      const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : undefined;
+      const limit = req.query.limit ? Math.min(Math.max(parseInt(req.query.limit as string, 10) || 20, 1), 200) : undefined;
+      const offset = req.query.offset ? Math.max(parseInt(req.query.offset as string, 10) || 0, 0) : undefined;
       const search = req.query.search as string | undefined;
       const filter = req.query.filter as "all" | "claimed" | "unclaimed" | "has-metadata" | "x402-enabled" | "has-reputation" | "has-feedback" | undefined;
       const chainId = parseChainId(req.query.chainId);
@@ -775,7 +775,7 @@ export async function registerRoutes(
       const agent = await storage.getAgent(req.params.id);
       if (!agent) return res.status(404).json({ message: "Agent not found" });
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
-      const offset = parseInt(req.query.offset as string) || 0;
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
       const transactions = await storage.getTransactions({ agentId: agent.id, limit, offset });
       res.json(transactions);
     } catch (err) {
