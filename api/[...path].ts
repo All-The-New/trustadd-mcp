@@ -59,5 +59,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: "Init failed", message: err.message });
     }
   }
+
+  // Ensure Express sees the original URL path, not the rewritten one
+  const originalUrl = req.headers["x-vercel-forwarded-for"]
+    ? req.url
+    : req.url;
+
+  // Log what Express receives
+  console.log(`[catch-all] ${req.method} url=${req.url} originalUrl=${req.headers["x-original-url"] || "none"}`);
+
   return app(req, res);
 }
