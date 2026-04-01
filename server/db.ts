@@ -43,4 +43,18 @@ export const pool = new Proxy({} as pg.Pool, {
   },
 });
 
-export const db = drizzle(pool, { schema });
+let _db: ReturnType<typeof drizzle> | null = null;
+
+function getDb() {
+  if (!_db) {
+    _db = drizzle(getDbPool(), { schema });
+  }
+  return _db;
+}
+
+// Lazy proxy: db is created on first access (avoids DATABASE_URL check at import time)
+export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+  get(_target, prop) {
+    return (getDb() as any)[prop];
+  },
+});
