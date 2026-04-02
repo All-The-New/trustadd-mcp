@@ -38,7 +38,7 @@ npm run dev                    # Express + Vite HMR on port 5000
 - `server/db.ts` — Lazy PostgreSQL pool + Drizzle setup (Supabase pooler compatible)
 - `api/[...path].ts` — Vercel serverless catch-all (wraps Express app)
 - `api/health.ts` — Standalone health check with DB connection test
-- `trigger/` — 5 Trigger.dev background job definitions
+- `trigger/` — 6 Trigger.dev scheduled task definitions + 1 shared alert helper
 - `vercel.json` — Vercel routing and build configuration
 - `client/src/App.tsx` — React routing (12 pages)
 
@@ -77,9 +77,8 @@ npm run dev                      # Express + Vite HMR on port 5000
 # Production (Vercel auto-deploys from main branch on push)
 npx vercel deploy --prod         # Manual deploy if needed
 
-# Trigger.dev jobs (auto-deploy via GitHub Actions on push to trigger/ or server/)
-npx trigger.dev@4.4.3 deploy --local-build   # Manual deploy from local machine
-# Note: --local-build required locally (depot.dev has network timeout); GitHub Actions uses default
+# Trigger.dev jobs (auto-deploy via GitHub Actions on push to trigger/, server/, shared/)
+# Manual deploy not available locally (no Docker) — use GitHub Actions or workflow_dispatch
 
 # Schema changes — must use Supabase SQL directly (trustadd_app doesn't own tables)
 # drizzle-kit push will fail; run DDL in Supabase SQL editor instead
@@ -90,8 +89,10 @@ npx trigger.dev@4.4.3 deploy --local-build   # Manual deploy from local machine
 - **Cloudflare DNS**: Must be set to **DNS-only (grey cloud)** — orange cloud proxy causes SSL 525 with Vercel
 - **Vercel Deployment Protection**: Must remain **OFF** — enabling it breaks API calls from the frontend
 - **`server/db.ts`**: Both `pool` and `db` are lazy Proxies — this is intentional. Prevents `DATABASE_URL` check at import time (required for Trigger.dev build container indexing)
-- **Trigger.dev config**: `trigger.config.ts` must include `maxDuration` (v4 requirement). Project ref: `proj_nabhtdcabmsfzbmlifqh`
-- **GitHub Actions**: `TRIGGER_ACCESS_TOKEN` secret must be set in repo for auto-deploy workflow to function (v4 CLI requires this env var name)
+- **Trigger.dev config**: `trigger.config.ts` must use `export default defineConfig(...)` and include `maxDuration`. Project ref: `proj_nabhtdcabmsfzbmlifqh`
+- **Trigger.dev task imports**: ALL task files MUST use dynamic `import()` for `../server/` and `../shared/` modules inside the `run` function — static top-level imports crash during container module initialization. Only `@trigger.dev/sdk/v3` can be imported statically.
+- **Trigger.dev env vars**: Set in dashboard (Settings > Environment Variables > Production). Feature flags (`ENABLE_TX_INDEXER`, `ENABLE_PROBER`, `ENABLE_RERESOLVE`) must be lowercase `true`.
+- **GitHub Actions**: `TRIGGER_ACCESS_TOKEN` secret (PAT starting with `tr_pat_`) must be set in repo for auto-deploy workflow to function
 
 ## Style & Conventions
 
