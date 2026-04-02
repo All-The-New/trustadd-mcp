@@ -40,7 +40,7 @@ export const watchdogTask = schedules.task({
       metadata.set("status", "failed");
       metadata.set("lastError", error.message);
       metadata.set("lastErrorAt", new Date().toISOString());
-      throw error;
+      return { error: error.message };
     }
   },
 });
