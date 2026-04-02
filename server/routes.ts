@@ -480,6 +480,81 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/status/tasks", async (_req, res) => {
+    try {
+      const triggerKey = process.env.TRIGGER_SECRET_KEY;
+      if (!triggerKey) {
+        res.json({ error: "TRIGGER_SECRET_KEY not configured", tasks: [] });
+        return;
+      }
+
+      const taskIds = [
+        "blockchain-indexer",
+        "chain-indexer",
+        "watchdog",
+        "recalculate-scores",
+        "transaction-indexer",
+        "community-feedback",
+        "x402-prober",
+      ];
+
+      const response = await fetch("https://api.trigger.dev/api/v1/runs?limit=50", {
+        headers: { Authorization: `Bearer ${triggerKey}` },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!response.ok) {
+        res.json({ error: "Failed to fetch Trigger.dev runs", tasks: [] });
+        return;
+      }
+
+      const data = await response.json() as { data: Array<{
+        id: string; status: string; taskIdentifier: string;
+        createdAt: string; finishedAt?: string; durationMs?: number;
+        isSuccess?: boolean; isFailed?: boolean; costInCents?: number;
+        tags?: string[];
+      }> };
+
+      // Get latest run per task
+      const taskMap = new Map<string, {
+        taskId: string; lastRunId: string; lastStatus: string;
+        lastRunAt: string; lastDurationMs: number; lastCostCents: number;
+        recentSuccesses: number; recentFailures: number; tags?: string[];
+      }>();
+
+      for (const run of data.data) {
+        const task = run.taskIdentifier;
+        if (!taskIds.includes(task)) continue;
+
+        if (!taskMap.has(task)) {
+          taskMap.set(task, {
+            taskId: task,
+            lastRunId: run.id,
+            lastStatus: run.status,
+            lastRunAt: run.createdAt,
+            lastDurationMs: run.durationMs || 0,
+            lastCostCents: run.costInCents || 0,
+            recentSuccesses: 0,
+            recentFailures: 0,
+            tags: run.tags,
+          });
+        }
+
+        const entry = taskMap.get(task)!;
+        if (run.isSuccess) entry.recentSuccesses++;
+        if (run.isFailed) entry.recentFailures++;
+      }
+
+      res.json({
+        tasks: Array.from(taskMap.values()),
+        fetchedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      logger.error("Failed to fetch task status", { error: (err as Error).message });
+      res.status(500).json({ error: "Failed to fetch task status" });
+    }
+  });
+
   app.get("/api/status/alerts", async (_req, res) => {
     try {
       const alerts = await evaluateAlerts();
