@@ -24,7 +24,7 @@ npm run dev                    # Express + Vite HMR on port 5000
 - **Monorepo layout**: `client/` (React), `server/` (Express), `shared/` (schema + types)
 - **Vercel serverless API**: Express app runs as a single catch-all serverless function (`api/[...path].ts`)
 - **Database-first types**: All types flow from `shared/schema.ts` via Drizzle ORM + drizzle-zod
-- **Background services**: Migrated to Trigger.dev scheduled tasks (not in-process)
+- **Background services**: Trigger.dev scheduled tasks with per-chain sub-tasks, metadata tracking, and queue concurrency control
 - **Multi-chain**: 5 EVM chains share the same contract addresses; chain config in `shared/chains.ts`
 - **ESM imports**: All relative imports use `.js` extensions for Vercel serverless compatibility
 
@@ -38,7 +38,8 @@ npm run dev                    # Express + Vite HMR on port 5000
 - `server/db.ts` — Lazy PostgreSQL pool + Drizzle setup (Supabase pooler compatible)
 - `api/[...path].ts` — Vercel serverless catch-all (wraps Express app)
 - `api/health.ts` — Standalone health check with DB connection test
-- `trigger/` — 6 Trigger.dev scheduled task definitions + 1 shared alert helper
+- `trigger/` — 7 Trigger.dev task definitions (6 scheduled + 1 per-chain sub-task) + 1 shared alert helper
+- `script/sync-trigger-env.ts` — Env var sync script for Trigger.dev (manual run)
 - `vercel.json` — Vercel routing and build configuration
 - `client/src/App.tsx` — React routing (12 pages)
 
