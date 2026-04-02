@@ -26,21 +26,23 @@ const SYNC_VARS = [
 ];
 
 async function main() {
-  const variables: { name: string; value: string }[] = [];
+  const variables: Record<string, string> = {};
+  const names: string[] = [];
 
   for (const name of SYNC_VARS) {
     const value = process.env[name];
     if (value) {
-      variables.push({ name, value });
+      variables[name] = value;
+      names.push(name);
     }
   }
 
-  if (variables.length === 0) {
+  if (names.length === 0) {
     console.log("No env vars to sync (none set in CI environment)");
     return;
   }
 
-  console.log(`Syncing ${variables.length} env vars to Trigger.dev ${ENV_SLUG}...`);
+  console.log(`Syncing ${names.length} env vars to Trigger.dev ${ENV_SLUG}...`);
 
   const result = await envvars.upload(PROJECT_REF, ENV_SLUG, {
     variables,
@@ -48,7 +50,7 @@ async function main() {
   });
 
   if (result.ok) {
-    console.log(`Successfully synced: ${variables.map((v) => v.name).join(", ")}`);
+    console.log(`Successfully synced: ${names.join(", ")}`);
   } else {
     console.error("Failed to sync env vars:", result.error);
     process.exit(1);

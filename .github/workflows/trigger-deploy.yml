@@ -27,6 +27,7 @@ jobs:
         run: npm ci
 
       - name: Sync env vars to Trigger.dev
+        continue-on-error: true
         run: npx tsx script/sync-trigger-env.ts
         env:
           TRIGGER_ACCESS_TOKEN: ${{ secrets.TRIGGER_ACCESS_TOKEN }}
