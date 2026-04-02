@@ -26,6 +26,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Sync env vars to Trigger.dev
+        run: npx tsx script/sync-trigger-env.ts
+        env:
+          TRIGGER_ACCESS_TOKEN: ${{ secrets.TRIGGER_ACCESS_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          API_KEY_ALCHEMY: ${{ secrets.API_KEY_ALCHEMY }}
+          API_KEY_INFURA: ${{ secrets.API_KEY_INFURA }}
+          API_KEY_NEYNAR: ${{ secrets.API_KEY_NEYNAR }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+          ENABLE_TX_INDEXER: ${{ secrets.ENABLE_TX_INDEXER }}
+          ENABLE_RERESOLVE: ${{ secrets.ENABLE_RERESOLVE }}
+          ENABLE_PROBER: ${{ secrets.ENABLE_PROBER }}
+
       - name: Deploy Trigger.dev jobs
         run: npx trigger.dev@4.4.3 deploy
         env:
