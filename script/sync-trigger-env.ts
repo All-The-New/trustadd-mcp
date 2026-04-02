@@ -2,13 +2,13 @@
  * Syncs environment variables to Trigger.dev production environment.
  * Run during CI deploy: npx tsx script/sync-trigger-env.ts
  *
- * Reads from process.env and uploads to Trigger.dev project.
+ * Reads from process.env and uploads to Trigger.dev project via API.
  * Only syncs variables that are explicitly listed (not all env vars).
  */
-import { envvars } from "@trigger.dev/sdk/v3";
 
 const PROJECT_REF = "proj_nabhtdcabmsfzbmlifqh";
 const ENV_SLUG = "prod";
+const API_BASE = "https://api.trigger.dev/api/v1";
 
 // Variables to sync from CI environment to Trigger.dev
 const SYNC_VARS = [
@@ -26,17 +26,19 @@ const SYNC_VARS = [
 ];
 
 async function main() {
-  const variables: Record<string, string> = {};
-  const names: string[] = [];
-
-  for (const name of SYNC_VARS) {
-    const value = process.env[name];
-    if (value) {
-      variables[name] = value;
-      names.push(name);
-    }
+  const token = process.env.TRIGGER_ACCESS_TOKEN;
+  if (!token) {
+    console.error("TRIGGER_ACCESS_TOKEN not set");
+    process.exit(1);
   }
 
+  const variables: Record<string, string> = {};
+  for (const name of SYNC_VARS) {
+    const value = process.env[name];
+    if (value) variables[name] = value;
+  }
+
+  const names = Object.keys(variables);
   if (names.length === 0) {
     console.log("No env vars to sync (none set in CI environment)");
     return;
@@ -44,15 +46,24 @@ async function main() {
 
   console.log(`Syncing ${names.length} env vars to Trigger.dev ${ENV_SLUG}...`);
 
-  const result = await envvars.upload(PROJECT_REF, ENV_SLUG, {
-    variables,
-    override: true,
-  });
+  const response = await fetch(
+    `${API_BASE}/projects/${PROJECT_REF}/envvars/${ENV_SLUG}/import`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ variables, override: true }),
+    },
+  );
 
-  if (result.ok) {
+  const result = await response.json();
+
+  if (response.ok && (result as any).success) {
     console.log(`Successfully synced: ${names.join(", ")}`);
   } else {
-    console.error("Failed to sync env vars:", JSON.stringify(result, null, 2));
+    console.error(`Failed to sync (${response.status}):`, JSON.stringify(result));
     process.exit(1);
   }
 }
