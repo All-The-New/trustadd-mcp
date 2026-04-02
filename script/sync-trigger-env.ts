@@ -52,7 +52,7 @@ async function main() {
   if (result.ok) {
     console.log(`Successfully synced: ${names.join(", ")}`);
   } else {
-    console.error("Failed to sync env vars:", result.error);
+    console.error("Failed to sync env vars:", JSON.stringify(result, null, 2));
     process.exit(1);
   }
 }
