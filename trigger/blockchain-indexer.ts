@@ -9,44 +9,45 @@ export const blockchainIndexerTask = schedules.task({
     metadata.set("startedAt", new Date().toISOString());
 
     try {
-      // Step 0: Direct DB test — bypass all abstractions
+      // Step 0: DB connectivity test with detailed error reporting
       const dbUrl = process.env.DATABASE_URL;
-      metadata.set("hasDbUrl", !!dbUrl);
       if (!dbUrl) {
-        return { error: "DATABASE_URL not set" };
+        logger.error("DATABASE_URL is not set in container");
+        // Log all env var names (not values) for debugging
+        const envKeys = Object.keys(process.env).filter(k => !k.startsWith("_")).sort();
+        logger.info("Available env vars", { keys: envKeys.join(", ") });
+        metadata.set("error", "DATABASE_URL not set");
+        metadata.set("envKeys", envKeys.join(", "));
+        return { error: "DATABASE_URL not set", envKeys };
       }
 
-      logger.info("Testing direct DB connection...");
-      const pg = await import("pg");
-      const testPool = new pg.default.Pool({
-        connectionString: dbUrl,
-        max: 1,
-        connectionTimeoutMillis: 10000,
-        ssl: { rejectUnauthorized: false },
+      logger.info("DATABASE_URL is set", {
+        length: dbUrl.length,
+        hasPooler: dbUrl.includes("pooler"),
+        prefix: dbUrl.slice(0, 30),
       });
 
+      // Try raw pg connection
+      let dbConnected = false;
       try {
-        const testResult = await testPool.query("SELECT NOW() as time, current_database() as db");
-        const row = testResult.rows[0];
-        metadata.set("dbConnected", true);
-        metadata.set("dbTime", row.time);
-        metadata.set("dbName", row.db);
-        logger.info("DB connected", { time: row.time, db: row.db });
-
-        // Test write to indexer_state
-        const writeResult = await testPool.query(
-          "UPDATE indexer_state SET updated_at = NOW() WHERE id = 'default' RETURNING updated_at"
-        );
-        metadata.set("dbWriteSuccess", writeResult.rowCount > 0);
-        logger.info("DB write test", { rowCount: writeResult.rowCount, updatedAt: writeResult.rows[0]?.updated_at });
-      } catch (dbErr) {
-        metadata.set("dbConnected", false);
-        metadata.set("dbError", (dbErr as Error).message);
-        logger.error("DB connection FAILED", { error: (dbErr as Error).message });
-        await testPool.end();
-        return { error: "DB connection failed", message: (dbErr as Error).message };
+        const pg = await import("pg");
+        const pool = new pg.default.Pool({
+          connectionString: dbUrl,
+          max: 1,
+          connectionTimeoutMillis: 10000,
+          ssl: { rejectUnauthorized: false },
+        });
+        const res = await pool.query("SELECT 1 as ok");
+        dbConnected = res.rows[0]?.ok === 1;
+        await pool.end();
+        logger.info("Direct DB connection: OK");
+      } catch (pgErr) {
+        logger.error("Direct DB connection FAILED", { error: (pgErr as Error).message });
+        metadata.set("dbError", (pgErr as Error).message);
+        return { error: "DB connection failed", message: (pgErr as Error).message, dbUrl: dbUrl.slice(0, 30) + "..." };
       }
-      await testPool.end();
+
+      metadata.set("dbConnected", dbConnected);
 
       // Step 1: Start indexer
       const { startIndexerImmediate, stopIndexer } = await import("../server/indexer");
@@ -73,7 +74,7 @@ export const blockchainIndexerTask = schedules.task({
       metadata.set("computeCostCents", cost.costInCents);
       metadata.set("durationMs", cost.durationMs);
 
-      return { chainsIndexed: result.started, failed: result.failed };
+      return { chainsIndexed: result.started, dbConnected, failed: result.failed };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error("blockchain-indexer failed", { error: error.message, stack: error.stack });
