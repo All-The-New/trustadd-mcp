@@ -19,6 +19,20 @@ npm run dev                    # Express + Vite HMR on port 5000
 | Background Jobs | **Trigger.dev** | 5 scheduled tasks in `trigger/` directory |
 | DNS/CDN | **Cloudflare** | trustadd.com → Vercel |
 
+## MCP Tooling (use first, before CLI)
+
+All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard** for all operations.
+
+| Service | MCP | Capabilities |
+|---------|-----|-------------|
+| **Supabase** | Connected | SQL queries, migrations, tables, edge functions, logs, advisors |
+| **Vercel** | Connected | Deployments, projects, build logs, runtime logs, domains, toolbar threads |
+| **Cloudflare** | Connected | DNS, Workers, KV, R2, D1, Hyperdrive, documentation search |
+| **GitHub** | Connected (platform connector) | PRs, issues, actions, releases. Fallback: `gh` CLI (`/opt/homebrew/bin/gh`, auth: `All-The-New`) |
+| **Trigger.dev** | Connected (`~/.claude.json`, scoped to `proj_nabhtdcabmsfzbmlifqh`) | Tasks, runs, deployments, docs search, project management |
+
+**Workflow priority**: MCP tool → CLI fallback → dashboard as last resort.
+
 ## Key Architecture Decisions
 
 - **Monorepo layout**: `client/` (React), `server/` (Express), `shared/` (schema + types)
@@ -90,7 +104,7 @@ npx vercel deploy --prod         # Manual deploy if needed
 - **Cloudflare DNS**: Must be set to **DNS-only (grey cloud)** — orange cloud proxy causes SSL 525 with Vercel
 - **Vercel Deployment Protection**: Must remain **OFF** — enabling it breaks API calls from the frontend
 - **`server/db.ts`**: Both `pool` and `db` are lazy Proxies — this is intentional. Prevents `DATABASE_URL` check at import time (required for Trigger.dev build container indexing)
-- **Trigger.dev config**: `trigger.config.ts` must use `export default defineConfig(...)` and include `maxDuration`. Project ref: `proj_nabhtdcabmsfzbmlifqh`
+- **Trigger.dev config**: `trigger.config.ts` must use `export default defineConfig(...)`, include `maxDuration`, and list `pg` in `build.external` (esbuild bundles pg incorrectly without it, causing silent DB connection failures). Project ref: `proj_nabhtdcabmsfzbmlifqh`
 - **Trigger.dev task imports**: ALL task files MUST use dynamic `import()` for `../server/` and `../shared/` modules inside the `run` function — static top-level imports crash during container module initialization. Only `@trigger.dev/sdk/v3` can be imported statically.
 - **Trigger.dev env vars**: Set in dashboard (Settings > Environment Variables > Production). Feature flags (`ENABLE_TX_INDEXER`, `ENABLE_PROBER`, `ENABLE_RERESOLVE`) must be lowercase `true`.
 - **GitHub Actions**: `TRIGGER_ACCESS_TOKEN` secret (PAT starting with `tr_pat_`) must be set in repo for auto-deploy workflow to function
