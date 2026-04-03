@@ -4,6 +4,9 @@ export default defineConfig({
   project: "proj_nabhtdcabmsfzbmlifqh",
   runtime: "node",
   logLevel: "log",
+  build: {
+    external: ["pg"],
+  },
   retries: {
     enabledInDev: false,
     default: {
