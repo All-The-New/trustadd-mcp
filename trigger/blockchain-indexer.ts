@@ -8,6 +8,12 @@ export const blockchainIndexerTask = schedules.task({
     metadata.set("status", "running");
     metadata.set("startedAt", new Date().toISOString());
 
+    // Diagnostic: check DATABASE_URL
+    const dbUrl = process.env.DATABASE_URL;
+    metadata.set("hasDbUrl", !!dbUrl);
+    metadata.set("dbUrlPrefix", dbUrl?.slice(0, 25) || "unset");
+    logger.info("DATABASE_URL check", { hasDbUrl: !!dbUrl, prefix: dbUrl?.slice(0, 25) });
+
     try {
       const { startIndexerImmediate, stopIndexer } = await import("../server/indexer");
 
@@ -18,7 +24,6 @@ export const blockchainIndexerTask = schedules.task({
       logger.info(`Started ${result.started} chain indexer(s)`, { failed: result.failed });
 
       if (result.started === 0) {
-        logger.error("No chains started successfully");
         metadata.set("status", "failed");
         metadata.set("lastError", `All chains failed: ${result.failed.join("; ")}`);
         return { error: "No chains started", failed: result.failed };
