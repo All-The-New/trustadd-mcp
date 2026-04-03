@@ -1084,6 +1084,41 @@ export function getAllIndexers(): Map<number, ERC8004Indexer> {
   return indexerInstances;
 }
 
+/**
+ * Start indexers for all enabled chains immediately (no stagger delay).
+ * Designed for ephemeral Trigger.dev containers where a 30s stagger
+ * wastes too much of the limited run window.
+ * Returns the number of chains that connected successfully.
+ */
+export async function startIndexerImmediate(): Promise<{ started: number; failed: string[] }> {
+  const enabledChains = getEnabledChains();
+  if (enabledChains.length === 0) {
+    throw new Error("No chains have available RPC keys. Set API_KEY_ALCHEMY or API_KEY_INFURA.");
+  }
+
+  storage.pruneOldEvents(7).catch(() => {});
+  storage.pruneOldMetrics(30).catch(() => {});
+
+  let started = 0;
+  const failed: string[] = [];
+
+  for (const chain of enabledChains) {
+    try {
+      const indexer = new ERC8004Indexer(chain);
+      indexerInstances.set(chain.chainId, indexer);
+      await indexer.start();
+      started++;
+      log(`Indexer started for ${chain.name}`, "startup");
+    } catch (err) {
+      failed.push(`${chain.name}: ${(err as Error).message?.slice(0, 80)}`);
+      log(`Failed to start ${chain.name}: ${(err as Error).message}`, "startup");
+    }
+  }
+
+  log(`${started}/${enabledChains.length} chains started (${failed.length} failed)`, "startup");
+  return { started, failed };
+}
+
 export function stopIndexer() {
   for (const [chainId, indexer] of indexerInstances) {
     indexer.stop().catch((err) => {
