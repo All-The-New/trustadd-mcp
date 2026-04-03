@@ -9,52 +9,31 @@ export const blockchainIndexerTask = schedules.task({
     metadata.set("startedAt", new Date().toISOString());
 
     try {
-      // Diagnostic: check env vars and chain connectivity
-      const alchemyKey = process.env.API_KEY_ALCHEMY;
-      const infuraKey = process.env.API_KEY_INFURA;
-      metadata.set("hasAlchemy", !!alchemyKey);
-      metadata.set("hasInfura", !!infuraKey);
-      metadata.set("alchemyKeyPrefix", alchemyKey?.slice(0, 6) || "unset");
-
+      // Step 1: Check chains
+      logger.info("Step 1: importing chains...");
       const { getEnabledChains } = await import("../shared/chains");
-      const enabledChains = getEnabledChains();
-      metadata.set("enabledChains", enabledChains.map((c) => c.name));
-      logger.info(`Enabled chains: ${enabledChains.map((c) => c.name).join(", ")}`);
+      const chains = getEnabledChains();
+      metadata.set("enabledChains", chains.length);
+      logger.info(`Step 1 OK: ${chains.length} chains enabled`);
 
-      if (enabledChains.length === 0) {
-        logger.error("No chains enabled — RPC keys missing");
-        metadata.set("status", "failed");
-        metadata.set("lastError", "No chains enabled");
-        return { error: "No chains enabled", hasAlchemy: !!alchemyKey, hasInfura: !!infuraKey };
-      }
-
+      // Step 2: Start indexer
+      logger.info("Step 2: importing indexer...");
       const { startIndexer, stopIndexer } = await import("../server/indexer");
-
-      metadata.set("phase", "starting-indexers");
+      logger.info("Step 2a: calling startIndexer...");
       const indexers = startIndexer();
       metadata.set("chainsStarted", indexers.length);
-      logger.info(`Started ${indexers.length} chain indexer(s)`);
+      logger.info(`Step 2 OK: ${indexers.length} indexers started`);
 
-      // Check DB state before indexing via raw SQL (avoids static import crash)
-      const { db } = await import("../server/db");
-      const { sql } = await import("drizzle-orm");
-      const beforeResult = await db.execute(sql`SELECT id, chain_id, last_processed_block, is_running, updated_at FROM indexer_state ORDER BY chain_id LIMIT 5`);
-      const statesBefore = (beforeResult as any).rows || [];
-      metadata.set("statesBefore", statesBefore.map((s: any) => `${s.chain_id}:${s.last_processed_block}:${s.is_running}`));
-      logger.info("States before indexing", { states: statesBefore });
-
+      // Step 3: Wait 90s
       metadata.set("phase", "indexing");
+      logger.info("Step 3: waiting 90s...");
       await new Promise((resolve) => setTimeout(resolve, 90_000));
+      logger.info("Step 3 OK: 90s elapsed");
 
-      // Check DB state after indexing
-      const afterResult = await db.execute(sql`SELECT id, chain_id, last_processed_block, is_running, updated_at FROM indexer_state ORDER BY chain_id LIMIT 5`);
-      const statesAfter = (afterResult as any).rows || [];
-      metadata.set("statesAfter", statesAfter.map((s: any) => `${s.chain_id}:${s.last_processed_block}:${s.is_running}`));
-      logger.info("States after indexing", { states: statesAfter });
-
+      // Step 4: Stop
       metadata.set("phase", "stopping");
       stopIndexer();
-      logger.info("Blockchain indexer cycle complete");
+      logger.info("Step 4 OK: stopped");
 
       const cost = await usage.getCurrent();
       metadata.set("status", "completed");
@@ -62,19 +41,19 @@ export const blockchainIndexerTask = schedules.task({
       metadata.set("computeCostCents", cost.costInCents);
       metadata.set("durationMs", cost.durationMs);
 
-      return {
-        chainsIndexed: indexers.length,
-        chain0BlockBefore: stateBefore.lastProcessedBlock,
-        chain0BlockAfter: stateAfter.lastProcessedBlock,
-        progressed: stateAfter.lastProcessedBlock > stateBefore.lastProcessedBlock,
-      };
+      return { chainsIndexed: indexers.length };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
-      logger.error("blockchain-indexer failed", { error: error.message, stack: error.stack });
+      logger.error("blockchain-indexer CAUGHT ERROR", {
+        error: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
       metadata.set("status", "failed");
       metadata.set("lastError", error.message);
+      metadata.set("lastErrorStack", error.stack?.split("\n").slice(0, 5).join(" | "));
       metadata.set("lastErrorAt", new Date().toISOString());
-      return { error: error.message };
+      return { error: error.message, stack: error.stack?.split("\n").slice(0, 5) };
     }
   },
 });
