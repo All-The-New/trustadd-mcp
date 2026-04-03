@@ -35,21 +35,22 @@ export const blockchainIndexerTask = schedules.task({
       metadata.set("chainsStarted", indexers.length);
       logger.info(`Started ${indexers.length} chain indexer(s)`);
 
-      // Check DB state before indexing
-      const { storage } = await import("../server/storage");
-      const stateBefore = await storage.getIndexerState(enabledChains[0].chainId);
-      metadata.set("chain0BlockBefore", stateBefore.lastProcessedBlock);
-      metadata.set("chain0RunningBefore", stateBefore.isRunning);
-      logger.info(`Chain ${enabledChains[0].name} state before: block=${stateBefore.lastProcessedBlock}, running=${stateBefore.isRunning}`);
+      // Check DB state before indexing via raw SQL (avoids static import crash)
+      const { db } = await import("../server/db");
+      const { sql } = await import("drizzle-orm");
+      const beforeResult = await db.execute(sql`SELECT id, chain_id, last_processed_block, is_running, updated_at FROM indexer_state ORDER BY chain_id LIMIT 5`);
+      const statesBefore = (beforeResult as any).rows || [];
+      metadata.set("statesBefore", statesBefore.map((s: any) => `${s.chain_id}:${s.last_processed_block}:${s.is_running}`));
+      logger.info("States before indexing", { states: statesBefore });
 
       metadata.set("phase", "indexing");
       await new Promise((resolve) => setTimeout(resolve, 90_000));
 
       // Check DB state after indexing
-      const stateAfter = await storage.getIndexerState(enabledChains[0].chainId);
-      metadata.set("chain0BlockAfter", stateAfter.lastProcessedBlock);
-      metadata.set("chain0RunningAfter", stateAfter.isRunning);
-      logger.info(`Chain ${enabledChains[0].name} state after: block=${stateAfter.lastProcessedBlock}, running=${stateAfter.isRunning}`);
+      const afterResult = await db.execute(sql`SELECT id, chain_id, last_processed_block, is_running, updated_at FROM indexer_state ORDER BY chain_id LIMIT 5`);
+      const statesAfter = (afterResult as any).rows || [];
+      metadata.set("statesAfter", statesAfter.map((s: any) => `${s.chain_id}:${s.last_processed_block}:${s.is_running}`));
+      logger.info("States after indexing", { states: statesAfter });
 
       metadata.set("phase", "stopping");
       stopIndexer();
