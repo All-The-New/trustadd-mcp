@@ -498,22 +498,31 @@ export async function registerRoutes(
         "x402-prober",
       ];
 
-      const response = await fetch("https://api.trigger.dev/api/v1/runs?limit=50", {
-        headers: { Authorization: `Bearer ${triggerKey}` },
-        signal: AbortSignal.timeout(10000),
-      });
-
-      if (!response.ok) {
-        res.json({ error: "Failed to fetch Trigger.dev runs", tasks: [] });
-        return;
-      }
-
-      const data = await response.json() as { data: Array<{
+      type RunEntry = {
         id: string; status: string; taskIdentifier: string;
         createdAt: string; finishedAt?: string; durationMs?: number;
         isSuccess?: boolean; isFailed?: boolean; costInCents?: number;
         tags?: string[];
-      }> };
+      };
+
+      // Fetch runs per task in parallel — ensures infrequent tasks appear
+      const perTaskFetches = taskIds.map(async (taskId) => {
+        try {
+          const url = `https://api.trigger.dev/api/v1/runs?filter[taskIdentifier]=${taskId}&page[size]=10`;
+          const resp = await fetch(url, {
+            headers: { Authorization: `Bearer ${triggerKey}` },
+            signal: AbortSignal.timeout(8000),
+          });
+          if (!resp.ok) return [];
+          const json = await resp.json() as { data: RunEntry[] };
+          return json.data || [];
+        } catch {
+          return [];
+        }
+      });
+
+      const allResults = await Promise.all(perTaskFetches);
+      const allRuns = allResults.flat();
 
       // Get latest run per task
       const taskMap = new Map<string, {
@@ -522,9 +531,8 @@ export async function registerRoutes(
         recentSuccesses: number; recentFailures: number; tags?: string[];
       }>();
 
-      for (const run of data.data) {
+      for (const run of allRuns) {
         const task = run.taskIdentifier;
-        if (!taskIds.includes(task)) continue;
 
         if (!taskMap.has(task)) {
           taskMap.set(task, {
