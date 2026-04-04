@@ -154,6 +154,7 @@ export class ERC8004Indexer {
   private isBackfillTimeout = false;
   private isStarting = false;
   private reResolveFailures = new Map<string, number>();
+  private consecutiveSpamBlocks = 0;
 
   constructor(chainConfig: ChainConfig) {
     this.chainConfig = chainConfig;
@@ -535,10 +536,26 @@ export class ERC8004Indexer {
       }
 
       let from = startBlock;
+      let spamRangeStart: number | null = null;
       while (from <= effectiveEnd) {
         const to = Math.min(from + chunkSize - 1, effectiveEnd);
 
+        this.consecutiveSpamBlocks = 0;
         await this.processBlockRangeWithBisection(from, to);
+
+        // If spam detection triggered, log one summary event and advance past the chunk
+        if (this.consecutiveSpamBlocks >= 5) {
+          if (spamRangeStart === null) spamRangeStart = from;
+          log(`Spam factory range detected at blocks ${from.toLocaleString()}-${to.toLocaleString()} — skipping chunk`, this.logPrefix);
+        } else {
+          if (spamRangeStart !== null) {
+            // Emit one summary event for the entire spam range that just ended
+            this.emitEvent("spam_skip", `Skipped spam factory blocks ${spamRangeStart.toLocaleString()}-${(from - 1).toLocaleString()} (${(from - spamRangeStart).toLocaleString()} blocks)`, {
+              fromBlock: spamRangeStart, toBlock: from - 1, blocksSkipped: from - spamRangeStart,
+            }).catch(() => {});
+            spamRangeStart = null;
+          }
+        }
 
         await storage.updateIndexerState(this.chainConfig.chainId, {
           lastProcessedBlock: to,
@@ -552,6 +569,13 @@ export class ERC8004Indexer {
         }
 
         from = to + 1;
+      }
+
+      // Emit final spam range event if cycle ended in a spam zone
+      if (spamRangeStart !== null) {
+        this.emitEvent("spam_skip", `Skipped spam factory blocks ${spamRangeStart.toLocaleString()}-${effectiveEnd.toLocaleString()} (${(effectiveEnd - spamRangeStart + 1).toLocaleString()} blocks)`, {
+          fromBlock: spamRangeStart, toBlock: effectiveEnd, blocksSkipped: effectiveEnd - spamRangeStart + 1,
+        }).catch(() => {});
       }
 
       if (isBackfill) {
@@ -611,6 +635,7 @@ export class ERC8004Indexer {
 
       this.emitEvent(errorType, errorMsg.slice(0, 500), {
         consecutiveErrors: this.consecutiveErrors, cycleDurationMs: cycleDuration,
+        errorCategory: errorType, chainId: this.chainConfig.chainId,
       }).catch(() => {});
     } finally {
       this.isProcessing = false;
@@ -622,8 +647,15 @@ export class ERC8004Indexer {
   }
 
   private async processBlockRangeWithBisection(fromBlock: number, toBlock: number, depth = 0): Promise<void> {
+    // If we've seen many consecutive spam blocks, skip the rest of this range
+    if (this.consecutiveSpamBlocks >= 5) {
+      return; // Caller will handle bulk skip
+    }
+
     try {
       await this.processBlockRange(fromBlock, toBlock);
+      // Successful processing resets spam counter
+      this.consecutiveSpamBlocks = 0;
     } catch (err) {
       const msg = (err as Error).message || "";
       const isLimit =
@@ -635,9 +667,16 @@ export class ERC8004Indexer {
         (err as any).code === -32005;
 
       if (isLimit && fromBlock < toBlock && depth < 20) {
+        // If we've already seen 3+ consecutive spam blocks and depth is high,
+        // assume the entire sub-range is spam and skip the RPC calls
+        if (this.consecutiveSpamBlocks >= 3 && depth >= 8) {
+          this.consecutiveSpamBlocks += (toBlock - fromBlock + 1);
+          return;
+        }
         const mid = Math.floor((fromBlock + toBlock) / 2);
         log(`-32005 limit: bisecting [${fromBlock.toLocaleString()}, ${toBlock.toLocaleString()}] → mid ${mid.toLocaleString()} (depth=${depth})`, this.logPrefix);
         await this.processBlockRangeWithBisection(fromBlock, mid, depth + 1);
+        if (this.consecutiveSpamBlocks >= 5) return; // Abort further bisection
         await sleep(REQUEST_DELAY_MS);
         await this.processBlockRangeWithBisection(mid + 1, toBlock, depth + 1);
         return;
@@ -646,9 +685,10 @@ export class ERC8004Indexer {
       if (isLimit && fromBlock === toBlock) {
         // Single block still overflows every provider's result limit.
         // This is a bulk-spam factory block with thousands of events.
-        // Skip it — these registrations will be classified as spam anyway.
-        log(`Block ${fromBlock.toLocaleString()} has too many events for any provider (bulk-spam factory block) — skipping`, this.logPrefix);
-        this.emitEvent("rpc_error", `Skipped bulk-spam factory block ${fromBlock} on BNB (result set too large for any provider)`, {}).catch(() => {});
+        this.consecutiveSpamBlocks++;
+        if (this.consecutiveSpamBlocks <= 5) {
+          log(`Spam factory block ${fromBlock.toLocaleString()} skipped (${this.consecutiveSpamBlocks} consecutive)`, this.logPrefix);
+        }
         return;
       }
 

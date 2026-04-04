@@ -233,6 +233,22 @@ export async function evaluateAlerts(): Promise<Alert[]> {
         lastSeen: now,
       });
     }
+
+    // High event volume (cost spike indicator) — reuses cached eventCounts
+    const spamSkips = eventCounts.find(e => e.eventType === "spam_skip")?.count || 0;
+    const rpcErrors = eventCounts.find(e => e.eventType === "rpc_error")?.count || 0;
+    const totalErrorVolume = failedCount + spamSkips + rpcErrors;
+    if (totalErrorVolume > 100) {
+      alerts.push({
+        id: `high_event_volume_${chain.chainId}`,
+        severity: totalErrorVolume > 500 ? "critical" : "warning",
+        chainId: chain.chainId,
+        title: "High Error/Skip Volume",
+        message: `${chain.name}: ${totalErrorVolume} error/skip events in the last hour — may indicate elevated compute cost`,
+        firstSeen: now,
+        lastSeen: now,
+      });
+    }
   }
 
   if (chainsTotal > 0 && chainsDown === chainsTotal) {

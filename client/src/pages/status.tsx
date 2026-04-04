@@ -16,7 +16,7 @@ import {
 import {
   Activity, AlertTriangle, CheckCircle2, XCircle,
   Clock, Blocks, RefreshCw, Info, AlertCircle,
-  Cpu, Zap, Database, TrendingUp, Users,
+  Cpu, Zap, Database, TrendingUp, Users, Server,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -50,6 +50,7 @@ const EVENT_TYPE_STYLES: Record<string, { color: string; label: string }> = {
   timeout: { color: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20", label: "Timeout" },
   backoff: { color: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20", label: "Backoff" },
   connection_error: { color: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20", label: "Connection" },
+  spam_skip: { color: "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20", label: "Spam Skip" },
 };
 
 function timeAgo(dateStr: string | Date | null): string {
@@ -564,6 +565,98 @@ function DownstreamSystemsPanel({ summary }: { summary: any }) {
   );
 }
 
+const TASK_DISPLAY_NAMES: Record<string, { name: string; schedule: string }> = {
+  "blockchain-indexer": { name: "Blockchain Indexer", schedule: "Every 2 min" },
+  "chain-indexer": { name: "Chain Indexer (sub-task)", schedule: "On demand" },
+  "watchdog": { name: "Watchdog", schedule: "Every 15 min" },
+  "recalculate-scores": { name: "Trust Score Recalc", schedule: "Daily 5 AM UTC" },
+  "transaction-indexer": { name: "Transaction Indexer", schedule: "Every 6 hours" },
+  "community-feedback": { name: "Community Feedback", schedule: "Daily 4 AM UTC" },
+  "x402-prober": { name: "x402 Prober", schedule: "Daily 3 AM UTC" },
+};
+
+function BackgroundTasksPanel({ tasks }: { tasks: any[] | null }) {
+  if (!tasks || tasks.length === 0) {
+    return (
+      <section data-testid="section-background-tasks">
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <Server className="w-5 h-5 text-muted-foreground" />
+          Background Tasks
+        </h2>
+        <p className="text-sm text-muted-foreground">No task data available. Requires TRIGGER_SECRET_KEY.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section data-testid="section-background-tasks">
+      <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+        <Server className="w-5 h-5 text-muted-foreground" />
+        Background Tasks ({tasks.length})
+      </h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {tasks.map((task: any) => {
+          const display = TASK_DISPLAY_NAMES[task.taskId] || { name: task.taskId, schedule: "Unknown" };
+          const isSuccess = task.lastStatus === "COMPLETED";
+          const isFailed = task.lastStatus === "FAILED" || task.lastStatus === "CRASHED" || task.lastStatus === "SYSTEM_FAILURE";
+          const isRunning = task.lastStatus === "EXECUTING" || task.lastStatus === "REATTEMPTING";
+          const total = task.recentSuccesses + task.recentFailures;
+          const failRate = total > 0 ? Math.round((task.recentFailures / total) * 100) : 0;
+
+          return (
+            <Card key={task.taskId} data-testid={`card-task-${task.taskId}`}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2.5 h-2.5 rounded-full ${isRunning ? "bg-blue-500 animate-pulse" : isSuccess ? "bg-green-500" : isFailed ? "bg-red-500" : "bg-gray-400"}`} />
+                    <span className="font-medium text-sm">{display.name}</span>
+                  </div>
+                  <Badge variant="outline" className={`text-xs ${isSuccess ? "text-green-700 dark:text-green-400" : isFailed ? "text-red-700 dark:text-red-400" : isRunning ? "text-blue-700 dark:text-blue-400" : ""}`}>
+                    {task.lastStatus}
+                  </Badge>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Last run</span>
+                    <span>{timeAgo(task.lastRunAt)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5" /> Schedule</span>
+                    <span className="text-xs">{display.schedule}</span>
+                  </div>
+                  {task.lastDurationMs > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground flex items-center gap-1"><Zap className="w-3.5 h-3.5" /> Duration</span>
+                      <span className="font-mono text-xs">{(task.lastDurationMs / 1000).toFixed(1)}s</span>
+                    </div>
+                  )}
+                  {task.lastCostCents > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground flex items-center gap-1"><Cpu className="w-3.5 h-3.5" /> Cost</span>
+                      <span className="font-mono text-xs">${(task.lastCostCents / 100).toFixed(3)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Recent runs</span>
+                    <span>
+                      <span className="text-green-600 dark:text-green-400">{task.recentSuccesses} ok</span>
+                      {task.recentFailures > 0 && (
+                        <span className="text-red-600 dark:text-red-400 ml-1">/ {task.recentFailures} fail
+                          <span className="text-muted-foreground ml-1">({failRate}%)</span>
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default function StatusPage() {
   const [eventChainFilter, setEventChainFilter] = useState("all");
   const [eventTypeFilter, setEventTypeFilter] = useState("all");
@@ -610,12 +703,18 @@ export default function StatusPage() {
     refetchInterval: 60000,
   });
 
+  const tasksQuery = useQuery({
+    queryKey: ["/api/status/tasks"],
+    refetchInterval: 60000,
+  });
+
   const healthData = healthQuery.data as any;
   const overviewData = overviewQuery.data as any;
   const alertsData = alertsQuery.data as any;
   const summaryData = summaryQuery.data as any;
   const eventsData = eventsQuery.data as any;
   const metricsData = metricsQuery.data as any;
+  const tasksData = tasksQuery.data as any;
 
   return (
     <Layout>
@@ -721,6 +820,20 @@ export default function StatusPage() {
           <DownstreamSystemsPanel summary={summaryData} />
         )}
 
+        {tasksQuery.isLoading ? (
+          <section>
+            <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <Server className="w-5 h-5 text-muted-foreground" />
+              Background Tasks
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-44" />)}
+            </div>
+          </section>
+        ) : tasksData?.tasks ? (
+          <BackgroundTasksPanel tasks={tasksData.tasks} />
+        ) : null}
+
         <section>
           <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
             <h2 className="text-lg font-semibold">Event Log</h2>
@@ -751,6 +864,7 @@ export default function StatusPage() {
                   <SelectItem value="timeout">Timeout</SelectItem>
                   <SelectItem value="backoff">Backoff</SelectItem>
                   <SelectItem value="connection_error">Connection</SelectItem>
+                  <SelectItem value="spam_skip">Spam Skip</SelectItem>
                 </SelectContent>
               </Select>
             </div>
