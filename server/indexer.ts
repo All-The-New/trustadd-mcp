@@ -248,14 +248,17 @@ export class ERC8004Indexer {
     }
   }
 
-  async start(retryAttempt = 0) {
+  async start(options?: { singleCycle?: boolean; retryAttempt?: number }) {
+    const singleCycle = options?.singleCycle ?? false;
+    const retryAttempt = options?.retryAttempt ?? 0;
+
     if (this.isStarting) {
       log(`${this.chainConfig.name} start() called while already starting — skipping duplicate`, this.logPrefix);
       return;
     }
     this.isStarting = true;
-    const MAX_START_RETRIES = 5;
-    log(`Starting ERC-8004 indexer for ${this.chainConfig.name} (chainId: ${this.chainConfig.chainId})${retryAttempt > 0 ? ` (retry ${retryAttempt}/${MAX_START_RETRIES})` : ""}...`, this.logPrefix);
+    const MAX_START_RETRIES = singleCycle ? 1 : 5;
+    log(`Starting ERC-8004 indexer for ${this.chainConfig.name} (chainId: ${this.chainConfig.chainId})${singleCycle ? " [single-cycle]" : ""}${retryAttempt > 0 ? ` (retry ${retryAttempt}/${MAX_START_RETRIES})` : ""}...`, this.logPrefix);
 
     try {
       const blockNumber = await this.rpcWithFallback((p) => p.getBlockNumber());
@@ -263,6 +266,7 @@ export class ERC8004Indexer {
     } catch (err) {
       const errorMsg = (err as Error).message;
       log(`Failed to connect to ${this.chainConfig.name}: ${errorMsg}`, this.logPrefix);
+      this.isStarting = false;
       try {
         await storage.updateIndexerState(this.chainConfig.chainId, {
           isRunning: false,
@@ -272,23 +276,26 @@ export class ERC8004Indexer {
         log(`Warning: DB state update failed during RPC connect failure (${(dbErr as Error).message?.slice(0, 80)})`, this.logPrefix);
       }
 
+      // In single-cycle mode, throw immediately — let Trigger.dev handle retries
+      if (singleCycle) {
+        throw new Error(`RPC connection failed for ${this.chainConfig.name}: ${errorMsg}`);
+      }
+
       if (retryAttempt < MAX_START_RETRIES) {
         const retryDelay = Math.min(ERROR_BACKOFF_BASE_MS * Math.pow(2, retryAttempt), 600_000);
         log(`Will retry ${this.chainConfig.name} in ${Math.round(retryDelay / 1000)}s`, this.logPrefix);
-        this.isStarting = false;
         setTimeout(() => {
           this.recycleProviders("connection_retry");
-          this.start(retryAttempt + 1).catch((e) => {
+          this.start({ retryAttempt: retryAttempt + 1 }).catch((e) => {
             log(`Retry start error for ${this.chainConfig.name}: ${(e as Error).message}`, this.logPrefix);
           });
         }, retryDelay);
       } else {
         const resetDelay = 15 * 60 * 1000;
         log(`${this.chainConfig.name} exhausted ${MAX_START_RETRIES} start retries — will try again in 15min`, this.logPrefix);
-        this.isStarting = false;
         setTimeout(() => {
           this.recycleProviders("connection_retry");
-          this.start(0).catch((e) => {
+          this.start({ retryAttempt: 0 }).catch((e) => {
             log(`Restart error for ${this.chainConfig.name}: ${(e as Error).message}`, this.logPrefix);
           });
         }, resetDelay);
@@ -301,6 +308,12 @@ export class ERC8004Indexer {
       await storage.updateIndexerState(this.chainConfig.chainId, { isRunning: true, lastError: null });
     } catch (dbErr) {
       log(`Warning: DB state update failed after RPC connect (${(dbErr as Error).message?.slice(0, 80)}) — continuing`, this.logPrefix);
+    }
+
+    if (singleCycle) {
+      // Single-cycle mode: await one cycle, no polling, no metrics timer
+      await this.runIndexCycle();
+      return;
     }
 
     if (!this.metricsTimer) {
@@ -328,6 +341,17 @@ export class ERC8004Indexer {
     await this.flushMetrics();
     await storage.updateIndexerState(this.chainConfig.chainId, { isRunning: false });
     log(`Indexer stopped for ${this.chainConfig.name}`, this.logPrefix);
+  }
+
+  getMetricsSnapshot() {
+    return {
+      blocksIndexed: this.metrics.blocksIndexed,
+      agentsDiscovered: this.metrics.agentsDiscovered,
+      cyclesCompleted: this.metrics.cyclesCompleted,
+      cyclesFailed: this.metrics.cyclesFailed,
+      rpcRequests: this.metrics.rpcRequests,
+      rpcErrors: this.metrics.rpcErrors,
+    };
   }
 
   private startMetricsFlush() {
@@ -1164,5 +1188,65 @@ export function stopIndexer() {
     indexer.stop().catch((err) => {
       log(`Error stopping indexer for chain ${chainId}: ${(err as Error).message}`, "shutdown");
     });
+  }
+}
+
+/**
+ * Start a single chain's indexer, run exactly one index cycle, flush metrics, and stop.
+ * Designed for per-chain Trigger.dev child tasks.
+ */
+export async function startSingleChainImmediate(chainId: number): Promise<{
+  success: boolean;
+  chainId: number;
+  chainName: string;
+  blocksIndexed: number;
+  agentsDiscovered: number;
+  error?: string;
+}> {
+  const enabledChains = getEnabledChains();
+  const chain = enabledChains.find((c) => c.chainId === chainId);
+  if (!chain) {
+    return {
+      success: false,
+      chainId,
+      chainName: `unknown-${chainId}`,
+      blocksIndexed: 0,
+      agentsDiscovered: 0,
+      error: `Chain ${chainId} not found or disabled`,
+    };
+  }
+
+  storage.pruneOldEvents(7).catch(() => {});
+  storage.pruneOldMetrics(30).catch(() => {});
+
+  const indexer = new ERC8004Indexer(chain);
+  indexerInstances.set(chainId, indexer);
+
+  try {
+    await indexer.start({ singleCycle: true });
+    const metrics = indexer.getMetricsSnapshot();
+    await indexer.stop();
+    indexerInstances.delete(chainId);
+
+    return {
+      success: true,
+      chainId,
+      chainName: chain.name,
+      blocksIndexed: metrics.blocksIndexed,
+      agentsDiscovered: metrics.agentsDiscovered,
+    };
+  } catch (err) {
+    const errorMsg = (err as Error).message?.slice(0, 200) ?? String(err);
+    try { await indexer.stop(); } catch {}
+    indexerInstances.delete(chainId);
+
+    return {
+      success: false,
+      chainId,
+      chainName: chain.name,
+      blocksIndexed: 0,
+      agentsDiscovered: 0,
+      error: errorMsg,
+    };
   }
 }

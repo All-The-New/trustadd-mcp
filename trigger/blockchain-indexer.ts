@@ -1,42 +1,77 @@
 import { schedules, logger, metadata, usage } from "@trigger.dev/sdk/v3";
+import { chainIndexerTask } from "./chain-indexer.js";
 
 export const blockchainIndexerTask = schedules.task({
   id: "blockchain-indexer",
   cron: "*/2 * * * *",
-  maxDuration: 120,
+  maxDuration: 300,
   run: async (payload) => {
-    metadata.set("status", "running");
+    metadata.set("status", "dispatching");
     metadata.set("startedAt", new Date().toISOString());
 
     try {
-      const { startIndexerImmediate, stopIndexer } = await import("../server/indexer");
+      const { getEnabledChains } = await import("../shared/chains.js");
 
-      metadata.set("phase", "starting-indexers");
-      const result = await startIndexerImmediate();
-      metadata.set("chainsStarted", result.started);
-      metadata.set("chainsFailed", result.failed);
-      logger.info(`Started ${result.started} chain indexer(s)`, { failed: result.failed });
-
-      if (result.started === 0) {
+      const chains = getEnabledChains();
+      if (chains.length === 0) {
         metadata.set("status", "failed");
-        metadata.set("lastError", `All chains failed: ${result.failed.join("; ")}`);
-        return { error: "No chains started", failed: result.failed };
+        metadata.set("lastError", "No chains enabled");
+        return { error: "No chains enabled" };
       }
 
-      metadata.set("phase", "indexing");
-      await new Promise((resolve) => setTimeout(resolve, 90_000));
+      metadata.set("chainCount", chains.length);
+      metadata.set("chains", chains.map((c) => c.shortName).join(", "));
+      logger.info(`Dispatching ${chains.length} chain indexer tasks`);
 
-      metadata.set("phase", "stopping");
-      stopIndexer();
-      logger.info("Blockchain indexer cycle complete");
+      // batchTriggerAndWait — parent checkpoints while waiting (free compute)
+      const results = await chainIndexerTask.batchTriggerAndWait(
+        chains.map((chain) => ({
+          payload: { chainId: chain.chainId, chainName: chain.name },
+          options: {
+            queue: `chain-indexer-${chain.chainId}`,
+            concurrencyKey: String(chain.chainId),
+          },
+        })),
+      );
 
-      const cost = await usage.getCurrent();
+      let succeeded = 0;
+      let failed = 0;
+      const failures: string[] = [];
+      let totalBlocks = 0;
+      let totalAgents = 0;
+
+      for (const run of results.runs) {
+        if (run.ok) {
+          succeeded++;
+          const output = run.output as {
+            totalBlocksIndexed?: number;
+            totalAgentsDiscovered?: number;
+            blocksIndexed?: number;
+            agentsDiscovered?: number;
+          } | null;
+          totalBlocks += output?.totalBlocksIndexed ?? output?.blocksIndexed ?? 0;
+          totalAgents += output?.totalAgentsDiscovered ?? output?.agentsDiscovered ?? 0;
+        } else {
+          failed++;
+          failures.push(String(run.error));
+        }
+      }
+
+      const cost = usage.getCurrent();
       metadata.set("status", "completed");
       metadata.set("completedAt", new Date().toISOString());
-      metadata.set("computeCostCents", cost.costInCents);
-      metadata.set("durationMs", cost.durationMs);
+      metadata.set("succeeded", succeeded);
+      metadata.set("failed", failed);
+      metadata.set("totalBlocksIndexed", totalBlocks);
+      metadata.set("totalAgentsDiscovered", totalAgents);
+      metadata.set("computeCostCents", cost.totalCostInCents);
+      metadata.set("durationMs", cost.compute.total.durationMs);
 
-      return { chainsIndexed: result.started, failed: result.failed };
+      logger.info(`Indexer cycle complete: ${succeeded}/${chains.length} chains, ${totalBlocks} blocks, ${totalAgents} agents`, {
+        failures,
+      });
+
+      return { succeeded, failed, failures, totalBlocks, totalAgents };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error("blockchain-indexer failed", { error: error.message, stack: error.stack });
