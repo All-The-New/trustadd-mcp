@@ -26,26 +26,33 @@ export class CommunityFeedbackScheduler {
     log(`Registered adapter: ${platform}`);
   }
 
-  async runPlatformScrape(platform: string): Promise<{ scraped: number; errors: number }> {
+  async runPlatformScrape(platform: string, options?: { deadlineMs?: number }): Promise<{ scraped: number; errors: number; skippedDueToTimeout: number }> {
     const adapter = this.adapters.get(platform);
     const config = this.configs.get(platform);
     if (!adapter || !config) {
       log(`No adapter registered for platform: ${platform}`);
-      return { scraped: 0, errors: 0 };
+      return { scraped: 0, errors: 0, skippedDueToTimeout: 0 };
     }
 
     const staleSources = await storage.getStaleSourcesForPlatform(platform, config.intervalHours);
     if (staleSources.length === 0) {
       log(`${platform}: No stale sources to scrape`);
-      return { scraped: 0, errors: 0 };
+      return { scraped: 0, errors: 0, skippedDueToTimeout: 0 };
     }
 
     log(`${platform}: Starting scrape of ${staleSources.length} sources`);
     let scraped = 0;
     let errors = 0;
+    let skippedDueToTimeout = 0;
+    const deadline = options?.deadlineMs;
     const affectedAgents = new Set<string>();
 
     for (const source of staleSources) {
+      if (deadline && Date.now() > deadline) {
+        skippedDueToTimeout = staleSources.length - scraped - errors;
+        log(`${platform}: Time budget exhausted — skipping ${skippedDueToTimeout} remaining sources`);
+        break;
+      }
       let attempt = 0;
       let success = false;
 
@@ -107,28 +114,39 @@ export class CommunityFeedbackScheduler {
       }
     }
 
-    log(`${platform}: Scrape complete — ${scraped} succeeded, ${errors} failed, ${affectedAgents.size} agents updated`);
+    log(`${platform}: Scrape complete — ${scraped} succeeded, ${errors} failed, ${affectedAgents.size} agents updated${skippedDueToTimeout > 0 ? `, ${skippedDueToTimeout} skipped (time budget)` : ""}`);
 
     for (const agentId of affectedAgents) {
       recalculateScore(agentId).catch(() => {});
     }
 
-    return { scraped, errors };
+    return { scraped, errors, skippedDueToTimeout };
   }
 
-  async runAllScrapes(): Promise<void> {
+  async runAllScrapes(options?: { deadlineMs?: number }): Promise<{ totalScraped: number; totalErrors: number; totalSkipped: number }> {
     if (this.running) {
       log("Scrape already in progress, skipping");
-      return;
+      return { totalScraped: 0, totalErrors: 0, totalSkipped: 0 };
     }
     this.running = true;
+    let totalScraped = 0;
+    let totalErrors = 0;
+    let totalSkipped = 0;
     try {
       for (const platform of this.adapters.keys()) {
-        await this.runPlatformScrape(platform);
+        if (options?.deadlineMs && Date.now() > options.deadlineMs) {
+          log(`Time budget exhausted — skipping remaining platforms`);
+          break;
+        }
+        const result = await this.runPlatformScrape(platform, options);
+        totalScraped += result.scraped;
+        totalErrors += result.errors;
+        totalSkipped += result.skippedDueToTimeout;
       }
     } finally {
       this.running = false;
     }
+    return { totalScraped, totalErrors, totalSkipped };
   }
 
   start() {

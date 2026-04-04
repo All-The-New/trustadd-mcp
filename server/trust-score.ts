@@ -146,16 +146,12 @@ export async function recalculateScore(agentId: string): Promise<TrustScoreBreak
   return breakdown;
 }
 
-export async function recalculateAllScores(): Promise<{ updated: number; elapsed: number }> {
-  const start = Date.now();
-  log("Starting batch trust score recalculation...", "trust-score");
-
-  const allAgents = await storage.getAllAgents();
-
+/** Pre-fetch all lookup maps needed for trust score calculation. */
+async function prefetchScoreLookups() {
   const feedbackMap = new Map<string, CommunityFeedbackSummary>();
   try {
     const summaries = await db.select().from(
-      (await import("@shared/schema")).communityFeedbackSummaries
+      (await import("../shared/schema.js")).communityFeedbackSummaries
     );
     for (const s of summaries) {
       feedbackMap.set(s.agentId, s);
@@ -165,9 +161,9 @@ export async function recalculateAllScores(): Promise<{ updated: number; elapsed
   const controllerChains = new Map<string, number>();
   try {
     const result = await db.execute(sql`
-      SELECT controller_address, COUNT(DISTINCT chain_id)::int as cnt 
-      FROM agents 
-      GROUP BY controller_address 
+      SELECT controller_address, COUNT(DISTINCT chain_id)::int as cnt
+      FROM agents
+      GROUP BY controller_address
       HAVING COUNT(DISTINCT chain_id) > 1
     `);
     for (const row of (result as any).rows ?? []) {
@@ -178,7 +174,7 @@ export async function recalculateAllScores(): Promise<{ updated: number; elapsed
   const eventCounts = new Map<string, number>();
   try {
     const result = await db.execute(sql`
-      SELECT agent_id, COUNT(*)::int as cnt FROM agent_metadata_events 
+      SELECT agent_id, COUNT(*)::int as cnt FROM agent_metadata_events
       WHERE event_type IN ('MetadataUpdated', 'AgentURISet')
       GROUP BY agent_id
     `);
@@ -186,6 +182,38 @@ export async function recalculateAllScores(): Promise<{ updated: number; elapsed
       eventCounts.set(row.agent_id, row.cnt);
     }
   } catch {}
+
+  return { feedbackMap, controllerChains, eventCounts };
+}
+
+/** Batch-update trust scores for a set of agents in a single SQL statement. */
+async function batchUpdateScores(updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown }>) {
+  if (updates.length === 0) return;
+  const now = new Date();
+  const ids = updates.map(u => u.id);
+  const scores = updates.map(u => u.score);
+  const breakdowns = updates.map(u => JSON.stringify(u.breakdown));
+
+  await db.execute(sql`
+    UPDATE agents SET
+      trust_score = batch.score,
+      trust_score_breakdown = batch.breakdown::jsonb,
+      trust_score_updated_at = ${now}
+    FROM (
+      SELECT unnest(${ids}::text[]) AS id,
+             unnest(${scores}::int[]) AS score,
+             unnest(${breakdowns}::text[]) AS breakdown
+    ) AS batch
+    WHERE agents.id = batch.id
+  `);
+}
+
+export async function recalculateAllScores(): Promise<{ updated: number; elapsed: number }> {
+  const start = Date.now();
+  log("Starting batch trust score recalculation...", "trust-score");
+
+  const allAgents = await storage.getAllAgents();
+  const { feedbackMap, controllerChains, eventCounts } = await prefetchScoreLookups();
 
   let updated = 0;
   const BATCH_SIZE = 500;
@@ -202,13 +230,7 @@ export async function recalculateAllScores(): Promise<{ updated: number; elapsed
       updates.push({ id: agent.id, score: breakdown.total, breakdown });
     }
 
-    for (const u of updates) {
-      await db.update(agents).set({
-        trustScore: u.score,
-        trustScoreBreakdown: u.breakdown,
-        trustScoreUpdatedAt: new Date(),
-      }).where(eq(agents.id, u.id));
-    }
+    await batchUpdateScores(updates);
 
     updated += updates.length;
     if (i % 5000 === 0 && i > 0) {
@@ -238,13 +260,22 @@ export async function ensureScoresCalculated(): Promise<void> {
       await recalculateAllScores();
     } else if (unscored > 0) {
       log(`${unscored} agents unscored, running incremental recalculation`, "trust-score");
+      const { feedbackMap, controllerChains, eventCounts } = await prefetchScoreLookups();
       let scored = 0;
       while (true) {
-        const batch = await db.select({ id: agents.id }).from(agents).where(isNull(agents.trustScore)).limit(500);
+        const batch = await db.select().from(agents).where(isNull(agents.trustScore)).limit(500);
         if (batch.length === 0) break;
-        for (const a of batch) {
-          await recalculateScore(a.id);
+
+        const updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown }> = [];
+        for (const agent of batch) {
+          const feedback = feedbackMap.get(agent.id) ?? null;
+          const evtCount = eventCounts.get(agent.id) ?? 0;
+          const crossChain = controllerChains.get(agent.controllerAddress) ?? 0;
+          const breakdown = calculateTrustScore(agent, feedback, evtCount, crossChain);
+          updates.push({ id: agent.id, score: breakdown.total, breakdown });
         }
+
+        await batchUpdateScores(updates);
         scored += batch.length;
       }
       log(`Incremental recalculation complete: ${scored} agents scored`, "trust-score");

@@ -57,16 +57,20 @@ interface NeynarFeedResponse {
 
 const NEYNAR_BASE = "https://api.neynar.com";
 
-function getApiKey(): string {
-  return process.env.NEYNAR_API_KEY || process.env.API_KEY_NEYNAR || "NEYNAR_API_DOCS";
+function getApiKey(): string | null {
+  return process.env.NEYNAR_API_KEY || process.env.API_KEY_NEYNAR || null;
 }
 
 async function neynarFetch<T>(path: string): Promise<{ data: T | null; status: number }> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    return { data: null, status: 401 };
+  }
   const url = `${NEYNAR_BASE}${path}`;
   const response = await fetch(url, {
     headers: {
       accept: "application/json",
-      "x-api-key": getApiKey(),
+      "x-api-key": apiKey,
       "x-neynar-experimental": "true",
     },
   });
@@ -83,6 +87,14 @@ export class FarcasterAdapter implements FeedbackSourceAdapter {
   platform = "farcaster";
 
   async scrapeSource(source: CommunityFeedbackSource): Promise<ScrapeResult> {
+    if (!getApiKey()) {
+      return {
+        items: [],
+        summary: {},
+        error: "NEYNAR_API_KEY not configured — skipping Farcaster scraping",
+      };
+    }
+
     const username = source.platformIdentifier.toLowerCase().replace(/^@/, "");
 
     if (!username || username.length === 0) {

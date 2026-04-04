@@ -8,7 +8,7 @@ import {
 
 const log = createLogger("x402-prober");
 
-const PROBE_TIMEOUT_MS = 10_000;
+const PROBE_TIMEOUT_MS = 5_000;
 const MAX_CONCURRENT = 2;                          // concurrent endpoint probes (keep low to avoid DB pool pressure)
 const STALE_HOURS = 24;
 const PROBE_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -256,16 +256,22 @@ export async function probeAgent(agentId: string): Promise<number> {
   return probed;
 }
 
-export async function probeAllAgents(): Promise<{ total: number; probed: number; found402: number; paymentAddresses: number; errors: number }> {
+export async function probeAllAgents(options?: { deadlineMs?: number }): Promise<{ total: number; probed: number; found402: number; paymentAddresses: number; errors: number; skippedDueToTimeout: number }> {
   const staleAgentIds = await storage.getStaleProbeAgentIds(STALE_HOURS);
   log.info(`Found ${staleAgentIds.length} agents to probe`);
 
   let totalProbed = 0;
   let errors = 0;
+  let skippedDueToTimeout = 0;
+  const deadline = options?.deadlineMs;
 
   await runWithConcurrency(
     staleAgentIds,
     async (agentId) => {
+      if (deadline && Date.now() > deadline) {
+        skippedDueToTimeout++;
+        return;
+      }
       try {
         const count = await probeAgent(agentId);
         totalProbed += count;
@@ -281,10 +287,10 @@ export async function probeAllAgents(): Promise<{ total: number; probed: number;
   const stats = await storage.getProbeStats();
 
   log.info(
-    `Probe complete: ${totalProbed} endpoints probed across ${staleAgentIds.length} agents, ${stats.found402} returned 402, ${stats.uniquePaymentAddresses} payment addresses${errors > 0 ? `, ${errors} errors` : ""}`,
+    `Probe complete: ${totalProbed} endpoints probed across ${staleAgentIds.length} agents, ${stats.found402} returned 402, ${stats.uniquePaymentAddresses} payment addresses${errors > 0 ? `, ${errors} errors` : ""}${skippedDueToTimeout > 0 ? `, ${skippedDueToTimeout} skipped (time budget)` : ""}`,
   );
 
-  return { total: staleAgentIds.length, probed: totalProbed, found402: stats.found402, paymentAddresses: stats.uniquePaymentAddresses, errors };
+  return { total: staleAgentIds.length, probed: totalProbed, found402: stats.found402, paymentAddresses: stats.uniquePaymentAddresses, errors, skippedDueToTimeout };
 }
 
 let probeTimeout: ReturnType<typeof setTimeout> | null = null;

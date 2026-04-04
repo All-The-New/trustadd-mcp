@@ -158,6 +158,11 @@ export class GitHubAdapter implements FeedbackSourceAdapter {
       return { items: [], summary: {}, error: `GitHub API error: HTTP ${repoResult.status}` };
     }
 
+    // Stop early if rate limit is dangerously low (saves quota for other repos)
+    if (repoResult.rateLimitRemaining < 50) {
+      return { items: [], summary: {}, error: `GitHub rate limit low (${repoResult.rateLimitRemaining} remaining) — skipping to preserve quota` };
+    }
+
     const repoData = repoResult.data;
 
     const contributorsResult = await githubFetch<GitHubContributor[]>(`${baseUrl}/contributors?per_page=1&anon=true`);
