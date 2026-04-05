@@ -24,11 +24,11 @@ export const blockchainIndexerTask = schedules.task({
       logger.info(`Dispatching ${chains.length} chain indexer tasks`);
 
       // batchTriggerAndWait — parent checkpoints while waiting (free compute)
+      // concurrencyKey creates per-chain sub-queues under the task's default queue
       const results = await chainIndexerTask.batchTriggerAndWait(
         chains.map((chain) => ({
           payload: { chainId: chain.chainId, chainName: chain.name },
           options: {
-            queue: `chain-indexer-${chain.chainId}`,
             concurrencyKey: String(chain.chainId),
           },
         })),
