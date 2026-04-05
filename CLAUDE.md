@@ -16,7 +16,7 @@ npm run dev                    # Express + Vite HMR on port 5000
 | Frontend | **Vercel** (static SPA) | React/Vite builds to `dist/public`, served as static files |
 | API | **Vercel** (serverless) | Express app wrapped in `api/[...path].ts` catch-all |
 | Database | **Supabase** PostgreSQL | Project `agfyfdhvgekekliujoxc` (us-east-2), Drizzle ORM |
-| Background Jobs | **Trigger.dev** | 5 scheduled tasks in `trigger/` directory |
+| Background Jobs | **Trigger.dev** | 8 tasks in `trigger/` directory (6 scheduled + 1 per-chain child + 1 alert helper) |
 | DNS/CDN | **Cloudflare** | trustadd.com → Vercel |
 
 ## MCP Tooling (use first, before CLI)
@@ -52,7 +52,7 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - `server/db.ts` — Lazy PostgreSQL pool + Drizzle setup (Supabase pooler compatible)
 - `api/[...path].ts` — Vercel serverless catch-all (wraps Express app)
 - `api/health.ts` — Standalone health check with DB connection test
-- `trigger/` — 7 Trigger.dev task definitions (6 scheduled + 1 per-chain sub-task) + 1 shared alert helper
+- `trigger/` — 8 Trigger.dev tasks: `blockchain-indexer` (orchestrator, */2 cron) → `chain-indexer` (per-chain child, 2 cycles + 90s checkpointed wait), `transaction-indexer`, `x402-prober`, `recalculate-scores`, `community-feedback`, `watchdog`, + `alert` helper
 - `script/sync-trigger-env.ts` — Env var sync script for Trigger.dev (manual run)
 - `vercel.json` — Vercel routing and build configuration
 - `client/src/App.tsx` — React routing (12 pages)
@@ -105,7 +105,7 @@ npx vercel deploy --prod         # Manual deploy if needed
 - **Vercel Deployment Protection**: Must remain **OFF** — enabling it breaks API calls from the frontend
 - **`server/db.ts`**: Both `pool` and `db` are lazy Proxies — this is intentional. Prevents `DATABASE_URL` check at import time (required for Trigger.dev build container indexing)
 - **Trigger.dev config**: `trigger.config.ts` must use `export default defineConfig(...)`, include `maxDuration`, and list `pg` in `build.external` (esbuild bundles pg incorrectly without it, causing silent DB connection failures). Project ref: `proj_nabhtdcabmsfzbmlifqh`
-- **Trigger.dev task imports**: ALL task files MUST use dynamic `import()` for `../server/` and `../shared/` modules inside the `run` function — static top-level imports crash during container module initialization. Only `@trigger.dev/sdk/v3` can be imported statically.
+- **Trigger.dev task imports**: ALL task files MUST use dynamic `import()` for `../server/` and `../shared/` modules inside the `run` function — static top-level imports crash during container module initialization. `@trigger.dev/sdk/v3` and other `trigger/*.ts` task files CAN be imported statically (e.g., `blockchain-indexer.ts` imports `chain-indexer.ts` for `batchTriggerAndWait`).
 - **Trigger.dev env vars**: Set in dashboard (Settings > Environment Variables > Production). Feature flags (`ENABLE_TX_INDEXER`, `ENABLE_PROBER`, `ENABLE_RERESOLVE`) must be lowercase `true`.
 - **GitHub Actions**: `TRIGGER_ACCESS_TOKEN` secret (PAT starting with `tr_pat_`) must be set in repo for auto-deploy workflow to function
 
