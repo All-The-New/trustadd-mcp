@@ -105,6 +105,7 @@ export interface IStorage {
   }>;
 
   logIndexerEvent(event: InsertIndexerEvent): Promise<IndexerEvent>;
+  getSpamRanges(chainId: number, afterBlock: number): Promise<Array<{ from: number; to: number }>>;
   getRecentIndexerEvents(limit?: number, chainId?: number, eventType?: string): Promise<IndexerEvent[]>;
   getIndexerEventCounts(sinceMinutes?: number, chainId?: number): Promise<Array<{ eventType: string; count: number }>>;
   recordMetricsPeriod(metrics: InsertIndexerMetric): Promise<IndexerMetric>;
@@ -1008,6 +1009,21 @@ export class DatabaseStorage implements IStorage {
   async logIndexerEvent(event: InsertIndexerEvent): Promise<IndexerEvent> {
     const [result] = await db.insert(indexerEvents).values(event).returning();
     return result;
+  }
+
+  async getSpamRanges(chainId: number, afterBlock: number): Promise<Array<{ from: number; to: number }>> {
+    const rows = await db.select({
+      from: sql<number>`(metadata->>'fromBlock')::int`,
+      to: sql<number>`(metadata->>'toBlock')::int`,
+    })
+      .from(indexerEvents)
+      .where(and(
+        eq(indexerEvents.chainId, chainId),
+        eq(indexerEvents.eventType, "spam_skip"),
+        gt(sql`(metadata->>'toBlock')::int`, afterBlock),
+      ))
+      .orderBy(sql`(metadata->>'fromBlock')::int`);
+    return rows;
   }
 
   async getRecentIndexerEvents(limit = 50, chainId?: number, eventType?: string): Promise<IndexerEvent[]> {

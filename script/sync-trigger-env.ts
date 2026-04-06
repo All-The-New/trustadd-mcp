@@ -23,6 +23,7 @@ const SYNC_VARS = [
   "ENABLE_TX_INDEXER",
   "ENABLE_RERESOLVE",
   "ENABLE_PROBER",
+  "SENTRY_DSN",
 ];
 
 async function main() {

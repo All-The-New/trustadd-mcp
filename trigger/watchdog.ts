@@ -27,11 +27,11 @@ export const watchdogTask = schedules.task({
         logger.info("Watchdog check clean — no alerts");
       }
 
-      const cost = await usage.getCurrent();
+      const cost = usage.getCurrent();
       metadata.set("status", "completed");
       metadata.set("completedAt", new Date().toISOString());
-      metadata.set("computeCostCents", cost.costInCents);
-      metadata.set("durationMs", cost.durationMs);
+      metadata.set("computeCostCents", cost.totalCostInCents);
+      metadata.set("durationMs", cost.compute.total.durationMs);
 
       return { alertsFound: alerts.length, critical, warnings };
     } catch (err) {

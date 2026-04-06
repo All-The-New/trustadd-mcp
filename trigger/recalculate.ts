@@ -109,12 +109,12 @@ export const recalculateTask = schedules.task({
         logger.warn("Time budget low — skipping classification phase");
       }
 
-      const cost = await usage.getCurrent();
+      const cost = usage.getCurrent();
       metadata.set("status", "completed");
       metadata.set("completedAt", new Date().toISOString());
       metadata.set("classified", classified);
-      metadata.set("computeCostCents", cost.costInCents);
-      metadata.set("durationMs", cost.durationMs);
+      metadata.set("computeCostCents", cost.totalCostInCents);
+      metadata.set("durationMs", cost.compute.total.durationMs);
 
       return { success: true, classified };
     } catch (err) {

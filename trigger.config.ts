@@ -1,4 +1,13 @@
 import { defineConfig } from "@trigger.dev/sdk/v3";
+import * as Sentry from "@sentry/node";
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    tracesSampleRate: 1.0,
+    environment: process.env.TRIGGER_ENVIRONMENT ?? "production",
+  });
+}
 
 export default defineConfig({
   project: "proj_nabhtdcabmsfzbmlifqh",
@@ -18,4 +27,14 @@ export default defineConfig({
   },
   dirs: ["./trigger"],
   maxDuration: 600,
+  onFailure: async ({ payload, error, ctx }) => {
+    Sentry.captureException(error, {
+      tags: {
+        taskId: ctx.task.id,
+        environment: ctx.environment.type,
+      },
+      extra: { payload },
+    });
+    await Sentry.flush(2000);
+  },
 });

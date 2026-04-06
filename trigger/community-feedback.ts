@@ -1,4 +1,5 @@
 import { schedules, logger, metadata, usage } from "@trigger.dev/sdk/v3";
+import { communityScrapeTask } from "./community-feedback-scraper.js";
 
 export const communityFeedbackTask = schedules.task({
   id: "community-feedback",
@@ -10,53 +11,59 @@ export const communityFeedbackTask = schedules.task({
 
     try {
       const { discoverAllSources } = await import("../server/community-feedback");
-      const { CommunityFeedbackScheduler } = await import(
-        "../server/community-feedback/scheduler"
-      );
-      const { GitHubAdapter } = await import(
-        "../server/community-feedback/adapters/github"
-      );
-      const { FarcasterAdapter } = await import(
-        "../server/community-feedback/adapters/farcaster"
-      );
 
       metadata.set("phase", "discovering");
       const discovered = await discoverAllSources();
       metadata.set("discovered", discovered);
       logger.info("Source discovery complete", { discovered });
 
-      metadata.set("phase", "scraping");
-      // Instantiate scheduler directly — getCommunityFeedbackScheduler() returns null
-      // in Trigger.dev container because initCommunityFeedback() only runs in Express server
-      const scheduler = new CommunityFeedbackScheduler();
-      scheduler.registerAdapter("github", new GitHubAdapter(), {
-        concurrency: 1,
-        delayMs: 1500,
-        retries: 2,
-        intervalHours: 24,
-      });
-      scheduler.registerAdapter("farcaster", new FarcasterAdapter(), {
-        concurrency: 1,
-        delayMs: 2000,
-        retries: 2,
-        intervalHours: 24,
-      });
+      // Dispatch parallel child tasks for each platform
+      metadata.set("phase", "dispatching");
+      const results = await communityScrapeTask.batchTriggerAndWait([
+        { payload: { platform: "github" } },
+        { payload: { platform: "farcaster" } },
+      ]);
 
-      // 540s budget = 600s maxDuration minus 60s buffer
-      const scrapeResult = await scheduler.runAllScrapes({ deadlineMs: Date.now() + 540_000 });
+      let totalScraped = 0;
+      let totalErrors = 0;
+      let totalSkipped = 0;
+      const failures: string[] = [];
+
+      for (const run of results.runs) {
+        if (run.ok) {
+          const output = run.output as {
+            platform: string;
+            totalScraped: number;
+            totalErrors: number;
+            totalSkipped: number;
+          } | null;
+          totalScraped += output?.totalScraped ?? 0;
+          totalErrors += output?.totalErrors ?? 0;
+          totalSkipped += output?.totalSkipped ?? 0;
+        } else {
+          failures.push(String(run.error));
+        }
+      }
+
       metadata.set("scrapesCompleted", true);
-      metadata.set("totalScraped", scrapeResult.totalScraped);
-      metadata.set("totalErrors", scrapeResult.totalErrors);
-      metadata.set("totalSkipped", scrapeResult.totalSkipped);
-      logger.info("Community feedback scraping complete", { scrapeResult });
+      metadata.set("totalScraped", totalScraped);
+      metadata.set("totalErrors", totalErrors);
+      metadata.set("totalSkipped", totalSkipped);
+      if (failures.length > 0) metadata.set("failures", failures);
+      logger.info("Community feedback scraping complete", {
+        totalScraped,
+        totalErrors,
+        totalSkipped,
+        failures,
+      });
 
-      const cost = await usage.getCurrent();
+      const cost = usage.getCurrent();
       metadata.set("status", "completed");
       metadata.set("completedAt", new Date().toISOString());
-      metadata.set("computeCostCents", cost.costInCents);
-      metadata.set("durationMs", cost.durationMs);
+      metadata.set("computeCostCents", cost.totalCostInCents);
+      metadata.set("durationMs", cost.compute.total.durationMs);
 
-      return { discovered, ...scrapeResult };
+      return { discovered, totalScraped, totalErrors, totalSkipped };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error("community-feedback failed", { error: error.message, stack: error.stack });

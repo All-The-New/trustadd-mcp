@@ -57,12 +57,15 @@ async function sendEmailAlert(toDeliver: Alert[]): Promise<boolean> {
   if (!apiKey || !alertEmail) return false;
 
   const criticalCount = toDeliver.filter((a) => a.severity === "critical").length;
+  const infoCount = toDeliver.filter((a) => a.severity === "info").length;
   const subject = criticalCount > 0
     ? `[CRITICAL] TrustAdd: ${criticalCount} critical alert${criticalCount > 1 ? "s" : ""}`
+    : infoCount === toDeliver.length
+    ? `TrustAdd: ${infoCount} notification${infoCount > 1 ? "s" : ""}`
     : `[WARNING] TrustAdd: ${toDeliver.length} alert${toDeliver.length > 1 ? "s" : ""}`;
 
   const rows = toDeliver.map((a) => {
-    const color = a.severity === "critical" ? "#dc2626" : "#f59e0b";
+    const color = a.severity === "critical" ? "#dc2626" : a.severity === "warning" ? "#f59e0b" : "#2563eb";
     return `<tr><td style="padding:8px;border-bottom:1px solid #eee"><span style="color:${color};font-weight:bold">${a.severity.toUpperCase()}</span></td><td style="padding:8px;border-bottom:1px solid #eee"><strong>${a.title}</strong></td><td style="padding:8px;border-bottom:1px solid #eee">${a.message}</td></tr>`;
   }).join("");
 
@@ -98,7 +101,8 @@ async function sendWebhookAlert(toDeliver: Alert[]): Promise<boolean> {
   if (!webhookUrl) return false;
 
   const criticalCount = toDeliver.filter((a) => a.severity === "critical").length;
-  const prefix = criticalCount > 0 ? "🚨" : "⚠️";
+  const infoOnly = toDeliver.every((a) => a.severity === "info");
+  const prefix = criticalCount > 0 ? "🚨" : infoOnly ? "ℹ️" : "⚠️";
   const text = `${prefix} **TrustAdd Alert** (${toDeliver.length} issue${toDeliver.length > 1 ? "s" : ""})\n\n` +
     toDeliver
       .map((a) => `[${a.severity.toUpperCase()}] **${a.title}**: ${a.message}`)
@@ -124,11 +128,17 @@ export async function deliverAlerts(alerts: Alert[]): Promise<void> {
   if (!hasEmail && !hasWebhook) return;
 
   const now = Date.now();
-  const candidates = alerts.filter((a) => a.severity !== "info");
-  if (candidates.length === 0) return;
 
-  const lastDelivered = await getLastDelivered(candidates.map((a) => a.id));
-  const toDeliver = candidates.filter((a) => {
+  // Health alerts (warning + critical)
+  const healthAlerts = alerts.filter((a) => a.severity !== "info");
+  // Info alerts (discovery notifications)
+  const infoAlerts = alerts.filter((a) => a.severity === "info");
+
+  const allCandidates = [...healthAlerts, ...infoAlerts];
+  if (allCandidates.length === 0) return;
+
+  const lastDelivered = await getLastDelivered(allCandidates.map((a) => a.id));
+  const toDeliver = allCandidates.filter((a) => {
     const last = lastDelivered.get(a.id);
     if (last && now - last.getTime() < REDELIVER_INTERVAL_MS) return false;
     return true;
@@ -136,7 +146,7 @@ export async function deliverAlerts(alerts: Alert[]): Promise<void> {
 
   if (toDeliver.length === 0) return;
 
-  // Try email first, fall back to webhook
+  // Deliver both health and info alerts via webhook + email
   let delivered = false;
   if (hasEmail) delivered = await sendEmailAlert(toDeliver);
   if (hasWebhook) delivered = (await sendWebhookAlert(toDeliver)) || delivered;
@@ -282,6 +292,34 @@ export async function evaluateAlerts(): Promise<Alert[]> {
     }
   } catch {
     // non-critical — prober may not have run yet
+  }
+
+  // New agent discovery
+  try {
+    const pool = getDbPool();
+    const newAgentsResult = await pool.query(
+      `SELECT id, name, chain_id, quality_tier, created_at
+       FROM agents
+       WHERE created_at >= NOW() - INTERVAL '24 hours'
+         AND quality_tier NOT IN ('spam', 'unclassified')
+       ORDER BY created_at DESC
+       LIMIT 50`,
+    );
+    const newAgents = newAgentsResult.rows;
+    if (newAgents.length > 0) {
+      const agentSummary = newAgents.map((a: any) => `${a.name || a.id} (${a.quality_tier})`).join(", ");
+      alerts.push({
+        id: `new_agents_${new Date().toISOString().slice(0, 10)}`,
+        severity: "info",
+        chainId: null,
+        title: "New Agents Discovered",
+        message: `${newAgents.length} new quality agent(s) in last 24h: ${agentSummary.slice(0, 300)}`,
+        firstSeen: new Date(newAgents[newAgents.length - 1].created_at),
+        lastSeen: new Date(newAgents[0].created_at),
+      });
+    }
+  } catch {
+    // non-critical — agent table may be empty
   }
 
   // Transaction indexer sync staleness

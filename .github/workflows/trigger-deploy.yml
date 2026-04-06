@@ -12,6 +12,14 @@ on:
       - "shared/**"
       - ".github/workflows/trigger-deploy.yml"
       - "script/sync-trigger-env.ts"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "trigger/**"
+      - "trigger.config.ts"
+      - "server/**"
+      - "shared/**"
 
 jobs:
   deploy:
@@ -42,8 +50,14 @@ jobs:
           ENABLE_TX_INDEXER: ${{ secrets.ENABLE_TX_INDEXER }}
           ENABLE_RERESOLVE: ${{ secrets.ENABLE_RERESOLVE }}
           ENABLE_PROBER: ${{ secrets.ENABLE_PROBER }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
 
       - name: Deploy Trigger.dev jobs
-        run: npx trigger.dev@4.4.3 deploy
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx trigger.dev@4.4.3 deploy --env preview
+          else
+            npx trigger.dev@4.4.3 deploy
+          fi
         env:
           TRIGGER_ACCESS_TOKEN: ${{ secrets.TRIGGER_ACCESS_TOKEN }}

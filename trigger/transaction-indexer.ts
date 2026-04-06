@@ -20,11 +20,11 @@ export const transactionIndexerTask = schedules.task({
       metadata.set("errors", result.errors);
       logger.info("Transaction sync complete", { result });
 
-      const cost = await usage.getCurrent();
+      const cost = usage.getCurrent();
       metadata.set("status", "completed");
       metadata.set("completedAt", new Date().toISOString());
-      metadata.set("computeCostCents", cost.costInCents);
-      metadata.set("durationMs", cost.durationMs);
+      metadata.set("computeCostCents", cost.totalCostInCents);
+      metadata.set("durationMs", cost.compute.total.durationMs);
 
       return result;
     } catch (err) {

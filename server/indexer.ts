@@ -155,6 +155,7 @@ export class ERC8004Indexer {
   private isStarting = false;
   private reResolveFailures = new Map<string, number>();
   private consecutiveSpamBlocks = 0;
+  private spamRanges: Array<{ from: number; to: number }> = [];
 
   constructor(chainConfig: ChainConfig) {
     this.chainConfig = chainConfig;
@@ -523,6 +524,39 @@ export class ERC8004Indexer {
     log(`Re-resolution batch complete: ${updated}/${batch.length} updated (${needsUpdate.length - batch.length} remaining)`, this.logPrefix);
   }
 
+  private async loadSpamRanges(afterBlock: number): Promise<void> {
+    try {
+      const rows = await storage.getSpamRanges(this.chainConfig.chainId, afterBlock);
+      // Merge overlapping/adjacent ranges into consolidated ranges
+      if (rows.length === 0) { this.spamRanges = []; return; }
+      const sorted = rows.sort((a, b) => a.from - b.from);
+      const merged: Array<{ from: number; to: number }> = [sorted[0]];
+      for (let i = 1; i < sorted.length; i++) {
+        const last = merged[merged.length - 1];
+        if (sorted[i].from <= last.to + 1) {
+          last.to = Math.max(last.to, sorted[i].to);
+        } else {
+          merged.push(sorted[i]);
+        }
+      }
+      this.spamRanges = merged;
+      if (merged.length > 0) {
+        log(`Loaded ${merged.length} merged spam ranges (${rows.length} raw) after block ${afterBlock.toLocaleString()}`, this.logPrefix);
+      }
+    } catch (err) {
+      log(`Failed to load spam ranges: ${(err as Error).message}`, this.logPrefix);
+      this.spamRanges = [];
+    }
+  }
+
+  private isChunkFullySpam(from: number, to: number): boolean {
+    for (const range of this.spamRanges) {
+      if (from >= range.from && to <= range.to) return true;
+      if (range.from > to) break; // Ranges are sorted, no need to check further
+    }
+    return false;
+  }
+
   private classifyError(msg: string): string {
     if (msg.includes("TIMEOUT") || msg.includes("timeout") || msg.includes("timed out")) return "timeout";
     if (msg.includes("Too Many Requests") || msg.includes("rate limit") || msg.includes("402") || msg.includes("Payment Required")) return "rate_limit";
@@ -559,10 +593,24 @@ export class ERC8004Indexer {
         log(`Backfilling ${totalBlocks.toLocaleString()} blocks (${startBlock} -> ${currentBlock}), chunk=${chainBackfillRange.toLocaleString()}, timeout=${RPC_TIMEOUT_BACKFILL_MS / 1000}s`, this.logPrefix);
       }
 
+      // Pre-load known spam ranges to skip without RPC calls
+      await this.loadSpamRanges(startBlock);
+
       let from = startBlock;
       let spamRangeStart: number | null = null;
       while (from <= effectiveEnd) {
         const to = Math.min(from + chunkSize - 1, effectiveEnd);
+
+        // Skip chunks entirely contained in known spam ranges (no RPC calls)
+        if (this.isChunkFullySpam(from, to)) {
+          if (spamRangeStart === null) spamRangeStart = from;
+          from = to + 1;
+          await storage.updateIndexerState(this.chainConfig.chainId, {
+            lastProcessedBlock: to,
+            lastError: null,
+          });
+          continue;
+        }
 
         this.consecutiveSpamBlocks = 0;
         await this.processBlockRangeWithBisection(from, to);
