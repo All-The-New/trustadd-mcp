@@ -88,7 +88,6 @@ function HealthBanner({ data }: { data: any }) {
           <p className={`font-semibold ${config.color}`} data-testid="text-health-status">{config.label}</p>
           <p className="text-sm text-muted-foreground">
             {data.chains?.filter((c: any) => c.status !== "down").length}/{data.chains?.length} chains active
-            {data.activeAlerts > 0 && ` · ${data.activeAlerts} alert${data.activeAlerts > 1 ? "s" : ""}`}
           </p>
         </div>
       </div>
@@ -124,7 +123,10 @@ function AlertCard({ alert }: { alert: any }) {
 }
 
 function ChainStatusCard({ chain }: { chain: any }) {
-  const isRunning = chain.isRunning;
+  const minutesSinceUpdate = chain.updatedAt
+    ? (Date.now() - new Date(chain.updatedAt).getTime()) / 60_000
+    : Infinity;
+  const isActive = minutesSinceUpdate < 10;
   const hasError = !!chain.lastError;
 
   return (
@@ -132,11 +134,11 @@ function ChainStatusCard({ chain }: { chain: any }) {
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <div className={`w-2.5 h-2.5 rounded-full ${isRunning ? (hasError ? "bg-amber-500" : "bg-green-500") : "bg-red-500"} animate-pulse`} />
+            <div className={`w-2.5 h-2.5 rounded-full ${isActive ? (hasError ? "bg-amber-500" : "bg-green-500") : "bg-red-500"} animate-pulse`} />
             <ChainBadge chainId={chain.chainId} size="md" />
           </div>
           <Badge variant="outline" className="text-xs">
-            {isRunning ? (hasError ? "Degraded" : "Running") : "Stopped"}
+            {isActive ? (hasError ? "Degraded" : "Active") : "Stale"}
           </Badge>
         </div>
 
@@ -169,7 +171,10 @@ function ChainStatusCard({ chain }: { chain: any }) {
 
 function OpsKpiStrip({ summary, overviewData }: { summary: any; overviewData: any }) {
   const chains = overviewData?.chains ?? [];
-  const runningCount = chains.filter((c: any) => c.isRunning).length;
+  const runningCount = chains.filter((c: any) => {
+    const minutesStale = c.updatedAt ? (Date.now() - new Date(c.updatedAt).getTime()) / 60_000 : Infinity;
+    return minutesStale < 10;
+  }).length;
   const totalCount = chains.length;
 
   const allUpdatedAts = chains.map((c: any) => new Date(c.updatedAt).getTime()).filter(Boolean);
@@ -754,20 +759,6 @@ export default function StatusPage() {
         ) : summaryData && overviewData ? (
           <OpsKpiStrip summary={summaryData} overviewData={overviewData} />
         ) : null}
-
-        {alertsData?.alerts?.length > 0 && (
-          <section>
-            <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-amber-500" />
-              Active Alerts ({alertsData.alerts.length})
-            </h2>
-            <div className="space-y-2" data-testid="container-alerts">
-              {alertsData.alerts.map((alert: any) => (
-                <AlertCard key={alert.id} alert={alert} />
-              ))}
-            </div>
-          </section>
-        )}
 
         <section>
           <h2 className="text-lg font-semibold mb-3">Chain Status</h2>

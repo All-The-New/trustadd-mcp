@@ -381,12 +381,14 @@ export async function registerRoutes(
 
       for (const chain of enabledChains) {
         const state = await storage.getIndexerState(chain.chainId);
-        if (state.isRunning) chainsRunning++;
+        const minutesStale = (Date.now() - state.updatedAt.getTime()) / 60_000;
+        const isActive = minutesStale < 10;
+        if (isActive) chainsRunning++;
         if (state.lastError) chainsWithErrors++;
         chains.push({
           chainId: chain.chainId,
           name: chain.name,
-          status: state.isRunning ? (state.lastError ? "degraded" : "healthy") : "down",
+          status: isActive ? (state.lastError ? "degraded" : "healthy") : "down",
           lastBlock: state.lastProcessedBlock,
         });
       }
