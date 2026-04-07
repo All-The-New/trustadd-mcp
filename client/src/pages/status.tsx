@@ -745,12 +745,6 @@ export default function StatusPage() {
           </div>
         </div>
 
-        {healthQuery.isLoading ? (
-          <Skeleton className="h-16 w-full" />
-        ) : healthData ? (
-          <HealthBanner data={healthData} />
-        ) : null}
-
         {/* Ops KPI strip */}
         {(summaryQuery.isLoading || overviewQuery.isLoading) ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
