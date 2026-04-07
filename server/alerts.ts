@@ -16,6 +16,7 @@ export interface Alert {
 }
 
 const REDELIVER_INTERVAL_MS = 6 * 60 * 60 * 1000; // re-alert every 6h for persistent issues
+const INFO_REDELIVER_INTERVAL_MS = 24 * 60 * 60 * 1000; // info alerts (discovery) once per day
 
 async function getLastDelivered(alertIds: string[]): Promise<Map<string, Date>> {
   const result = new Map<string, Date>();
@@ -133,8 +134,9 @@ export async function deliverAlerts(alerts: Alert[]): Promise<void> {
   const lastDelivered = await getLastDelivered(alerts.map((a) => a.id));
   const toDeliver = alerts.filter((a) => {
     const last = lastDelivered.get(a.id);
-    if (last && now - last.getTime() < REDELIVER_INTERVAL_MS) return false;
-    return true;
+    if (!last) return true;
+    const interval = a.severity === "info" ? INFO_REDELIVER_INTERVAL_MS : REDELIVER_INTERVAL_MS;
+    return now - last.getTime() >= interval;
   });
 
   if (toDeliver.length === 0) return;
@@ -163,21 +165,28 @@ export async function evaluateAlerts(): Promise<Alert[]> {
   let chainsDown = 0;
   let chainsTotal = 0;
 
+  const CHAIN_DOWN_MINUTES = 10; // 5 missed 2-min cycles = definitely down
+
   for (const chain of enabledChains) {
     chainsTotal++;
     const state = await storage.getIndexerState(chain.chainId);
+    const timeSinceUpdate = (now.getTime() - state.updatedAt.getTime()) / (60 * 1000);
 
-    if (!state.isRunning) {
+    // Chain is "down" if no update in 10+ minutes (not based on is_running flag,
+    // which is only true mid-cycle and false between Trigger.dev cron runs)
+    if (timeSinceUpdate > CHAIN_DOWN_MINUTES) {
       chainsDown++;
-      alerts.push({
-        id: `chain_down_${chain.chainId}`,
-        severity: "warning",
-        chainId: chain.chainId,
-        title: "Chain Not Running",
-        message: `${chain.name} indexer is not running${state.lastError ? `: ${state.lastError.slice(0, 150)}` : ""}`,
-        firstSeen: state.updatedAt,
-        lastSeen: now,
-      });
+      if (timeSinceUpdate > STALL_THRESHOLD_MINUTES) {
+        alerts.push({
+          id: `chain_stalled_${chain.chainId}`,
+          severity: "warning",
+          chainId: chain.chainId,
+          title: "Chain Stalled",
+          message: `${chain.name} hasn't progressed in ${Math.round(timeSinceUpdate)} minutes${state.lastError ? `: ${state.lastError.slice(0, 150)}` : ""}`,
+          firstSeen: state.updatedAt,
+          lastSeen: now,
+        });
+      }
       continue;
     }
 
@@ -189,19 +198,6 @@ export async function evaluateAlerts(): Promise<Alert[]> {
         title: "RPC Degraded",
         message: `${chain.name}: ${state.lastError.slice(0, 150)}`,
         firstSeen: state.updatedAt,
-        lastSeen: now,
-      });
-    }
-
-    const timeSinceUpdate = (now.getTime() - state.updatedAt.getTime()) / (60 * 1000);
-    if (timeSinceUpdate > STALL_THRESHOLD_MINUTES && state.isRunning) {
-      alerts.push({
-        id: `chain_stalled_${chain.chainId}`,
-        severity: "warning",
-        chainId: chain.chainId,
-        title: "Chain Stalled",
-        message: `${chain.name} hasn't progressed in ${Math.round(timeSinceUpdate)} minutes`,
-        firstSeen: new Date(now.getTime() - timeSinceUpdate * 60 * 1000),
         lastSeen: now,
       });
     }
@@ -237,17 +233,16 @@ export async function evaluateAlerts(): Promise<Alert[]> {
       });
     }
 
-    // High event volume (cost spike indicator) — reuses cached eventCounts
-    const spamSkips = eventCounts.find(e => e.eventType === "spam_skip")?.count || 0;
+    // High error volume (excludes spam_skip — expected on BNB)
     const rpcErrors = eventCounts.find(e => e.eventType === "rpc_error")?.count || 0;
-    const totalErrorVolume = failedCount + spamSkips + rpcErrors;
-    if (totalErrorVolume > 100) {
+    const totalErrorVolume = failedCount + rpcErrors;
+    if (totalErrorVolume > 50) {
       alerts.push({
         id: `high_event_volume_${chain.chainId}`,
-        severity: totalErrorVolume > 500 ? "critical" : "warning",
+        severity: totalErrorVolume > 200 ? "critical" : "warning",
         chainId: chain.chainId,
-        title: "High Error/Skip Volume",
-        message: `${chain.name}: ${totalErrorVolume} error/skip events in the last hour — may indicate elevated compute cost`,
+        title: "High Error Volume",
+        message: `${chain.name}: ${totalErrorVolume} errors in the last hour (${failedCount} failed cycles, ${rpcErrors} RPC errors)`,
         firstSeen: now,
         lastSeen: now,
       });
