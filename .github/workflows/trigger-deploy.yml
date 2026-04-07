@@ -12,6 +12,9 @@ on:
       - "shared/**"
       - ".github/workflows/trigger-deploy.yml"
       - "script/sync-trigger-env.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".npmrc"
   pull_request:
     branches:
       - main
