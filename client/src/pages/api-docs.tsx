@@ -125,7 +125,7 @@ const endpoints: Endpoint[] = [
         type: "number",
         required: false,
         description:
-          "Filter agents by chain: 1 (Ethereum), 8453 (Base), 56 (BNB Chain), 137 (Polygon), 42161 (Arbitrum). Omit for all chains.",
+          "Filter agents by chain: 1 (Ethereum), 8453 (Base), 56 (BNB Chain), 137 (Polygon), 42161 (Arbitrum), 42220 (Celo), 100 (Gnosis), 10 (Optimism), 43114 (Avalanche). Omit for all chains.",
       },
     ],
     exampleCurl: `curl "${BASE_URL}/api/agents?limit=2&filter=has-metadata"`,
@@ -165,7 +165,7 @@ const endpoints: Endpoint[] = [
       },
       {
         field: "agents[].chainId",
-        description: "The chain ID where this agent was discovered (1 = Ethereum, 8453 = Base, 56 = BNB Chain, 137 = Polygon, 42161 = Arbitrum).",
+        description: "The chain ID where this agent was discovered (1 = Ethereum, 8453 = Base, 56 = BNB Chain, 137 = Polygon, 42161 = Arbitrum, 42220 = Celo, 100 = Gnosis, 10 = Optimism, 43114 = Avalanche).",
       },
       {
         field: "agents[].primaryContractAddress",
@@ -524,6 +524,42 @@ const endpoints: Endpoint[] = [
           totalAgents: 0,
           lastProcessedBlock: 290000000,
         },
+        {
+          chainId: 42220,
+          name: "Celo",
+          shortName: "celo",
+          explorerUrl: "https://celoscan.io",
+          enabled: true,
+          totalAgents: 0,
+          lastProcessedBlock: 58396700,
+        },
+        {
+          chainId: 100,
+          name: "Gnosis",
+          shortName: "gnosis",
+          explorerUrl: "https://gnosisscan.io",
+          enabled: true,
+          totalAgents: 0,
+          lastProcessedBlock: 44505000,
+        },
+        {
+          chainId: 10,
+          name: "Optimism",
+          shortName: "opt",
+          explorerUrl: "https://optimistic.etherscan.io",
+          enabled: true,
+          totalAgents: 0,
+          lastProcessedBlock: 147514900,
+        },
+        {
+          chainId: 43114,
+          name: "Avalanche",
+          shortName: "avax",
+          explorerUrl: "https://snowscan.xyz",
+          enabled: true,
+          totalAgents: 0,
+          lastProcessedBlock: 77389000,
+        },
       ],
       null,
       2
@@ -531,7 +567,7 @@ const endpoints: Endpoint[] = [
     responseFields: [
       {
         field: "chainId",
-        description: "The numeric chain ID (1 = Ethereum, 8453 = Base, 56 = BNB Chain, 137 = Polygon, 42161 = Arbitrum).",
+        description: "The numeric chain ID (1 = Ethereum, 8453 = Base, 56 = BNB Chain, 137 = Polygon, 42161 = Arbitrum, 42220 = Celo, 100 = Gnosis, 10 = Optimism, 43114 = Avalanche).",
       },
       {
         field: "name",

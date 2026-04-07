@@ -105,7 +105,7 @@ export const ABOUT = {
   mission: {
     title: "Our Mission",
     paragraphs: [
-      "As AI agents become more autonomous, knowing which ones to trust matters more than ever. TrustAdd indexes identity, reputation, and on-chain signals from multiple protocols — including ERC-8004, x402, and emerging standards — across Ethereum, Base, Polygon, and Arbitrum.",
+      "As AI agents become more autonomous, knowing which ones to trust matters more than ever. TrustAdd indexes identity, reputation, and on-chain signals from multiple protocols — including ERC-8004, x402, and emerging standards — across 9 EVM chains including Ethereum, Base, Polygon, Arbitrum, BNB Chain, Celo, Gnosis, Optimism, and Avalanche.",
       "We're building a universal trust layer for AI agents. By combining on-chain identity, community signals, and capability data into a single, transparent score, TrustAdd gives both humans and machines a reliable way to evaluate agent trustworthiness.",
     ],
   },
@@ -158,7 +158,7 @@ export const PROTOCOLS = {
         "Reputation feedback from other agents",
         "Controller ownership changes",
       ],
-      chains: ["Ethereum", "Base", "Polygon", "Arbitrum"],
+      chains: ["Ethereum", "Base", "Polygon", "Arbitrum", "BNB Chain", "Celo", "Gnosis", "Optimism", "Avalanche"],
       status: "live" as const,
       scoreCategories: ["Identity", "History", "Transparency"],
     },
@@ -177,7 +177,7 @@ export const PROTOCOLS = {
         "On-chain transaction volume (USDC, USDT, DAI, WETH, ETH)",
         "Endpoint availability and response patterns",
       ],
-      chains: ["Ethereum", "Base", "Polygon", "Arbitrum"],
+      chains: ["Ethereum", "Base", "Polygon", "Arbitrum", "BNB Chain", "Celo", "Gnosis", "Optimism", "Avalanche"],
       status: "live" as const,
       scoreCategories: ["Capability"],
     },
@@ -257,7 +257,7 @@ export const API_DOCS = {
     "Access everything in TrustAdd programmatically. Query agents, read trust scores and on-chain history, and integrate multi-protocol agent data into your own applications. No authentication required.",
   usageNotes: {
     dataSource:
-      "Agent data is sourced from 4 active EVM chains (Ethereum, Base, Polygon, Arbitrum) via multiple protocols including ERC-8004 and x402. Data freshness depends on indexer status. Use the chainId parameter to filter by chain.",
+      "Agent data is sourced from 9 active EVM chains (Ethereum, Base, Polygon, Arbitrum, BNB Chain, Celo, Gnosis, Optimism, Avalanche) via multiple protocols including ERC-8004 and x402. Data freshness depends on indexer status. Use the chainId parameter to filter by chain.",
   },
 };
 
@@ -299,7 +299,7 @@ export const DIRECTORY = {
   seo: {
     title: "Agents",
     description:
-      "Browse and search all AI agent identities discovered across Ethereum, Base, Polygon, and Arbitrum. Filter by trust score, chain, protocol support, and more.",
+      "Browse and search all AI agent identities discovered across 9 EVM chains. Filter by trust score, chain, protocol support, and more.",
   },
   emptyState:
     "The indexer is scanning for AI agent identities across supported chains. Check back soon.",

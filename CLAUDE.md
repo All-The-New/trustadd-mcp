@@ -40,13 +40,13 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - **Vercel serverless API**: Express app runs as a single catch-all serverless function (`api/[...path].ts`)
 - **Database-first types**: All types flow from `shared/schema.ts` via Drizzle ORM + drizzle-zod
 - **Background services**: Trigger.dev scheduled tasks with per-chain sub-tasks, metadata tracking, and queue concurrency control
-- **Multi-chain**: 5 EVM chains share the same contract addresses; chain config in `shared/chains.ts`
+- **Multi-chain**: 9 EVM chains share the same contract addresses; chain config in `shared/chains.ts`
 - **ESM imports**: All relative imports use `.js` extensions for Vercel serverless compatibility
 
 ## Important Files
 
 - `shared/schema.ts` — All 11 database tables, insert schemas, and TypeScript types
-- `shared/chains.ts` — Multi-chain configuration (5 EVM chains, RPC URLs, contract addresses)
+- `shared/chains.ts` — Multi-chain configuration (9 EVM chains, RPC URLs, contract addresses)
 - `server/storage.ts` — Database abstraction layer (IStorage interface, ~2300 lines)
 - `server/routes.ts` — All API endpoints (~900 lines)
 - `server/index.ts` — Local dev entry point (starts Vite HMR + background services)

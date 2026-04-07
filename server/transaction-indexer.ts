@@ -42,6 +42,27 @@ const TOKEN_ADDRESSES: Record<number, Array<{ address: string; symbol: string; d
     { address: "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1", symbol: "DAI", decimals: 18 },
     { address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", symbol: "WETH", decimals: 18 },
   ],
+  42220: [
+    { address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", symbol: "USDC", decimals: 6 },
+    { address: "0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e", symbol: "USDT", decimals: 6 },
+  ],
+  100: [
+    { address: "0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83", symbol: "USDC", decimals: 6 },
+    { address: "0x4ECaBa5870353805a9F068101A40E0f32ed605C6", symbol: "USDT", decimals: 6 },
+    { address: "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d", symbol: "WXDAI", decimals: 18 },
+  ],
+  10: [
+    { address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", symbol: "USDC", decimals: 6 },
+    { address: "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58", symbol: "USDT", decimals: 6 },
+    { address: "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1", symbol: "DAI", decimals: 18 },
+    { address: "0x4200000000000000000000000000000000000006", symbol: "WETH", decimals: 18 },
+  ],
+  43114: [
+    { address: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E", symbol: "USDC", decimals: 6 },
+    { address: "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7", symbol: "USDT", decimals: 6 },
+    { address: "0xd586E7F844cEa2F87f50152665BCbc2C279D8d70", symbol: "DAI", decimals: 18 },
+    { address: "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB", symbol: "WETH", decimals: 18 },
+  ],
 };
 
 const CHAIN_RPC_URLS: Record<number, string> = {
@@ -49,6 +70,10 @@ const CHAIN_RPC_URLS: Record<number, string> = {
   8453: "https://base-mainnet.g.alchemy.com/v2/{key}",
   137: "https://polygon-mainnet.g.alchemy.com/v2/{key}",
   42161: "https://arb-mainnet.g.alchemy.com/v2/{key}",
+  42220: "https://celo-mainnet.g.alchemy.com/v2/{key}",
+  100: "https://gnosis-mainnet.g.alchemy.com/v2/{key}",
+  10: "https://opt-mainnet.g.alchemy.com/v2/{key}",
+  43114: "https://avax-mainnet.g.alchemy.com/v2/{key}",
 };
 
 function getAlchemyUrl(chainId: number): string | null {
