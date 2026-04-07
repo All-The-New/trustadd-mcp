@@ -28,13 +28,15 @@ export default defineConfig({
   dirs: ["./trigger"],
   maxDuration: 600,
   onFailure: async ({ payload, error, ctx }) => {
-    Sentry.captureException(error, {
-      tags: {
-        taskId: ctx.task.id,
-        environment: ctx.environment.type,
-      },
-      extra: { payload },
-    });
-    await Sentry.flush(2000);
+    if (process.env.SENTRY_DSN) {
+      Sentry.captureException(error, {
+        tags: {
+          taskId: ctx.task.id,
+          environment: ctx.environment.type,
+        },
+        extra: { payload },
+      });
+      await Sentry.flush(2000);
+    }
   },
 });

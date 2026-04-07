@@ -603,7 +603,10 @@ export class ERC8004Indexer {
 
         // Skip chunks entirely contained in known spam ranges (no RPC calls)
         if (this.isChunkFullySpam(from, to)) {
-          if (spamRangeStart === null) spamRangeStart = from;
+          if (spamRangeStart === null) {
+            spamRangeStart = from;
+            log(`Skipping cached spam range starting at block ${from.toLocaleString()}`, this.logPrefix);
+          }
           from = to + 1;
           await storage.updateIndexerState(this.chainConfig.chainId, {
             lastProcessedBlock: to,

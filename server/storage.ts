@@ -1022,7 +1022,8 @@ export class DatabaseStorage implements IStorage {
         eq(indexerEvents.eventType, "spam_skip"),
         gt(sql`(metadata->>'toBlock')::int`, afterBlock),
       ))
-      .orderBy(sql`(metadata->>'fromBlock')::int`);
+      .orderBy(sql`(metadata->>'fromBlock')::int`)
+      .limit(5000);
     return rows;
   }
 

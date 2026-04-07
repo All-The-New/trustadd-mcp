@@ -128,17 +128,10 @@ export async function deliverAlerts(alerts: Alert[]): Promise<void> {
   if (!hasEmail && !hasWebhook) return;
 
   const now = Date.now();
+  if (alerts.length === 0) return;
 
-  // Health alerts (warning + critical)
-  const healthAlerts = alerts.filter((a) => a.severity !== "info");
-  // Info alerts (discovery notifications)
-  const infoAlerts = alerts.filter((a) => a.severity === "info");
-
-  const allCandidates = [...healthAlerts, ...infoAlerts];
-  if (allCandidates.length === 0) return;
-
-  const lastDelivered = await getLastDelivered(allCandidates.map((a) => a.id));
-  const toDeliver = allCandidates.filter((a) => {
+  const lastDelivered = await getLastDelivered(alerts.map((a) => a.id));
+  const toDeliver = alerts.filter((a) => {
     const last = lastDelivered.get(a.id);
     if (last && now - last.getTime() < REDELIVER_INTERVAL_MS) return false;
     return true;

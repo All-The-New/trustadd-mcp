@@ -50,6 +50,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
           ENABLE_TX_INDEXER: ${{ secrets.ENABLE_TX_INDEXER }}
           ENABLE_RERESOLVE: ${{ secrets.ENABLE_RERESOLVE }}
           ENABLE_PROBER: ${{ secrets.ENABLE_PROBER }}
