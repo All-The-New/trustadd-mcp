@@ -24,21 +24,7 @@ import {
 } from "recharts";
 import { useState } from "react";
 
-const CHAIN_COLORS: Record<number, string> = {
-  1: "#627EEA",
-  8453: "#0052FF",
-  56: "#F0B90B",
-  137: "#8247E5",
-  42161: "#28A0F0",
-};
-
-const CHAIN_NAMES: Record<number, string> = {
-  1: "Ethereum",
-  8453: "Base",
-  56: "BNB Chain",
-  137: "Polygon",
-  42161: "Arbitrum",
-};
+import { CHAIN_COLORS, CHAIN_NAMES } from "@shared/chains";
 
 const ERROR_EVENT_TYPES = ["error", "timeout", "connection_error", "rate_limit", "backoff"];
 

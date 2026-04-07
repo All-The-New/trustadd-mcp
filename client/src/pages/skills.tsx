@@ -24,12 +24,7 @@ import {
   Cpu, AlertTriangle, FileCode, Globe, TrendingUp,
 } from "lucide-react";
 
-const CHAIN_COLORS: Record<number, string> = {
-  1: "#627EEA", 8453: "#0052FF", 56: "#F0B90B", 137: "#8247E5", 42161: "#28A0F0",
-};
-const CHAIN_NAMES: Record<number, string> = {
-  1: "Ethereum", 8453: "Base", 56: "BNB Chain", 137: "Polygon", 42161: "Arbitrum",
-};
+import { CHAIN_COLORS, CHAIN_NAMES } from "@shared/chains";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Social": "#f59e0b",

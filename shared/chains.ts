@@ -196,6 +196,16 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
   },
 };
 
+/** Derived chain color map — auto-synced from CHAIN_CONFIGS. Use in charts/visualizations. */
+export const CHAIN_COLORS: Record<number, string> = Object.fromEntries(
+  Object.values(CHAIN_CONFIGS).map((c) => [c.chainId, c.color]),
+);
+
+/** Derived chain name map — auto-synced from CHAIN_CONFIGS. Use in charts/visualizations. */
+export const CHAIN_NAMES: Record<number, string> = Object.fromEntries(
+  Object.values(CHAIN_CONFIGS).map((c) => [c.chainId, c.name]),
+);
+
 export function getChain(chainId: number): ChainConfig | undefined {
   return CHAIN_CONFIGS[chainId];
 }

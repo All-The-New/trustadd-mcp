@@ -83,20 +83,14 @@ const URI_TYPE_LABELS: Record<string, { label: string; color: string }> = {
   other: { label: "Other", color: "#94a3b8" },
 };
 
-const CHAIN_EXPLORER: Record<number, string> = {
-  1: "https://etherscan.io/address/",
-  56: "https://bscscan.com/address/",
-  137: "https://polygonscan.com/address/",
-  8453: "https://basescan.org/address/",
-  42161: "https://arbiscan.io/address/",
-};
+import { getExplorerAddressUrl } from "@shared/chains";
 
 function AddressLink({ address, fullAddress, chainId }: { address: string; fullAddress?: string; chainId?: number }) {
-  const base = chainId ? CHAIN_EXPLORER[chainId] : "https://etherscan.io/address/";
   const target = fullAddress ?? address;
+  const href = getExplorerAddressUrl(chainId ?? 1, target);
   return (
     <a
-      href={`${base}${target}`}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       className="font-mono text-xs text-primary hover:underline"
