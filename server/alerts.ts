@@ -156,7 +156,7 @@ const HIGH_ERROR_RATE_THRESHOLD = 0.5;
 const PROBER_WARN_HOURS = 25;
 const TX_INDEXER_WARN_HOURS = 8;
 const TX_INDEXER_CRITICAL_HOURS = 13;
-const ZERO_PROGRESS_MINUTES = 30; // alert if last_processed_block=0 for 30+ minutes
+const ZERO_PROGRESS_MIN_CYCLES = 4; // alert after 4+ cycles with no block progress (~8+ minutes)
 
 export async function evaluateAlerts(): Promise<Alert[]> {
   const alerts: Alert[] = [];
@@ -249,38 +249,33 @@ export async function evaluateAlerts(): Promise<Alert[]> {
       });
     }
 
-    // Zero block progress: chain is updating (not stale) but last_processed_block is 0
-    // This catches the Gnosis-type bug where cycles run but never persist block progress
-    if (state.lastProcessedBlock === 0 && timeSinceUpdate < CHAIN_DOWN_MINUTES) {
-      const indexerStateAge = (now.getTime() - state.updatedAt.getTime()) / (60 * 1000);
-      // Only alert if the state entry has existed for 30+ minutes (not a brand-new chain)
-      const createdAt = state.updatedAt; // updatedAt tracks when state was last touched
-      if (indexerStateAge <= CHAIN_DOWN_MINUTES) {
-        // Chain is actively running but stuck at block 0 — check if it's been stuck long enough
-        // Use created_at from earliest event to estimate how long we've been trying
-        const authErrors = eventCounts.find(e => e.eventType === "auth_error")?.count || 0;
-        if (authErrors > 0) {
-          alerts.push({
-            id: `auth_config_error_${chain.chainId}`,
-            severity: "critical",
-            chainId: chain.chainId,
-            title: "RPC Auth Error",
-            message: `${chain.name}: ${authErrors} auth failures in last hour — likely needs network enabled in Alchemy dashboard${state.lastError ? `: ${state.lastError.slice(0, 120)}` : ""}`,
-            firstSeen: now,
-            lastSeen: now,
-          });
-        } else if (completedCount > 2 && state.lastProcessedBlock === 0) {
-          alerts.push({
-            id: `zero_progress_${chain.chainId}`,
-            severity: "warning",
-            chainId: chain.chainId,
-            title: "Zero Block Progress",
-            message: `${chain.name}: completing cycles but last_processed_block is still 0 — blocks may not be persisting`,
-            firstSeen: now,
-            lastSeen: now,
-          });
-        }
-      }
+    // Auth config error: 403/Forbidden from RPC provider (needs Alchemy dashboard fix)
+    const authErrors = eventCounts.find(e => e.eventType === "auth_error")?.count || 0;
+    if (authErrors > 0) {
+      alerts.push({
+        id: `auth_config_error_${chain.chainId}`,
+        severity: "critical",
+        chainId: chain.chainId,
+        title: "RPC Auth Error",
+        message: `${chain.name}: ${authErrors} auth failures in last hour — likely needs network enabled in Alchemy dashboard${state.lastError ? `: ${state.lastError.slice(0, 120)}` : ""}`,
+        firstSeen: now,
+        lastSeen: now,
+      });
+    }
+
+    // Zero block progress: chain is actively cycling but last_processed_block never advances
+    // This catches the Gnosis-type bug where the cycle runs but errors prevent block persistence.
+    // Trigger after 4+ cycles (≥8 min of effort) with no progress — avoids false positives on brand-new chains.
+    if (state.lastProcessedBlock === 0 && totalCycles > ZERO_PROGRESS_MIN_CYCLES && timeSinceUpdate < CHAIN_DOWN_MINUTES) {
+      alerts.push({
+        id: `zero_progress_${chain.chainId}`,
+        severity: "warning",
+        chainId: chain.chainId,
+        title: "Zero Block Progress",
+        message: `${chain.name}: ${totalCycles} cycles ran but last_processed_block is still 0 — blocks may not be persisting`,
+        firstSeen: now,
+        lastSeen: now,
+      });
     }
   }
 

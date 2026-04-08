@@ -267,21 +267,47 @@ export class ERC8004Indexer {
   private async contractCallWithFallback<T>(
     fn: (contract: ethers.Contract) => Promise<T>,
   ): Promise<T> {
-    try {
-      return await fn(this.identityContract);
-    } catch (err) {
-      let lastErr = err;
-      for (let i = 0; i < this.fallbackIdentityContracts.length; i++) {
-        const label = i === 0 ? "fallback" : `fallback-${i + 1}`;
-        log(`Primary contract call failed, trying ${label}: ${(lastErr as Error).message?.slice(0, 100)}`, this.logPrefix);
-        try {
-          return await fn(this.fallbackIdentityContracts[i]);
-        } catch (fbErr) {
-          lastErr = fbErr;
+    if (!this.authFailedProviders.has(-1)) {
+      try {
+        return await fn(this.identityContract);
+      } catch (err) {
+        const msg = (err as Error).message || "";
+        if (msg.includes("403") || msg.includes("Forbidden") || msg.includes("not enabled")) {
+          this.authFailedProviders.add(-1);
         }
+        let lastErr = err;
+        for (let i = 0; i < this.fallbackIdentityContracts.length; i++) {
+          if (this.authFailedProviders.has(i)) continue;
+          const label = i === 0 ? "fallback" : `fallback-${i + 1}`;
+          log(`Primary contract call failed, trying ${label}: ${(lastErr as Error).message?.slice(0, 100)}`, this.logPrefix);
+          try {
+            return await fn(this.fallbackIdentityContracts[i]);
+          } catch (fbErr) {
+            const fbMsg = (fbErr as Error).message || "";
+            if (fbMsg.includes("403") || fbMsg.includes("Forbidden") || fbMsg.includes("not enabled")) {
+              this.authFailedProviders.add(i);
+            }
+            lastErr = fbErr;
+          }
+        }
+        throw lastErr;
       }
-      throw lastErr;
     }
+    // Primary is auth-failed, try fallback contracts directly
+    let lastErr: unknown;
+    for (let i = 0; i < this.fallbackIdentityContracts.length; i++) {
+      if (this.authFailedProviders.has(i)) continue;
+      try {
+        return await fn(this.fallbackIdentityContracts[i]);
+      } catch (fbErr) {
+        const fbMsg = (fbErr as Error).message || "";
+        if (fbMsg.includes("403") || fbMsg.includes("Forbidden") || fbMsg.includes("not enabled")) {
+          this.authFailedProviders.add(i);
+        }
+        lastErr = fbErr;
+      }
+    }
+    throw lastErr ?? new Error(`All contract providers auth-failed for ${this.chainConfig.name}`);
   }
 
   async start(options?: { singleCycle?: boolean; retryAttempt?: number }) {
