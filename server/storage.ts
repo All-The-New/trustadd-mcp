@@ -302,7 +302,7 @@ export class DatabaseStorage implements IStorage {
 
   async getAgentIdsForSitemap(): Promise<Array<{ id: string; slug: string | null; updatedAt: Date | null }>> {
     const result = await db.execute(sql`
-      SELECT id, slug, created_at as "updatedAt"
+      SELECT id, slug, GREATEST(created_at, trust_score_updated_at) as "updatedAt"
       FROM agents
       WHERE quality_tier IS NULL OR quality_tier NOT IN ('spam', 'archived')
       ORDER BY created_at DESC

@@ -7,6 +7,7 @@
     { "source": "/api/debug", "destination": "/api/debug" },
     { "source": "/api/:path*", "destination": "/api/[...path]" },
     { "source": "/sitemap-agents.xml", "destination": "/api/[...path]" },
+    { "source": "/agent/:id", "destination": "/api/agent/[id]" },
     { "source": "/:path((?!api/).*)", "destination": "/index.html" }
   ]
 }

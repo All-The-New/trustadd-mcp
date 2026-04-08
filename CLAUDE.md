@@ -52,6 +52,7 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - `server/index.ts` — Local dev entry point (starts Vite HMR + background services)
 - `server/db.ts` — Lazy PostgreSQL pool + Drizzle setup (Supabase pooler compatible)
 - `api/[...path].ts` — Vercel serverless catch-all (wraps Express app)
+- `api/agent/[id].ts` — SSR meta tag injection for agent pages (SEO: serves index.html with per-agent title, description, OG tags, canonical, JSON-LD)
 - `api/health.ts` — Standalone health check with DB connection test
 - `trigger/` — 9 Trigger.dev tasks: `blockchain-indexer` (orchestrator, */2 cron) → `chain-indexer` (per-chain child, 2 cycles + 90s checkpointed wait), `community-feedback` (orchestrator, daily 4am) → `community-scrape` (per-platform child), `transaction-indexer`, `x402-prober`, `recalculate-scores`, `watchdog`, + `alert` helper
 - `script/sync-trigger-env.ts` — Env var sync script for Trigger.dev (manual run)
@@ -103,7 +104,7 @@ npx vercel deploy --prod         # Manual deploy if needed
 ## Critical Infrastructure Notes
 
 - **Cloudflare DNS**: Must be set to **DNS-only (grey cloud)** — orange cloud proxy causes SSL 525 with Vercel
-- **Vercel Deployment Protection**: Must remain **OFF** — enabling it breaks API calls from the frontend
+- **Vercel Deployment Protection**: Must remain **OFF** — enabling it breaks API calls from the frontend AND the SSR function's self-fetch of `index.html`
 - **`server/db.ts`**: Both `pool` and `db` are lazy Proxies — this is intentional. Prevents `DATABASE_URL` check at import time (required for Trigger.dev build container indexing)
 - **Trigger.dev config**: `trigger.config.ts` must use `export default defineConfig(...)`, include `maxDuration`, and list `pg` in `build.external` (esbuild bundles pg incorrectly without it, causing silent DB connection failures). Sentry integration via `@sentry/node` with `onFailure` hook. Project ref: `proj_nabhtdcabmsfzbmlifqh`
 - **`.npmrc`**: `legacy-peer-deps=true` required — `@sentry/node@10` has peerOptional deps on `@opentelemetry/*@^2.1.0` but Trigger.dev pins `@2.0.1`. Without this, `npm ci` fails on CI.

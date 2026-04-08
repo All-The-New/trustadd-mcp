@@ -1126,7 +1126,7 @@ export default function AgentProfile() {
       <SEO
         title={agent.name ? `${agent.name} — Agent Profile` : `Agent #${agent.erc8004Id} — Profile`}
         description={agent.description || PROFILE.defaultSeoDescription(agent.erc8004Id, getChain(agent.chainId)?.name || "EVM")}
-        path={`/agent/${agent.id}`}
+        path={`/agent/${agent.slug ?? agent.id}`}
       />
       <div className="mx-auto max-w-6xl px-4 py-6">
         <Link href="/agents">
