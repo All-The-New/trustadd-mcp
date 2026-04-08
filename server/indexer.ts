@@ -21,6 +21,8 @@ const CHAIN_START_STAGGER_MS = 30_000;   // 30s between chain starts
 const MAX_CONSECUTIVE_ERRORS = 2;
 const ERROR_BACKOFF_BASE_MS = 60_000;
 const PROVIDER_RECREATE_THRESHOLD = 3;
+const TIMEOUT_REDUCE_THRESHOLD = 3;      // reduce range after 3 consecutive timeouts
+const MIN_BACKFILL_BLOCK_RANGE = 200;    // floor for auto-reduction
 const RERESOLVE_CHAIN_STAGGER_MS = 60_000; // 1 min between chain re-resolves
 
 const IDENTITY_ABI = [
@@ -156,10 +158,13 @@ export class ERC8004Indexer {
   private reResolveFailures = new Map<string, number>();
   private consecutiveSpamBlocks = 0;
   private spamRanges: Array<{ from: number; to: number }> = [];
+  private effectiveBackfillRange: number;
+  private authFailedProviders = new Set<number>(); // indices of providers that returned 403
 
   constructor(chainConfig: ChainConfig) {
     this.chainConfig = chainConfig;
     this.logPrefix = `indexer:${chainConfig.shortName}`;
+    this.effectiveBackfillRange = chainConfig.backfillBlockRange ?? BACKFILL_BLOCK_RANGE;
     this.createProviders(RPC_TIMEOUT_MS);
   }
 
@@ -198,6 +203,7 @@ export class ERC8004Indexer {
     } catch {}
     this.createProviders(RPC_TIMEOUT_MS);
     this.consecutiveTimeouts = 0;
+    this.authFailedProviders.clear(); // retry auth on fresh providers
     this.emitEvent("recovery", `Recycled RPC providers to clear stale connections`, { reason }).catch(() => {});
   }
 
@@ -210,23 +216,52 @@ export class ERC8004Indexer {
   }
 
   private async rpcWithFallback<T>(fn: (provider: ethers.JsonRpcProvider) => Promise<T>): Promise<T> {
-    try {
-      return await fn(this.provider);
-    } catch (err) {
-      let lastErr = err;
-      for (let i = 0; i < this.fallbackProviders.length; i++) {
-        const prevLabel = i === 0 ? "primary" : `fallback-${i}`;
-        const nextLabel = i === 0 ? "fallback" : `fallback-${i + 1}`;
-        log(`${prevLabel} RPC failed (${(lastErr as Error).message?.slice(0, 80)}), trying ${nextLabel}`, this.logPrefix);
-        try {
-          return await fn(this.fallbackProviders[i]);
-        } catch (fbErr) {
-          lastErr = fbErr;
+    // Try primary unless it has a cached auth failure
+    if (!this.authFailedProviders.has(-1)) {
+      try {
+        return await fn(this.provider);
+      } catch (err) {
+        const msg = (err as Error).message || "";
+        if (msg.includes("403") || msg.includes("Forbidden") || msg.includes("not enabled")) {
+          this.authFailedProviders.add(-1);
+          log(`Primary RPC returned 403 — skipping for future calls, falling back to public RPCs`, this.logPrefix);
         }
+        // Fall through to fallbacks
+        let lastErr = err;
+        for (let i = 0; i < this.fallbackProviders.length; i++) {
+          if (this.authFailedProviders.has(i)) continue;
+          const nextLabel = i === 0 ? "fallback" : `fallback-${i + 1}`;
+          log(`primary RPC failed (${msg.slice(0, 80)}), trying ${nextLabel}`, this.logPrefix);
+          try {
+            return await fn(this.fallbackProviders[i]);
+          } catch (fbErr) {
+            const fbMsg = (fbErr as Error).message || "";
+            if (fbMsg.includes("403") || fbMsg.includes("Forbidden") || fbMsg.includes("not enabled")) {
+              this.authFailedProviders.add(i);
+            }
+            lastErr = fbErr;
+          }
+        }
+        log(`All ${this.fallbackProviders.length + 1} RPC providers failed: ${(lastErr as Error).message?.slice(0, 100)}`, this.logPrefix);
+        throw lastErr;
       }
-      log(`All ${this.fallbackProviders.length + 1} RPC providers failed: ${(lastErr as Error).message?.slice(0, 100)}`, this.logPrefix);
-      throw lastErr;
     }
+
+    // Primary is auth-failed, try fallbacks directly
+    let lastErr: unknown;
+    for (let i = 0; i < this.fallbackProviders.length; i++) {
+      if (this.authFailedProviders.has(i)) continue;
+      try {
+        return await fn(this.fallbackProviders[i]);
+      } catch (fbErr) {
+        const fbMsg = (fbErr as Error).message || "";
+        if (fbMsg.includes("403") || fbMsg.includes("Forbidden") || fbMsg.includes("not enabled")) {
+          this.authFailedProviders.add(i);
+        }
+        lastErr = fbErr;
+      }
+    }
+    throw lastErr ?? new Error(`All RPC providers auth-failed for ${this.chainConfig.name}`);
   }
 
   private async contractCallWithFallback<T>(
@@ -560,6 +595,7 @@ export class ERC8004Indexer {
   private classifyError(msg: string): string {
     if (msg.includes("TIMEOUT") || msg.includes("timeout") || msg.includes("timed out")) return "timeout";
     if (msg.includes("Too Many Requests") || msg.includes("rate limit") || msg.includes("402") || msg.includes("Payment Required")) return "rate_limit";
+    if (msg.includes("403") || msg.includes("Forbidden") || msg.includes("not enabled for this app")) return "auth_error";
     if (msg.includes("socket disconnected") || msg.includes("ECONNRESET") || msg.includes("ECONNREFUSED") || msg.includes("Authentication timed out")) return "connection_error";
     return "error";
   }
@@ -583,14 +619,13 @@ export class ERC8004Indexer {
 
       const totalBlocks = currentBlock - startBlock;
       const isBackfill = totalBlocks > LIVE_BLOCK_RANGE;
-      const chainBackfillRange = this.chainConfig.backfillBlockRange ?? BACKFILL_BLOCK_RANGE;
-      const chunkSize = isBackfill ? chainBackfillRange : LIVE_BLOCK_RANGE;
+      const chunkSize = isBackfill ? this.effectiveBackfillRange : LIVE_BLOCK_RANGE;
       const effectiveEnd = isBackfill ? Math.min(startBlock + MAX_BLOCKS_PER_CYCLE - 1, currentBlock) : currentBlock;
 
       if (isBackfill) {
         this.createProviders(RPC_TIMEOUT_BACKFILL_MS);
         this.isBackfillTimeout = true;
-        log(`Backfilling ${totalBlocks.toLocaleString()} blocks (${startBlock} -> ${currentBlock}), chunk=${chainBackfillRange.toLocaleString()}, timeout=${RPC_TIMEOUT_BACKFILL_MS / 1000}s`, this.logPrefix);
+        log(`Backfilling ${totalBlocks.toLocaleString()} blocks (${startBlock} -> ${currentBlock}), chunk=${this.effectiveBackfillRange.toLocaleString()}, timeout=${RPC_TIMEOUT_BACKFILL_MS / 1000}s`, this.logPrefix);
       }
 
       // Pre-load known spam ranges to skip without RPC calls
@@ -697,6 +732,15 @@ export class ERC8004Indexer {
         this.consecutiveTimeouts++;
         if (this.consecutiveTimeouts >= PROVIDER_RECREATE_THRESHOLD) {
           this.recycleProviders();
+        }
+        // Auto-reduce backfill block range after repeated timeouts
+        if (this.consecutiveTimeouts >= TIMEOUT_REDUCE_THRESHOLD && this.effectiveBackfillRange > MIN_BACKFILL_BLOCK_RANGE) {
+          const prev = this.effectiveBackfillRange;
+          this.effectiveBackfillRange = Math.max(Math.floor(this.effectiveBackfillRange / 2), MIN_BACKFILL_BLOCK_RANGE);
+          log(`Auto-reduced backfill range ${prev.toLocaleString()} → ${this.effectiveBackfillRange.toLocaleString()} after ${this.consecutiveTimeouts} consecutive timeouts`, this.logPrefix);
+          this.emitEvent("range_reduced", `Backfill range auto-reduced from ${prev} to ${this.effectiveBackfillRange}`, {
+            previousRange: prev, newRange: this.effectiveBackfillRange, consecutiveTimeouts: this.consecutiveTimeouts,
+          }).catch(() => {});
         }
       } else {
         this.consecutiveTimeouts = 0;
