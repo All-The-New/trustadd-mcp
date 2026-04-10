@@ -157,6 +157,7 @@ const PROBER_WARN_HOURS = 25;
 const TX_INDEXER_WARN_HOURS = 8;
 const TX_INDEXER_CRITICAL_HOURS = 13;
 const ZERO_PROGRESS_MIN_CYCLES = 4; // alert after 4+ cycles with no block progress (~8+ minutes)
+const STUCK_BLOCK_MIN_EVENTS = 10;  // alert after 10+ no_new_blocks events in hour (~20+ min stuck)
 
 export async function evaluateAlerts(): Promise<Alert[]> {
   const alerts: Alert[] = [];
@@ -273,6 +274,22 @@ export async function evaluateAlerts(): Promise<Alert[]> {
         chainId: chain.chainId,
         title: "Zero Block Progress",
         message: `${chain.name}: ${totalCycles} cycles ran but last_processed_block is still 0 — blocks may not be persisting`,
+        firstSeen: now,
+        lastSeen: now,
+      });
+    }
+
+    // Stuck at non-zero block: indexer is "running" (updated_at recent) but block hasn't
+    // advanced despite multiple cycles. Catches the Gnosis-style silent RPC-behind bug.
+    // Detected via the no_new_blocks telemetry event (emitted when startBlock > currentBlock).
+    const noNewBlocksCount = eventCounts.find(e => e.eventType === "no_new_blocks")?.count || 0;
+    if (state.lastProcessedBlock > 0 && noNewBlocksCount >= STUCK_BLOCK_MIN_EVENTS) {
+      alerts.push({
+        id: `stuck_block_${chain.chainId}`,
+        severity: "warning",
+        chainId: chain.chainId,
+        title: "Stuck at Block",
+        message: `${chain.name}: RPC returned currentBlock < startBlock ${noNewBlocksCount} times in last hour — last_processed_block=${state.lastProcessedBlock}, likely a lagging/cached RPC provider`,
         firstSeen: now,
         lastSeen: now,
       });

@@ -27,7 +27,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     explorerName: "Etherscan",
     rpcUrlTemplates: [
       { provider: "alchemy", template: "https://eth-mainnet.g.alchemy.com/v2/{key}" },
-      { provider: "public", template: "https://rpc.ankr.com/eth" },
       { provider: "infura", template: "https://mainnet.infura.io/v3/{key}" },
     ],
     deploymentBlock: 21_700_000,
@@ -45,7 +44,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     explorerName: "BscScan",
     rpcUrlTemplates: [
       { provider: "alchemy", template: "https://bnb-mainnet.g.alchemy.com/v2/{key}" },
-      { provider: "public", template: "https://rpc.ankr.com/bsc" },
       { provider: "public", template: "https://bsc-dataseed.binance.org/" },
       { provider: "public", template: "https://bsc-dataseed1.defibit.io/" },
     ],
@@ -65,7 +63,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     explorerName: "PolygonScan",
     rpcUrlTemplates: [
       { provider: "alchemy", template: "https://polygon-mainnet.g.alchemy.com/v2/{key}" },
-      { provider: "public", template: "https://rpc.ankr.com/polygon" },
       { provider: "infura", template: "https://polygon-mainnet.infura.io/v3/{key}" },
       { provider: "public", template: "https://polygon-bor-rpc.publicnode.com" },
       { provider: "public", template: "https://polygon.drpc.org" },
@@ -86,7 +83,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     explorerName: "Arbiscan",
     rpcUrlTemplates: [
       { provider: "alchemy", template: "https://arb-mainnet.g.alchemy.com/v2/{key}" },
-      { provider: "public", template: "https://rpc.ankr.com/arbitrum" },
       { provider: "infura", template: "https://arbitrum-mainnet.infura.io/v3/{key}" },
       { provider: "public", template: "https://arb1.arbitrum.io/rpc" },
     ],
@@ -106,7 +102,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     rpcUrlTemplates: [
       { provider: "alchemy", template: "https://base-mainnet.g.alchemy.com/v2/{key}" },
       { provider: "public", template: "https://mainnet.base.org" },
-      { provider: "public", template: "https://rpc.ankr.com/base" },
       { provider: "infura", template: "https://base-mainnet.infura.io/v3/{key}" },
     ],
     deploymentBlock: 25_000_000,
@@ -145,7 +140,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     rpcUrlTemplates: [
       { provider: "alchemy", template: "https://gnosis-mainnet.g.alchemy.com/v2/{key}" },
       { provider: "public", template: "https://rpc.gnosischain.com" },
-      { provider: "public", template: "https://rpc.ankr.com/gnosis" },
     ],
     deploymentBlock: 44_505_000,
     backfillBlockRange: 2_000,
@@ -164,7 +158,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     rpcUrlTemplates: [
       { provider: "alchemy", template: "https://opt-mainnet.g.alchemy.com/v2/{key}" },
       { provider: "public", template: "https://mainnet.optimism.io" },
-      { provider: "public", template: "https://rpc.ankr.com/optimism" },
       { provider: "infura", template: "https://optimism-mainnet.infura.io/v3/{key}" },
     ],
     deploymentBlock: 147_514_900,
@@ -183,7 +176,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     rpcUrlTemplates: [
       { provider: "alchemy", template: "https://avax-mainnet.g.alchemy.com/v2/{key}" },
       { provider: "public", template: "https://api.avax.network/ext/bc/C/rpc" },
-      { provider: "public", template: "https://rpc.ankr.com/avalanche" },
       { provider: "infura", template: "https://avalanche-mainnet.infura.io/v3/{key}" },
     ],
     deploymentBlock: 77_389_000,

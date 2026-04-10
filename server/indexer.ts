@@ -639,6 +639,11 @@ export class ERC8004Indexer {
       const currentBlock = await this.rpcWithFallback((p) => p.getBlockNumber());
 
       if (startBlock > currentBlock) {
+        // RPC returned a block number behind our last processed block.
+        // Indicates stale/lagging RPC or misconfiguration. Emit telemetry so we can detect it.
+        this.emitEvent("no_new_blocks", `RPC currentBlock (${currentBlock}) < startBlock (${startBlock}) — chain may be stuck`, {
+          startBlock, currentBlock, lastProcessedBlock: state.lastProcessedBlock, chainId: this.chainConfig.chainId,
+        }).catch(() => {});
         this.isProcessing = false;
         return;
       }
