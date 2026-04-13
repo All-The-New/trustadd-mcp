@@ -68,7 +68,9 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - `client/src/components/admin-layout.tsx` — Admin shell with nav, session guard, logout
 - `client/src/pages/admin/*.tsx` — 6 admin pages: login, dashboard, usage, status-details, tasks, audit-log
 - `vercel.json` — Vercel routing and build configuration
-- `client/src/App.tsx` — React routing (18 pages: 12 public + 6 admin)
+- `client/src/lib/content-zones.ts` — Centralized copy for all public pages (all marketing/positioning text)
+- `client/src/pages/trust-api.tsx` — Trust API product page (pricing, live demo, x402 flow, integration guide)
+- `client/src/App.tsx` — React routing (19 pages: 13 public + 6 admin)
 
 ## Required Environment Variables
 
