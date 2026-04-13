@@ -227,7 +227,7 @@ export default function Bazaar() {
         path="/bazaar"
       />
 
-      <div className="space-y-8">
+      <div className="mx-auto max-w-6xl px-4 py-8 space-y-8">
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold tracking-tight">x402 Bazaar Analytics</h1>
