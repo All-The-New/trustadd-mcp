@@ -57,7 +57,7 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - `api/agent/[id].ts` — SSR meta tag injection for agent pages (SEO: serves index.html with per-agent title, description, OG tags, canonical, JSON-LD)
 - `api/health.ts` — Standalone health check with DB connection test
 - `server/lib/request-logger.ts` — Fire-and-forget API request logging middleware (path normalization, 90-day stochastic cleanup)
-- `trigger/` — 10 Trigger.dev tasks: `blockchain-indexer` (orchestrator, */2 cron) → `chain-indexer` (per-chain child, 2 cycles + 90s checkpointed wait), `community-feedback` (orchestrator, daily 4am) → `community-scrape` (per-platform child), `transaction-indexer`, `x402-prober`, `recalculate-scores`, `watchdog`, `bazaar-indexer`, + `alert` helper
+- `trigger/` — 10 Trigger.dev tasks: `blockchain-indexer` (orchestrator, */2 cron) → `chain-indexer` (per-chain child, 2 cycles + 90s checkpointed wait), `community-feedback` (orchestrator, daily 4am) → `community-scrape` (per-platform child), `transaction-indexer`, `x402-prober`, `recalculate-scores` (scores + slugs + classification + report recompilation), `watchdog`, `bazaar-indexer`, + `alert` helper
 - `server/trust-report-compiler.ts` — Trust Data Product report compiler (verdict logic, address resolution, cache management)
 - `server/lib/x402-gate.ts` — x402 payment middleware for Trust Data Product (CDP facilitator on Base)
 - `docs/trust-product.md` — Trust Data Product specification (tiers, pricing, verdict logic, payment flow)
@@ -70,7 +70,8 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - `vercel.json` — Vercel routing and build configuration
 - `client/src/lib/content-zones.ts` — Centralized copy for all public pages (all marketing/positioning text)
 - `client/src/pages/trust-api.tsx` — Trust API product page (pricing, live demo, x402 flow, integration guide)
-- `client/src/App.tsx` — React routing (19 pages: 13 public + 6 admin)
+- `client/src/pages/methodology.tsx` — Scoring methodology page (5 categories, weights, signals, verdict thresholds, data sources)
+- `client/src/App.tsx` — React routing (20 pages: 14 public + 6 admin)
 
 ## Required Environment Variables
 

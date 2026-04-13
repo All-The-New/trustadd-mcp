@@ -109,14 +109,34 @@ export const recalculateTask = schedules.task({
         logger.warn("Time budget low — skipping classification phase");
       }
 
+      // Recompile stale trust reports so cached verdicts reflect new scores
+      let recompiled = 0;
+      if (budget.hasTime(60_000)) {
+        const recompileStart = Date.now();
+        metadata.set("phase", "recompiling-reports");
+        try {
+          const { batchRecompileReports } = await import("../server/trust-report-compiler");
+          const result = await batchRecompileReports({ limit: 200 });
+          recompiled = result.recompiled;
+          logger.info(`Recompiled ${recompiled} stale trust reports`);
+        } catch (err) {
+          logger.error("Failed to recompile reports", { error: (err as Error).message });
+        }
+        metadata.set("phaseRecompileMs", Date.now() - recompileStart);
+      } else {
+        metadata.set("skippedRecompile", true);
+        logger.warn("Time budget low — skipping report recompilation phase");
+      }
+
       const cost = usage.getCurrent();
       metadata.set("status", "completed");
       metadata.set("completedAt", new Date().toISOString());
       metadata.set("classified", classified);
+      metadata.set("recompiled", recompiled);
       metadata.set("computeCostCents", cost.totalCostInCents);
       metadata.set("durationMs", cost.compute.total.durationMs);
 
-      return { success: true, classified };
+      return { success: true, classified, recompiled };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error("recalculate-scores failed", { error: error.message, stack: error.stack });

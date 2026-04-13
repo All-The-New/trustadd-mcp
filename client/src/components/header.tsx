@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Shield, Bot, BarChart3, ChevronDown, Zap, Info, BookOpen, Layers, Activity, ShieldCheck, Sparkles, Store, Coins } from "lucide-react";
+import { Shield, Bot, BarChart3, ChevronDown, Zap, Info, BookOpen, Layers, Activity, ShieldCheck, Sparkles, Store, Coins, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,7 +10,7 @@ import {
 import { ThemeToggle } from "./theme-toggle";
 
 const analyticsRoutes = ["/analytics", "/economy", "/skills", "/bazaar", "/quality", "/status"];
-const aboutRoutes = ["/about", "/protocols", "/api-docs"];
+const aboutRoutes = ["/about", "/protocols", "/api-docs", "/methodology"];
 
 export function Header() {
   const [location] = useLocation();
@@ -127,6 +127,12 @@ export function Header() {
                 <DropdownMenuItem className="gap-2 cursor-pointer">
                   <Layers className="w-4 h-4" />
                   Protocols
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/methodology">
+                <DropdownMenuItem className="gap-2 cursor-pointer">
+                  <FlaskConical className="w-4 h-4" />
+                  Methodology
                 </DropdownMenuItem>
               </Link>
               <Link href="/api-docs">

@@ -319,6 +319,108 @@ export const PROFILE = {
   statusDiscovery: "Discovered automatically via on-chain indexing",
 };
 
+export const METHODOLOGY = {
+  header: {
+    title: "Scoring Methodology",
+    subtitle:
+      "How TrustAdd computes trust scores and verdicts. Every signal, weight, and threshold is documented here — the same formula applied equally to every agent.",
+  },
+  overview: {
+    title: "How the TrustAdd Score Works",
+    paragraphs: [
+      "Every agent indexed by TrustAdd receives a composite trust score from 0 to 100. The score is computed from five categories of on-chain and off-chain signals, each weighted to reflect its importance for autonomous decision-making.",
+      "Scores are recalculated daily and on-demand when new data arrives. The same formula is applied to every agent — no manual overrides, no special treatment. The score powers trust verdicts (TRUSTED, CAUTION, UNTRUSTED) that agents can query programmatically via the Trust API.",
+    ],
+  },
+  categories: [
+    {
+      name: "Identity",
+      icon: "Shield" as const,
+      maxPoints: 25,
+      color: "bg-blue-500",
+      description:
+        "Does the agent have a complete, well-maintained on-chain identity? Name, description, image, endpoints, and declared skills all contribute. Completeness signals intentional registration rather than placeholder entries.",
+      signals: [
+        { name: "Name", condition: "Non-empty name field", points: "+5" },
+        { name: "Description", condition: "Any / 30+ chars / 100+ chars", points: "+1 / +3 / +5" },
+        { name: "Image", condition: "Valid image URL (PNG, SVG, IPFS, etc.)", points: "+5" },
+        { name: "Endpoints", condition: "At least one endpoint declared", points: "+5" },
+        { name: "Skills / Tags", condition: "OASF skills or tags present", points: "+5" },
+      ],
+    },
+    {
+      name: "History",
+      icon: "Clock" as const,
+      maxPoints: 20,
+      color: "bg-purple-500",
+      description:
+        "How long has the agent existed on-chain? Has it been actively maintained? Agents with longer history, metadata updates, and cross-chain presence demonstrate sustained commitment.",
+      signals: [
+        { name: "Registration age", condition: "1+ day / 7+ days / 30+ days", points: "+2 / +5 / +10" },
+        { name: "Metadata updates", condition: "1+ update events / 2+ update events", points: "+2 / +5" },
+        { name: "Cross-chain presence", condition: "2+ chains / 3+ chains (same controller)", points: "+3 / +5" },
+      ],
+    },
+    {
+      name: "Capability",
+      icon: "Zap" as const,
+      maxPoints: 15,
+      color: "bg-green-500",
+      description:
+        "What can the agent actually do? x402 payment support, declared OASF skills, and exposed endpoints demonstrate functional capability beyond a static identity.",
+      signals: [
+        { name: "x402 support", condition: "Active x402 payment endpoint detected", points: "+5" },
+        { name: "OASF skills", condition: "1+ skill / 3+ skills declared", points: "+3 / +5" },
+        { name: "Endpoints", condition: "1+ endpoint / 3+ endpoints", points: "+3 / +5" },
+      ],
+    },
+    {
+      name: "Community",
+      icon: "Users" as const,
+      maxPoints: 20,
+      color: "bg-amber-500",
+      description:
+        "What do humans and systems say about this agent? GitHub project health, Farcaster social engagement, and on-chain reputation feedback from other agents provide external validation.",
+      signals: [
+        { name: "GitHub health", condition: "Score > 0 / 40+ / 70+", points: "+3 / +6 / +10" },
+        { name: "Farcaster engagement", condition: "Score > 0 / 0.4+ / 0.7+", points: "+1 / +3 / +5" },
+        { name: "Community sources", condition: "Any verified community data source", points: "+5" },
+      ],
+    },
+    {
+      name: "Transparency",
+      icon: "Eye" as const,
+      maxPoints: 20,
+      color: "bg-teal-500",
+      description:
+        "Is the agent's metadata verifiable and immutable? Decentralized storage (IPFS, Arweave) scores highest. Declared trust mechanisms and active status signals further indicate accountability.",
+      signals: [
+        { name: "Metadata storage", condition: "data: / http / https / IPFS or Arweave", points: "+2 / +3 / +5 / +8" },
+        { name: "Trust mechanisms", condition: "1 declared / 2+ / 3+", points: "+3 / +5 / +7" },
+        { name: "Active status", condition: "Agent marked as active on-chain", points: "+5" },
+      ],
+    },
+  ],
+  principles: [
+    {
+      title: "Equal Application",
+      desc: "The same formula is applied to every agent. No manual score overrides, no premium tiers, no special treatment. The methodology is the product.",
+    },
+    {
+      title: "Observable Inputs Only",
+      desc: "Scores are computed from data anyone can verify — on-chain events, public metadata, open-source repos, and protocol-level signals. No private data, no secret sauce.",
+    },
+    {
+      title: "Continuous Recalculation",
+      desc: "Scores update automatically as new data arrives. Indexers, probers, and scrapers run on known schedules. Stale reports are recompiled daily and on-demand.",
+    },
+    {
+      title: "Additive Scoring",
+      desc: "The score is purely additive — agents start at zero and earn points for each positive signal. There are no penalties or negative adjustments. More evidence means a higher score.",
+    },
+  ],
+};
+
 export const NAV = {
   footer: {
     tagline:
@@ -346,5 +448,10 @@ export const SEO = {
     title: "Trust API",
     description:
       "Query the TrustAdd oracle. Quick trust checks from $0.01 USDC, full evidence reports from $0.05. Paid via x402 micropayment on Base. Free ecosystem analytics included.",
+  },
+  methodology: {
+    title: "Scoring Methodology",
+    description:
+      "How TrustAdd computes agent trust scores. Five scoring categories, signal weights, verdict thresholds, and data sources — fully transparent and equally applied.",
   },
 };

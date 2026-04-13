@@ -18,6 +18,7 @@ import Quality from "@/pages/quality";
 import Skills from "@/pages/skills";
 import Bazaar from "@/pages/bazaar";
 import TrustApi from "@/pages/trust-api";
+import Methodology from "@/pages/methodology";
 import NotFound from "@/pages/not-found";
 import AdminLogin from "@/pages/admin/login";
 import AdminDashboard from "@/pages/admin/dashboard";
@@ -42,6 +43,7 @@ function Router() {
       <Route path="/skills" component={Skills} />
       <Route path="/bazaar" component={Bazaar} />
       <Route path="/trust-api" component={TrustApi} />
+      <Route path="/methodology" component={Methodology} />
       {/* Admin routes — specific paths before the catch-all /admin */}
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/usage" component={AdminUsage} />
