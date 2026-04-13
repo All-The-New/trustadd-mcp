@@ -20,7 +20,7 @@ import {
   AreaChart, Area, ResponsiveContainer, Tooltip,
 } from "recharts";
 import {
-  Store, DollarSign, Users, TrendingUp, AlertTriangle, Coins,
+  Store, DollarSign, Users, TrendingUp, AlertTriangle,
   Search, ExternalLink, Wifi, WifiOff, ChevronLeft, ChevronRight,
   ChevronDown, ChevronUp, Fingerprint, Link2,
 } from "lucide-react";
@@ -104,14 +104,6 @@ function formatPrice(price: number | null | undefined): string {
   return `$${price.toFixed(2)}`;
 }
 
-function formatVolume(vol: number | null | undefined): string {
-  if (vol == null || vol === 0) return "$0";
-  if (vol < 1) return `$${vol.toFixed(2)}`;
-  if (vol < 1_000) return `$${vol.toFixed(0)}`;
-  if (vol < 1_000_000) return `$${(vol / 1_000).toFixed(1)}K`;
-  return `$${(vol / 1_000_000).toFixed(2)}M`;
-}
-
 function truncateUrl(url: string, max = 60): string {
   if (url.length <= max) return url;
   return url.slice(0, max - 3) + "...";
@@ -160,8 +152,6 @@ type BazaarServiceRow = {
   method: string | null;
   assetName: string | null;
   scheme: string | null;
-  paymentVolumeUsdc: number | null;
-  paymentCount: number | null;
 };
 
 function ServiceDetailRow({ service }: { service: BazaarServiceRow }) {
@@ -202,12 +192,6 @@ function ServiceDetailRow({ service }: { service: BazaarServiceRow }) {
             {service.uptimePct != null && (
               <div><span className="text-muted-foreground">Uptime: </span>{service.uptimePct.toFixed(1)}%</div>
             )}
-            {(service.paymentVolumeUsdc != null && service.paymentVolumeUsdc > 0) && (
-              <div>
-                <span className="text-muted-foreground">Payment Volume: </span>
-                {formatVolume(service.paymentVolumeUsdc)} USDC ({service.paymentCount?.toLocaleString() ?? 0} txns)
-              </div>
-            )}
             <div>
               <span className="text-muted-foreground">First Seen: </span>
               {new Date(service.firstSeenAt).toLocaleDateString()}
@@ -235,8 +219,6 @@ export default function Bazaar() {
     networkBreakdown: Array<{ network: string; count: number }>;
     priceStats: { median: number | null; mean: number | null; min: number | null; max: number | null };
     totalPayToWallets: number;
-    totalPaymentVolumeUsdc: number;
-    totalPaymentCount: number;
   }>({
     queryKey: ["/api/bazaar/stats"],
   });
@@ -370,10 +352,10 @@ export default function Bazaar() {
               iconColor="text-purple-500"
             />
             <KpiCard
-              label="Payment Volume"
-              value={formatVolume(stats.totalPaymentVolumeUsdc)}
-              icon={Coins}
-              subtitle={`${stats.totalPaymentCount.toLocaleString()} transactions`}
+              label="Categories"
+              value={stats.categoryBreakdown.length}
+              icon={TrendingUp}
+              subtitle={`Top: ${CATEGORY_LABELS[stats.categoryBreakdown[0]?.category] || stats.categoryBreakdown[0]?.category || "N/A"}`}
               iconColor="text-orange-500"
             />
           </div>
@@ -636,7 +618,6 @@ export default function Bazaar() {
               <option value="newest">Newest First</option>
               <option value="price_asc">Price: Low to High</option>
               <option value="price_desc">Price: High to Low</option>
-              <option value="volume">Payment Volume</option>
               <option value="trust">Trust Score</option>
               <option value="latency">Latency</option>
             </select>
