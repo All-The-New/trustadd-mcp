@@ -93,7 +93,7 @@ export default function Landing() {
                     {HOME.hero.ctaPrimary}
                   </Button>
                 </Link>
-                <Link href="/api-docs">
+                <Link href="/trust-api">
                   <Button variant="outline" className="gap-2" data-testid="button-view-api">
                     <Globe className="w-4 h-4" />
                     {HOME.hero.ctaSecondary}
@@ -259,7 +259,7 @@ export default function Landing() {
                 {HOME.api.desc}
               </p>
             </div>
-            <Link href="/api-docs">
+            <Link href="/trust-api">
               <Button variant="outline" className="gap-2" data-testid="link-api-docs-footer">
                 <Globe className="w-4 h-4" />
                 {HOME.api.cta}
