@@ -34,14 +34,9 @@ import {
   Building,
   CreditCard,
   Lock,
-  Star,
-  MessageSquare,
   Users,
-  CalendarDays,
-  Award,
   ArrowRight,
   Layers,
-  AlertCircle,
   Activity,
   FileSearch,
 } from "lucide-react";
@@ -424,20 +419,31 @@ export default function AgentProfile() {
     enabled: !!id,
   });
 
+  // These endpoints return 402 for gated data — parse the body regardless of 4xx status.
+  // Throw on 5xx so TanStack Query can surface real server errors.
+  const gatedQueryFn = (path: string) => async () => {
+    const res = await fetch(path);
+    if (res.status >= 500) throw new Error(`Server error: ${res.status}`);
+    return res.json();
+  };
+
   const { data: events, isLoading: eventsLoading } = useQuery<AgentMetadataEvent[] | { message: string; fullReportPrice: string }>({
     queryKey: ["/api/agents", id, "history"],
+    queryFn: gatedQueryFn(`/api/agents/${id}/history`),
     enabled: !!id,
     retry: false,
   });
 
   const { data: trustScoreData } = useQuery<TrustScoreData>({
     queryKey: ["/api/agents", id, "trust-score"],
+    queryFn: gatedQueryFn(`/api/agents/${id}/trust-score`),
     enabled: !!id,
     retry: false,
   });
 
   const { data: communityData } = useQuery<CommunityGatedData>({
     queryKey: ["/api/agents", id, "community-feedback"],
+    queryFn: gatedQueryFn(`/api/agents/${id}/community-feedback`),
     enabled: !!id,
     retry: false,
   });

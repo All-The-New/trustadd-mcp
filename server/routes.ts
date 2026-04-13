@@ -33,12 +33,15 @@ import {
 
 /** Strip trust-intelligence fields from an agent object for public (free) responses. */
 function redactAgentForPublic(agent: Record<string, unknown>): Record<string, unknown> {
-  const verdict = computeVerdict(
-    (agent.trustScore as number) ?? 0,
-    (agent.qualityTier as string) ?? null,
-    (agent.spamFlags as string[]) ?? null,
-    (agent.lifecycleStatus as string) ?? null,
-  );
+  const rawScore = agent.trustScore as number | null;
+  const verdict: Verdict = rawScore == null
+    ? "UNKNOWN"
+    : computeVerdict(
+        rawScore,
+        (agent.qualityTier as string) ?? null,
+        (agent.spamFlags as string[]) ?? null,
+        (agent.lifecycleStatus as string) ?? null,
+      );
   const {
     trustScore: _ts,
     trustScoreBreakdown: _tsb,
@@ -51,11 +54,14 @@ function redactAgentForPublic(agent: Record<string, unknown>): Record<string, un
   return {
     ...publicFields,
     verdict,
-    reportAvailable: true,
+    reportAvailable: (agent.trustScore as number | null) != null,
   };
 }
 
-// ─── Rate Limiting ───────────────────────────────────────────────
+// ─── Rate Limiting (best-effort, per-instance) ──────────────────
+// On Vercel serverless, each instance has its own Map — state is NOT shared.
+// This is a soft limit for warm instances. The DB-backed rate limiter in
+// api/[...path].ts provides the authoritative cross-instance limit.
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
 function checkRateLimit(ip: string, windowMs: number, maxRequests: number): boolean {
@@ -745,27 +751,37 @@ export async function registerRoutes(
   });
 
   app.get("/api/agents/:id/community-feedback/github", async (req, res) => {
-    const agent = await storage.getAgent(req.params.id);
-    if (!agent) return res.status(404).json({ message: "Agent not found" });
-    res.set("X-TrustAdd-Tier", "gated");
-    res.status(402).json({
-      message: "GitHub signals are available in the Full Trust Report ($0.05 USDC via x402).",
-      endpoint: `/api/v1/trust/${agent.primaryContractAddress}/report`,
-      fullReportPrice: "$0.05",
-      paymentNetwork: "eip155:8453",
-    });
+    try {
+      const agent = await storage.getAgent(req.params.id);
+      if (!agent) return res.status(404).json({ message: "Agent not found" });
+      res.set("X-TrustAdd-Tier", "gated");
+      res.status(402).json({
+        message: "GitHub signals are available in the Full Trust Report ($0.05 USDC via x402).",
+        endpoint: `/api/v1/trust/${agent.primaryContractAddress}/report`,
+        fullReportPrice: "$0.05",
+        paymentNetwork: "eip155:8453",
+      });
+    } catch (err) {
+      logger.error("Error in github feedback gate", { error: (err as Error).message });
+      res.status(500).json({ message: "Internal error" });
+    }
   });
 
   app.get("/api/agents/:id/community-feedback/farcaster", async (req, res) => {
-    const agent = await storage.getAgent(req.params.id);
-    if (!agent) return res.status(404).json({ message: "Agent not found" });
-    res.set("X-TrustAdd-Tier", "gated");
-    res.status(402).json({
-      message: "Farcaster signals are available in the Full Trust Report ($0.05 USDC via x402).",
-      endpoint: `/api/v1/trust/${agent.primaryContractAddress}/report`,
-      fullReportPrice: "$0.05",
-      paymentNetwork: "eip155:8453",
-    });
+    try {
+      const agent = await storage.getAgent(req.params.id);
+      if (!agent) return res.status(404).json({ message: "Agent not found" });
+      res.set("X-TrustAdd-Tier", "gated");
+      res.status(402).json({
+        message: "Farcaster signals are available in the Full Trust Report ($0.05 USDC via x402).",
+        endpoint: `/api/v1/trust/${agent.primaryContractAddress}/report`,
+        fullReportPrice: "$0.05",
+        paymentNetwork: "eip155:8453",
+      });
+    } catch (err) {
+      logger.error("Error in farcaster feedback gate", { error: (err as Error).message });
+      res.status(500).json({ message: "Internal error" });
+    }
   });
 
   app.get("/api/community-feedback/stats", async (_req, res) => {
@@ -818,18 +834,20 @@ export async function registerRoutes(
       const agent = await storage.getAgent(req.params.id);
       if (!agent) return res.status(404).json({ message: "Agent not found" });
 
-      const verdict = computeVerdict(
-        agent.trustScore ?? 0,
-        agent.qualityTier ?? null,
-        agent.spamFlags ?? null,
-        agent.lifecycleStatus ?? null,
-      );
+      const verdict: Verdict = agent.trustScore == null
+        ? "UNKNOWN"
+        : computeVerdict(
+            agent.trustScore,
+            agent.qualityTier ?? null,
+            agent.spamFlags ?? null,
+            agent.lifecycleStatus ?? null,
+          );
 
       res.set("X-TrustAdd-Tier", "free");
       res.json({
         verdict,
         updatedAt: agent.trustScoreUpdatedAt ?? null,
-        reportAvailable: true,
+        reportAvailable: agent.trustScore != null,
         quickCheckPrice: "$0.01",
         fullReportPrice: "$0.05",
         message: "Full trust score and breakdown available via x402 Trust Report. See /api/v1/trust/:address",
@@ -848,12 +866,14 @@ export async function registerRoutes(
       const leaderboard = await storage.getTrustScoreLeaderboard(limit, chainId);
       // Redact: strip numeric scores, show verdict only
       const redacted = (leaderboard as any[]).map((entry: any) => {
-        const verdict = computeVerdict(
-          entry.trustScore ?? 0,
-          entry.qualityTier ?? null,
-          entry.spamFlags ?? null,
-          entry.lifecycleStatus ?? null,
-        );
+        const verdict: Verdict = entry.trustScore == null
+          ? "UNKNOWN"
+          : computeVerdict(
+              entry.trustScore,
+              entry.qualityTier ?? null,
+              entry.spamFlags ?? null,
+              entry.lifecycleStatus ?? null,
+            );
         return {
           id: entry.id,
           name: entry.name,
@@ -907,12 +927,15 @@ export async function registerRoutes(
     }
   });
 
+  // Free tier: strip trust scores from x402 top agents
   app.get("/api/economy/top-agents", async (req, res) => {
     try {
       const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 20, 1), 100);
       const chainId = parseChainId(req.query.chain);
       const topAgents = await storage.getTopX402Agents(limit, chainId);
-      res.json(topAgents);
+      const redacted = (topAgents as any[]).map(({ trustScore: _ts, trustScoreBreakdown: _tsb, ...safe }: any) => safe);
+      res.set("X-TrustAdd-Tier", "free");
+      res.json(redacted);
     } catch (err) {
       logger.error("Error fetching top x402 agents", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch top agents" });
@@ -929,10 +952,13 @@ export async function registerRoutes(
     }
   });
 
+  // Free tier: strip avgTrustScore from chain breakdown
   app.get("/api/economy/chain-breakdown", async (_req, res) => {
     try {
       const breakdown = await storage.getX402AdoptionByChain();
-      res.json(breakdown);
+      const redacted = (breakdown as any[]).map(({ avgTrustScore: _ats, ...safe }: any) => safe);
+      res.set("X-TrustAdd-Tier", "free");
+      res.json(redacted);
     } catch (err) {
       logger.error("Error fetching chain breakdown", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch chain breakdown" });
@@ -1359,13 +1385,15 @@ export async function registerRoutes(
         });
       }
 
-      // Use the same verdict logic as the paid endpoints
-      const verdict = computeVerdict(
-        agent.trustScore ?? 0,
-        agent.qualityTier ?? null,
-        agent.spamFlags ?? null,
-        agent.lifecycleStatus ?? null,
-      );
+      // Use the same verdict logic as the paid endpoints (null score → UNKNOWN)
+      const verdict: Verdict = agent.trustScore == null
+        ? "UNKNOWN"
+        : computeVerdict(
+            agent.trustScore,
+            agent.qualityTier ?? null,
+            agent.spamFlags ?? null,
+            agent.lifecycleStatus ?? null,
+          );
 
       res.json({
         found: true,

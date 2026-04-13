@@ -144,7 +144,7 @@ const freeEndpoints: Endpoint[] = [
             firstSeenBlock: 19500000,
             tags: ["weather", "api"],
             x402Support: true,
-            verdict: "trusted",
+            verdict: "TRUSTED",
             reportAvailable: true,
           },
         ],
@@ -177,7 +177,7 @@ const freeEndpoints: Endpoint[] = [
       },
       {
         field: "agents[].verdict",
-        description: 'High-level trust signal derived from ecosystem data: "trusted", "neutral", "caution", or "unknown". Not a substitute for a full Trust Report.',
+        description: 'High-level trust signal derived from ecosystem data: "TRUSTED", "CAUTION", "UNTRUSTED", or "UNKNOWN". Not a substitute for a full Trust Report.',
       },
       {
         field: "agents[].reportAvailable",
@@ -214,7 +214,7 @@ const freeEndpoints: Endpoint[] = [
         tags: ["weather", "api"],
         x402Support: true,
         imageUrl: "https://example.com/avatar.png",
-        verdict: "trusted",
+        verdict: "TRUSTED",
         reportAvailable: true,
       },
       null,
@@ -246,7 +246,7 @@ const freeEndpoints: Endpoint[] = [
       },
       {
         field: "verdict",
-        description: 'High-level trust signal: "trusted", "neutral", "caution", or "unknown".',
+        description: 'High-level trust signal: "TRUSTED", "CAUTION", "UNTRUSTED", or "UNKNOWN".',
       },
       {
         field: "reportAvailable",
@@ -515,7 +515,7 @@ const freeEndpoints: Endpoint[] = [
           name: "WeatherBot",
           chainId: 1,
           trustScore: 85,
-          verdict: "trusted",
+          verdict: "TRUSTED",
           image: "https://example.com/avatar.png",
         },
         {
@@ -523,7 +523,7 @@ const freeEndpoints: Endpoint[] = [
           name: "DataOracle",
           chainId: 8453,
           trustScore: 78,
-          verdict: "trusted",
+          verdict: "TRUSTED",
           image: null,
         },
       ],
@@ -545,7 +545,7 @@ const freeEndpoints: Endpoint[] = [
       },
       {
         field: "verdict",
-        description: 'High-level trust signal: "trusted", "neutral", "caution", or "unknown".',
+        description: 'High-level trust signal: "TRUSTED", "CAUTION", "UNTRUSTED", or "UNKNOWN".',
       },
       {
         field: "chainId",
@@ -655,7 +655,7 @@ const paidEndpoints: Endpoint[] = [
     exampleResponse: JSON.stringify(
       {
         address: "0x1234...abcd",
-        verdict: "trusted",
+        verdict: "TRUSTED",
         score: 82,
         reportAvailable: true,
         cachedUntil: "2026-04-13T00:00:00.000Z",
@@ -670,7 +670,7 @@ const paidEndpoints: Endpoint[] = [
       },
       {
         field: "verdict",
-        description: 'Trust verdict: "trusted", "neutral", "caution", or "unknown".',
+        description: 'Trust verdict: "TRUSTED", "CAUTION", "UNTRUSTED", or "UNKNOWN".',
       },
       {
         field: "score",
@@ -704,7 +704,7 @@ const paidEndpoints: Endpoint[] = [
     exampleResponse: JSON.stringify(
       {
         address: "0x1234...abcd",
-        verdict: "trusted",
+        verdict: "TRUSTED",
         score: 82,
         breakdown: {
           total: 82,
@@ -735,7 +735,7 @@ const paidEndpoints: Endpoint[] = [
     responseFields: [
       {
         field: "verdict",
-        description: 'Trust verdict: "trusted", "neutral", "caution", or "unknown".',
+        description: 'Trust verdict: "TRUSTED", "CAUTION", "UNTRUSTED", or "UNKNOWN".',
       },
       {
         field: "score",

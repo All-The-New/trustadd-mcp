@@ -41,25 +41,25 @@ interface AgentRow {
   chainId: number;
   trustScore: number | null;
   qualityTier: string | null;
-  spamFlags: number | null;
+  spamFlags: string[] | null;
   lifecycleStatus: string | null;
   imageUrl: string | null;
   primaryContractAddress: string | null;
 }
 
-type Verdict = "TRUSTED" | "CAUTION" | "UNTRUSTED";
+type Verdict = "TRUSTED" | "CAUTION" | "UNTRUSTED" | "UNKNOWN";
 
-function computeVerdict(agent: AgentRow): Verdict | null {
+// Aligned with server/trust-report-compiler.ts computeVerdict
+function computeVerdict(agent: AgentRow): Verdict {
   const { trustScore, qualityTier, spamFlags, lifecycleStatus } = agent;
-  if (trustScore == null) return null;
-  if (lifecycleStatus === "spam" || lifecycleStatus === "archived") return "UNTRUSTED";
+  const flags = spamFlags ?? [];
+  const status = lifecycleStatus ?? "active";
+
+  if (trustScore == null) return "UNKNOWN";
   if (qualityTier === "spam" || qualityTier === "archived") return "UNTRUSTED";
+  if (status === "archived") return "UNTRUSTED";
   if (trustScore < 30) return "UNTRUSTED";
-  if (
-    trustScore >= 60 &&
-    (qualityTier === "high" || qualityTier === "medium") &&
-    (spamFlags == null || spamFlags === 0)
-  ) {
+  if (trustScore >= 60 && (qualityTier === "high" || qualityTier === "medium") && flags.length === 0) {
     return "TRUSTED";
   }
   return "CAUTION";
@@ -113,11 +113,12 @@ function injectAgentMeta(html: string, agent: AgentRow): string {
   const agentName = agent.name ?? `Agent #${agent.erc8004Id}`;
   const title = escapeHtml(`${agentName} \u2014 Agent Profile | TrustAdd`);
   const verdict = computeVerdict(agent);
-  const verdictSuffix = verdict ? ` Verdict: ${verdict}.` : "";
+  const verdictSuffix = verdict !== "UNKNOWN" ? ` Verdict: ${verdict}.` : "";
   const baseDesc = agent.description ?? `AI agent #${agent.erc8004Id} on ${chainName}. View trust score, metadata, and on-chain history.`;
   const description = escapeHtml(truncate(baseDesc + verdictSuffix, 160));
   const canonicalSlug = agent.slug ?? agent.id;
-  const canonicalUrl = `${BASE_URL}/agent/${canonicalSlug}`;
+  const rawCanonicalUrl = `${BASE_URL}/agent/${canonicalSlug}`;
+  const canonicalUrl = escapeHtml(rawCanonicalUrl);
 
   // Replace title
   html = html.replace(
@@ -168,7 +169,7 @@ function injectAgentMeta(html: string, agent: AgentRow): string {
     "@type": "SoftwareApplication",
     name: agentName,
     description: agent.description ?? `An AI agent on ${chainName} tracked by TrustAdd.`,
-    url: canonicalUrl,
+    url: rawCanonicalUrl,
     applicationCategory: "AI Agent",
     operatingSystem: chainName,
   };

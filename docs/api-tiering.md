@@ -89,20 +89,20 @@ All free endpoints return `X-TrustAdd-Tier: free` in the response headers.
 | Endpoint | Returns |
 |---|---|
 | `GET /api/analytics/overview` | Total agents, chains, transactions, ecosystem totals |
-| `GET /api/analytics/chains` | Per-chain agent and transaction counts |
-| `GET /api/analytics/chain-summary` | Chain health metrics |
-| `GET /api/analytics/trust-distribution` | Score distribution histogram (no agent IDs) |
-| `GET /api/analytics/tier-distribution` | Count by quality tier |
-| `GET /api/analytics/skill-coverage` | Skills present across ecosystem |
-| `GET /api/analytics/activity-timeline` | Aggregate activity over time |
-| `GET /api/analytics/growth` | New agent registration rate |
-| `GET /api/analytics/platform-breakdown` | Community signal by platform |
-| `GET /api/analytics/transaction-volume` | Volume aggregates (chain, time) |
-| `GET /api/analytics/top-skills` | Most common capability tags |
-| `GET /api/analytics/protocol-presence` | Cross-protocol adoption rates |
-| `GET /api/analytics/onboarding-funnel` | Registration-to-active conversion |
-| `GET /api/analytics/spam-rate` | Spam/archive rate by chain |
-| `GET /api/analytics/feedback-velocity` | Community feedback rate over time |
+| `GET /api/analytics/protocol-stats` | Per-protocol agent and transaction counts |
+| `GET /api/analytics/chain-distribution` | Agent distribution across chains |
+| `GET /api/analytics/registrations` | New agent registration rate over time |
+| `GET /api/analytics/metadata-quality` | Metadata completeness metrics |
+| `GET /api/analytics/x402-by-chain` | x402-enabled agent counts per chain |
+| `GET /api/analytics/controller-concentration` | Controller wallet concentration metrics |
+| `GET /api/analytics/uri-schemes` | URI scheme adoption rates |
+| `GET /api/analytics/categories` | Agent category distribution |
+| `GET /api/analytics/image-domains` | Image hosting domain breakdown |
+| `GET /api/analytics/models` | AI model usage across agents |
+| `GET /api/analytics/endpoints-coverage` | Endpoint probe coverage stats |
+| `GET /api/analytics/top-agents` | Top agents by ecosystem metric |
+| `GET /api/analytics/trust-scores` | Aggregate trust score distribution (no per-agent data, no topAgents) |
+| `GET /api/analytics/api-usage` | API usage statistics |
 
 ### Agent Directory (Redacted)
 
@@ -111,6 +111,7 @@ All free endpoints return `X-TrustAdd-Tier: free` in the response headers.
 | `GET /api/agents` | Returns agent list. See redacted fields in Section 6. Rate-limited: 10 req/min, max 20/page. Adds `verdict` and `reportAvailable` to each record. |
 | `GET /api/agents/:id` | Single agent detail. Same field stripping as list. Adds `verdict` and `reportAvailable`. |
 | `GET /api/agents/:id/trust-score` | Returns `verdict` (string label) only. Does not return numeric score, breakdown, or tier. |
+| `GET /api/agents/:id/feedback` | Returns basic agent feedback summary only (no per-platform breakdown). |
 
 ### Chain and Status
 
@@ -118,45 +119,51 @@ All free endpoints return `X-TrustAdd-Tier: free` in the response headers.
 |---|---|
 | `GET /api/chains` | Supported chains, RPC metadata, contract addresses |
 | `GET /api/stats` | Ecosystem-wide summary statistics |
-| `GET /api/status/health` | Service liveness |
-| `GET /api/status/db` | Database connectivity |
-| `GET /api/status/jobs` | Background job status (names and last-run times) |
+| `GET /api/health` | Service liveness and DB connection test |
+| `GET /api/status/overview` | Overall system status |
+| `GET /api/status/events` | Recent system events |
+| `GET /api/status/metrics` | System performance metrics |
+| `GET /api/status/summary` | Status summary across all services |
+| `GET /api/status/tasks` | Background task status (names and last-run times) |
+| `GET /api/status/alerts` | Active system alerts |
+| `GET /api/events/recent` | Recent indexer events |
 
 ### Bazaar (Marketplace)
 
 | Endpoint | Returns |
 |---|---|
-| `GET /api/bazaar` | Listed agents with pricing. Trust scores and payment addresses stripped from crossref data. |
-| `GET /api/bazaar/:id` | Single listing detail. Same stripping applies. |
-| `GET /api/bazaar/categories` | Available service categories |
-| `GET /api/bazaar/featured` | Featured listings (name + chain + category only) |
+| `GET /api/bazaar/stats` | Bazaar aggregate statistics |
+| `GET /api/bazaar/services` | Listed services with pricing |
+| `GET /api/bazaar/trends` | Service listing trends over time |
+| `GET /api/bazaar/top-services` | Top services by activity |
+| `GET /api/bazaar/price-distribution` | Service price distribution histogram |
+| `GET /api/bazaar/crossref` | Agent crossref data. Trust scores and payment addresses stripped. |
 
 ### Skills
 
 | Endpoint | Returns |
 |---|---|
-| `GET /api/skills` | Full skill/capability taxonomy |
-| `GET /api/skills/:id` | Skill detail and agent count using it |
-| `GET /api/skills/popular` | Top skills by adoption |
+| `GET /api/skills/summary` | Skill ecosystem summary |
+| `GET /api/skills/chain-distribution` | Skill adoption by chain |
+| `GET /api/skills/top-capabilities` | Most common capability tags |
+| `GET /api/skills/category-breakdown` | Skills grouped by category |
+| `GET /api/skills/trust-correlation` | Skill presence vs trust score correlation |
+| `GET /api/skills/oasf-overview` | OASF schema adoption overview |
+| `GET /api/skills/notable-agents` | Notable agents by skill profile |
 
 ### Economy
 
 | Endpoint | Returns |
 |---|---|
 | `GET /api/economy/overview` | Total volume, transaction count, active agents |
-| `GET /api/economy/chain-breakdown` | Volume and count per chain |
+| `GET /api/economy/top-agents` | Top agents by economic activity. `trustScore` and `trustScoreBreakdown` stripped. |
+| `GET /api/economy/endpoints` | Endpoint activity metrics |
+| `GET /api/economy/chain-breakdown` | Volume and count per chain. `avgTrustScore` stripped. |
+| `GET /api/economy/probes` | x402 probe results aggregate |
 | `GET /api/economy/transactions/stats` | Transaction aggregate statistics |
 | `GET /api/economy/transactions/recent` | Recent transactions (anonymized) |
 | `GET /api/economy/transactions/volume` | Volume over time |
-| `GET /api/economy/transactions/top-earners` | Top earners by volume. **Anonymized**: name + chain only, no addresses, no amounts. |
-
-### Quality and Trust Summaries
-
-| Endpoint | Returns |
-|---|---|
-| `GET /api/quality/summary` | Aggregate tier distribution counts (high/medium/low/spam/archived/unclassified) |
-| `GET /api/trust-scores/distribution` | Histogram of score ranges (no agent IDs or names) |
-| `GET /api/trust-scores/top` | Top-ranked agents: names + verdict label only, no numeric scores |
+| `GET /api/economy/transactions/top-earners` | Top earners by volume. **Anonymized**: rank + name + chainId only, no addresses or amounts. |
 
 ### Community Feedback Aggregates
 
@@ -165,11 +172,19 @@ All free endpoints return `X-TrustAdd-Tier: free` in the response headers.
 | `GET /api/community-feedback/stats` | Platform-level aggregate stats (total posts, sentiment distribution) |
 | `GET /api/community-feedback/leaderboard` | Most-mentioned agents: names only, no raw metrics |
 
+### Quality
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/quality/summary` | Aggregate tier distribution counts (high/medium/low/spam/archived/unclassified) |
+
 ### Trust Discovery (v1)
 
 | Endpoint | Returns |
 |---|---|
 | `GET /api/v1/trust/:address/exists` | Boolean: whether address is indexed. Free discovery endpoint with no score data. |
+| `GET /api/trust-scores/top` | Top-ranked agents: names + verdict label only, no numeric scores |
+| `GET /api/trust-scores/distribution` | Histogram of score ranges (no agent IDs or names) |
 
 ---
 
@@ -225,6 +240,7 @@ These endpoints were previously free and returned raw per-agent data. They now r
 | `GET /api/agents/:id/transactions/stats` | 402 — use `/api/v1/trust/:address/report` |
 | `GET /api/agents/:id/history` | 402 — use `/api/v1/trust/:address/report` |
 | `GET /api/quality/offenders` | 402 — returns low/spam tier agents with full flag details |
+| `GET /api/economy/payment-addresses` | 402 — use `/api/v1/trust/:address` or `/api/v1/trust/:address/report` |
 
 All gated 402 responses include:
 - `X-TrustAdd-Tier: gated` response header
@@ -313,9 +329,9 @@ Verdicts are computed from `trustScore`, `qualityTier`, and `spamFlags`. The fre
 | `TRUSTED` | `trustScore >= 60` AND `qualityTier in (high, medium)` AND `spamFlags` is empty |
 | `CAUTION` | `trustScore` 30–59 OR `qualityTier = low` OR `spamFlags` has at least one non-critical flag |
 | `UNTRUSTED` | `trustScore < 30` OR `qualityTier in (spam, archived)` |
-| `UNKNOWN` | Address not found in the index |
+| `UNKNOWN` | Address not indexed OR indexed but not yet scored (i.e. `trustScore` is null) |
 
-**Precedence**: `UNTRUSTED` conditions override `CAUTION` conditions. If both apply, `UNTRUSTED` wins. `UNKNOWN` is only returned for addresses not present in the database; it is never a fallback for missing score data.
+**Precedence**: `UNTRUSTED` conditions override `CAUTION` conditions. If both apply, `UNTRUSTED` wins. `UNKNOWN` is returned for addresses not present in the database AND for addresses that are indexed but have not yet had a trust score computed.
 
 **Critical vs non-critical flags**: Flags such as `no_transactions` or `low_community_presence` are non-critical and push an agent to `CAUTION`. Flags such as `known_spam_cluster` or `controller_flagged` are critical and push to `UNTRUSTED` regardless of numeric score.
 

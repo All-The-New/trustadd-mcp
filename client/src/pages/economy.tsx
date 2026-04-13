@@ -223,17 +223,12 @@ export default function Economy() {
 
   const { data: chainBreakdown, isLoading: chainLoading } = useQuery<Array<{
     chainId: number; totalAgents: number; x402Agents: number; adoptionRate: number;
-    withEndpoints: number; avgTrustScore: number | null;
+    withEndpoints: number;
   }>>({ queryKey: ["/api/economy/chain-breakdown"] });
 
   const { data: probeStats } = useQuery<{
     totalProbed: number; found402: number; uniquePaymentAddresses: number; lastProbeAt: string | null;
   }>({ queryKey: ["/api/economy/probes"] });
-
-  const { data: paymentAddresses } = useQuery<Array<{
-    agentId: string; agentName: string | null; agentSlug: string | null; chainId: number;
-    paymentAddress: string; paymentNetwork: string | null; paymentToken: string | null; probedAt: string;
-  }>>({ queryKey: ["/api/economy/payment-addresses"] });
 
   const { data: txStats } = useQuery<{
     totalTransactions: number; totalVolumeUsd: number; uniqueBuyers: number; uniqueSellers: number;
@@ -556,9 +551,6 @@ export default function Economy() {
                         </div>
                         <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
                           <span>{chain.withEndpoints.toLocaleString()} with endpoints</span>
-                          {chain.avgTrustScore != null && (
-                            <span>Avg trust: {chain.avgTrustScore}</span>
-                          )}
                         </div>
                       </div>
                     ))}
@@ -571,7 +563,7 @@ export default function Economy() {
           </div>
         </div>
 
-        {(probeStats && probeStats.totalProbed > 0) || (paymentAddresses && paymentAddresses.length > 0) ? (
+        {probeStats && probeStats.totalProbed > 0 ? (
           <Card data-testid="card-payment-discovery">
             <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center gap-2">
@@ -595,47 +587,6 @@ export default function Economy() {
                     <div className="text-center p-3 rounded-lg bg-muted/50">
                       <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{probeStats.uniquePaymentAddresses}</p>
                       <p className="text-xs text-muted-foreground">Payment Addresses</p>
-                    </div>
-                  </div>
-                )}
-
-                {paymentAddresses && paymentAddresses.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium flex items-center gap-1.5">
-                      <Wallet className="w-3.5 h-3.5" />
-                      Discovered Payment Addresses
-                    </h4>
-                    <div className="space-y-1">
-                      {paymentAddresses.map((pa) => (
-                        <Link
-                          key={`${pa.agentId}-${pa.paymentAddress}`}
-                          href={`/agent/${pa.agentSlug || pa.agentId}`}
-                        >
-                          <div
-                            className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer group"
-                            data-testid={`payment-address-${pa.paymentAddress.slice(0, 8)}`}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium truncate">{pa.agentName || "Unknown Agent"}</span>
-                                <ChainBadge chainId={pa.chainId} size="xs" />
-                              </div>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <code className="text-[11px] text-muted-foreground font-mono">
-                                  {pa.paymentAddress.slice(0, 6)}...{pa.paymentAddress.slice(-4)}
-                                </code>
-                                {pa.paymentNetwork && (
-                                  <span className="text-[10px] px-1.5 rounded bg-muted text-muted-foreground uppercase">{pa.paymentNetwork}</span>
-                                )}
-                                {pa.paymentToken && (
-                                  <span className="text-[10px] px-1.5 rounded bg-primary/10 text-primary uppercase font-medium">{pa.paymentToken}</span>
-                                )}
-                              </div>
-                            </div>
-                            <ArrowRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </div>
-                        </Link>
-                      ))}
                     </div>
                   </div>
                 )}

@@ -312,7 +312,7 @@ export const DIRECTORY = {
 export const PROFILE = {
   defaultDescription: (chainName: string) =>
     `This agent was automatically discovered on the ${chainName} blockchain. No additional description has been provided.`,
-  defaultSeoDescription: (erc8004Id: number, chainName: string) =>
+  defaultSeoDescription: (erc8004Id: string | number, chainName: string) =>
     `AI agent #${erc8004Id} on ${chainName}. View trust score, metadata, and on-chain history.`,
   reputationEmpty:
     "This agent hasn't received any on-chain reputation feedback yet. As the protocol ecosystem matures, endorsements and reputation signals from other agents and users will appear here.",
