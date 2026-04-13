@@ -180,7 +180,7 @@ function injectAgentMeta(html: string, agent: AgentRow): string {
   // Inject canonical link + JSON-LD before </head>
   const extraHead = [
     `<link rel="canonical" href="${canonicalUrl}" />`,
-    `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`,
+    `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, "\\u003c")}</script>`,
   ].join("\n    ");
 
   html = html.replace("</head>", `    ${extraHead}\n  </head>`);
