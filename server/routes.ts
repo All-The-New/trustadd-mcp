@@ -25,6 +25,7 @@ import {
   type FullReportData,
   type Verdict,
 } from "./trust-report-compiler.js";
+import { getMethodology } from "./trust-methodology.js";
 
 // ─── API Tiering ─────────────────────────────────────────────────
 // Free tier: ecosystem analytics, agent discovery (redacted), verdict badges
@@ -1356,6 +1357,11 @@ export async function registerRoutes(
   const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 
   const trustProductEnabled = process.env.TRUST_PRODUCT_ENABLED?.toLowerCase() === "true";
+
+  // Free endpoint — methodology description for the trust scoring rubric
+  app.get("/api/v1/trust/methodology", (_req, res) => {
+    res.json(getMethodology());
+  });
 
   // Free endpoint — registered before the x402 gate. The gate's route regex only
   // matches /:address and /:address/report (not /:address/exists), so registration
