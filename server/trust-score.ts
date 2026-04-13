@@ -3,6 +3,7 @@ import { storage } from "./storage.js";
 import { db } from "./db.js";
 import { eq, isNull, sql } from "drizzle-orm";
 import { log } from "./lib/log.js";
+import { computeSignalHash, METHODOLOGY_VERSION } from "./trust-provenance.js";
 
 function looksLikeImageUrl(url: string): boolean {
   if (!url || url.length < 5) return false;
@@ -18,6 +19,22 @@ function looksLikeImageUrl(url: string): boolean {
   return false;
 }
 
+export interface TrustSignal {
+  dimension: "identity" | "history" | "capability" | "community" | "transparency";
+  name: string;
+  points: number;
+  maxPoints: number;
+  earned: boolean;
+  detail?: string;
+}
+
+export interface TrustOpportunity {
+  signal: string;
+  dimension: string;
+  maxPoints: number;
+  hint: string;
+}
+
 export interface TrustScoreBreakdown {
   total: number;
   identity: number;
@@ -25,6 +42,31 @@ export interface TrustScoreBreakdown {
   capability: number;
   community: number;
   transparency: number;
+  signals: TrustSignal[];
+  opportunities: TrustOpportunity[];
+}
+
+function getOpportunityHint(signalName: string): string {
+  const hints: Record<string, string> = {
+    agent_name: "Set a descriptive agent name in your ERC-8004 metadata",
+    description_quality: "Add a description of at least 100 characters explaining what your agent does",
+    image_url: "Add an image URL (PNG, SVG, or IPFS-hosted) to your agent metadata",
+    endpoints_declared: "Declare at least one API endpoint in your agent metadata",
+    tags_or_skills: "Add tags or OASF skills to help users discover your agent",
+    agent_age: "Trust accumulates over time — agents gain full age points after 30 days",
+    metadata_updates: "Update your agent metadata at least twice to demonstrate active maintenance",
+    cross_chain_presence: "Deploy or register your agent on 2+ chains to earn cross-chain points",
+    x402_payment: "Enable x402 payment headers on at least one endpoint",
+    oasf_skills: "Register at least 1 OASF skill or domain (3+ for maximum points)",
+    endpoint_count: "Declare at least 3 endpoints to reach the maximum capability score",
+    github_health: "Connect a healthy GitHub repository with recent activity and good engagement",
+    farcaster_presence: "Establish a Farcaster presence with a score above 0.4",
+    community_sources: "Get listed in at least one community data source",
+    metadata_storage: "Store metadata on IPFS or Arweave for immutability (8 points vs 5 for HTTPS)",
+    trust_protocols: "Support at least 2 trust protocols (e.g. eip712, erc7710) for 5 points; 3+ for 7",
+    active_status: "Set activeStatus to true in your agent metadata",
+  };
+  return hints[signalName] ?? `Improve the ${signalName.replace(/_/g, " ")} signal`;
 }
 
 export function calculateTrustScore(
@@ -33,85 +75,263 @@ export function calculateTrustScore(
   eventCount?: number,
   crossChainCount?: number,
 ): TrustScoreBreakdown {
-  let identity = 0;
-  let history = 0;
-  let capability = 0;
-  let community = 0;
-  let transparency = 0;
+  const signals: TrustSignal[] = [];
 
-  if (agent.name && agent.name.trim().length > 0) identity += 5;
+  // ── Identity ─────────────────────────────────────────────────────────────
+  const hasName = Boolean(agent.name && agent.name.trim().length > 0);
+  signals.push({
+    dimension: "identity",
+    name: "agent_name",
+    points: hasName ? 5 : 0,
+    maxPoints: 5,
+    earned: hasName,
+    detail: hasName ? agent.name!.trim() : undefined,
+  });
+
+  let descPoints = 0;
+  let descDetail: string | undefined;
   if (agent.description && agent.description.trim().length > 0) {
     const descLen = agent.description.trim().length;
-    if (descLen >= 100) identity += 5;
-    else if (descLen >= 30) identity += 3;
-    else identity += 1;
+    descDetail = `${descLen} chars`;
+    if (descLen >= 100) descPoints = 5;
+    else if (descLen >= 30) descPoints = 3;
+    else descPoints = 1;
   }
-  if (agent.imageUrl && looksLikeImageUrl(agent.imageUrl)) identity += 5;
-  const endpoints = agent.endpoints as any;
-  const hasEndpoints = endpoints && (Array.isArray(endpoints) ? endpoints.length > 0 : Object.keys(endpoints).length > 0);
-  if (hasEndpoints) identity += 5;
-  if ((agent.tags && agent.tags.length > 0) || (agent.oasfSkills && agent.oasfSkills.length > 0)) identity += 5;
+  signals.push({
+    dimension: "identity",
+    name: "description_quality",
+    points: descPoints,
+    maxPoints: 5,
+    earned: descPoints > 0,
+    detail: descDetail,
+  });
 
+  const hasImage = Boolean(agent.imageUrl && looksLikeImageUrl(agent.imageUrl));
+  signals.push({
+    dimension: "identity",
+    name: "image_url",
+    points: hasImage ? 5 : 0,
+    maxPoints: 5,
+    earned: hasImage,
+    detail: hasImage ? agent.imageUrl! : undefined,
+  });
+
+  const endpoints = agent.endpoints as any;
+  const hasEndpoints = Boolean(
+    endpoints && (Array.isArray(endpoints) ? endpoints.length > 0 : Object.keys(endpoints).length > 0)
+  );
+  signals.push({
+    dimension: "identity",
+    name: "endpoints_declared",
+    points: hasEndpoints ? 5 : 0,
+    maxPoints: 5,
+    earned: hasEndpoints,
+  });
+
+  const hasTagsOrSkills = Boolean(
+    (agent.tags && agent.tags.length > 0) || (agent.oasfSkills && agent.oasfSkills.length > 0)
+  );
+  signals.push({
+    dimension: "identity",
+    name: "tags_or_skills",
+    points: hasTagsOrSkills ? 5 : 0,
+    maxPoints: 5,
+    earned: hasTagsOrSkills,
+    detail: hasTagsOrSkills
+      ? `${agent.tags?.length ?? 0} tags, ${agent.oasfSkills?.length ?? 0} skills`
+      : undefined,
+  });
+
+  // ── History ───────────────────────────────────────────────────────────────
   const ageDays = (Date.now() - new Date(agent.createdAt).getTime()) / (1000 * 60 * 60 * 24);
-  if (ageDays >= 30) history += 10;
-  else if (ageDays >= 7) history += 5;
-  else if (ageDays >= 1) history += 2;
+  let agePoints = 0;
+  if (ageDays >= 30) agePoints = 10;
+  else if (ageDays >= 7) agePoints = 5;
+  else if (ageDays >= 1) agePoints = 2;
+  signals.push({
+    dimension: "history",
+    name: "agent_age",
+    points: agePoints,
+    maxPoints: 10,
+    earned: agePoints > 0,
+    detail: `${Math.floor(ageDays)} days`,
+  });
 
   const updates = eventCount ?? 0;
-  if (updates >= 2) history += 5;
-  else if (updates >= 1) history += 2;
+  let updatesPoints = 0;
+  if (updates >= 2) updatesPoints = 5;
+  else if (updates >= 1) updatesPoints = 2;
+  signals.push({
+    dimension: "history",
+    name: "metadata_updates",
+    points: updatesPoints,
+    maxPoints: 5,
+    earned: updatesPoints > 0,
+    detail: updates > 0 ? `${updates} updates` : undefined,
+  });
 
   const crossChain = crossChainCount ?? 0;
-  if (crossChain >= 3) history += 5;
-  else if (crossChain >= 2) history += 3;
+  let crossChainPoints = 0;
+  if (crossChain >= 3) crossChainPoints = 5;
+  else if (crossChain >= 2) crossChainPoints = 3;
+  signals.push({
+    dimension: "history",
+    name: "cross_chain_presence",
+    points: crossChainPoints,
+    maxPoints: 5,
+    earned: crossChainPoints > 0,
+    detail: crossChain > 0 ? `${crossChain} chains` : undefined,
+  });
 
-  if (agent.x402Support === true) capability += 5;
+  // ── Capability ────────────────────────────────────────────────────────────
+  const hasX402 = agent.x402Support === true;
+  signals.push({
+    dimension: "capability",
+    name: "x402_payment",
+    points: hasX402 ? 5 : 0,
+    maxPoints: 5,
+    earned: hasX402,
+  });
 
   const skillCount = (agent.oasfSkills?.length ?? 0) + (agent.oasfDomains?.length ?? 0);
-  if (skillCount >= 3) capability += 5;
-  else if (skillCount >= 1) capability += 3;
+  let skillPoints = 0;
+  if (skillCount >= 3) skillPoints = 5;
+  else if (skillCount >= 1) skillPoints = 3;
+  signals.push({
+    dimension: "capability",
+    name: "oasf_skills",
+    points: skillPoints,
+    maxPoints: 5,
+    earned: skillPoints > 0,
+    detail: skillCount > 0 ? `${skillCount} skills/domains` : undefined,
+  });
 
   let endpointCount = 0;
   if (endpoints) {
     if (Array.isArray(endpoints)) endpointCount = endpoints.length;
     else if (typeof endpoints === "object") endpointCount = Object.keys(endpoints).length;
   }
-  if (endpointCount >= 3) capability += 5;
-  else if (endpointCount >= 1) capability += 3;
+  let endpointPoints = 0;
+  if (endpointCount >= 3) endpointPoints = 5;
+  else if (endpointCount >= 1) endpointPoints = 3;
+  signals.push({
+    dimension: "capability",
+    name: "endpoint_count",
+    points: endpointPoints,
+    maxPoints: 5,
+    earned: endpointPoints > 0,
+    detail: endpointCount > 0 ? `${endpointCount} endpoints` : undefined,
+  });
 
+  // ── Community ─────────────────────────────────────────────────────────────
   if (feedback) {
     const ghScore = feedback.githubHealthScore ?? 0;
-    if (ghScore >= 70) community += 10;
-    else if (ghScore >= 40) community += 6;
-    else if (ghScore > 0) community += 3;
+    let ghPoints = 0;
+    if (ghScore >= 70) ghPoints = 10;
+    else if (ghScore >= 40) ghPoints = 6;
+    else if (ghScore > 0) ghPoints = 3;
+    signals.push({
+      dimension: "community",
+      name: "github_health",
+      points: ghPoints,
+      maxPoints: 10,
+      earned: ghPoints > 0,
+      detail: ghScore > 0 ? `score ${ghScore}` : undefined,
+    });
 
     const fcScore = feedback.farcasterScore ?? 0;
-    if (fcScore >= 0.7) community += 5;
-    else if (fcScore >= 0.4) community += 3;
-    else if (fcScore > 0) community += 1;
+    let fcPoints = 0;
+    if (fcScore >= 0.7) fcPoints = 5;
+    else if (fcScore >= 0.4) fcPoints = 3;
+    else if (fcScore > 0) fcPoints = 1;
+    signals.push({
+      dimension: "community",
+      name: "farcaster_presence",
+      points: fcPoints,
+      maxPoints: 5,
+      earned: fcPoints > 0,
+      detail: fcScore > 0 ? `score ${fcScore}` : undefined,
+    });
 
-    if (feedback.totalSources > 0) community += 5;
+    const hasSources = feedback.totalSources > 0;
+    signals.push({
+      dimension: "community",
+      name: "community_sources",
+      points: hasSources ? 5 : 0,
+      maxPoints: 5,
+      earned: hasSources,
+      detail: hasSources ? `${feedback.totalSources} sources` : undefined,
+    });
+  } else {
+    signals.push({ dimension: "community", name: "github_health", points: 0, maxPoints: 10, earned: false });
+    signals.push({ dimension: "community", name: "farcaster_presence", points: 0, maxPoints: 5, earned: false });
+    signals.push({ dimension: "community", name: "community_sources", points: 0, maxPoints: 5, earned: false });
   }
 
+  // ── Transparency ──────────────────────────────────────────────────────────
   const uri = agent.metadataUri ?? "";
-  if (uri.startsWith("ipfs://")) transparency += 8;
-  else if (uri.startsWith("ar://")) transparency += 8;
-  else if (uri.startsWith("https://")) transparency += 5;
-  else if (uri.startsWith("http://")) transparency += 3;
-  else if (uri.startsWith("data:")) transparency += 2;
+  let storagePoints = 0;
+  let storageDetail: string | undefined;
+  if (uri.startsWith("ipfs://")) { storagePoints = 8; storageDetail = "ipfs"; }
+  else if (uri.startsWith("ar://")) { storagePoints = 8; storageDetail = "arweave"; }
+  else if (uri.startsWith("https://")) { storagePoints = 5; storageDetail = "https"; }
+  else if (uri.startsWith("http://")) { storagePoints = 3; storageDetail = "http"; }
+  else if (uri.startsWith("data:")) { storagePoints = 2; storageDetail = "data-uri"; }
+  signals.push({
+    dimension: "transparency",
+    name: "metadata_storage",
+    points: storagePoints,
+    maxPoints: 8,
+    earned: storagePoints > 0,
+    detail: storageDetail,
+  });
 
+  let trustPoints = 0;
+  let trustDetail: string | undefined;
   if (agent.supportedTrust && agent.supportedTrust.length > 0) {
     const trustCount = agent.supportedTrust.length;
-    if (trustCount >= 3) transparency += 7;
-    else if (trustCount >= 2) transparency += 5;
-    else transparency += 3;
+    trustDetail = `${trustCount} protocols`;
+    if (trustCount >= 3) trustPoints = 7;
+    else if (trustCount >= 2) trustPoints = 5;
+    else trustPoints = 3;
   }
+  signals.push({
+    dimension: "transparency",
+    name: "trust_protocols",
+    points: trustPoints,
+    maxPoints: 7,
+    earned: trustPoints > 0,
+    detail: trustDetail,
+  });
 
-  if (agent.activeStatus === true) transparency += 5;
+  const isActive = agent.activeStatus === true;
+  signals.push({
+    dimension: "transparency",
+    name: "active_status",
+    points: isActive ? 5 : 0,
+    maxPoints: 5,
+    earned: isActive,
+  });
 
+  // ── Tally dimension totals from signals ───────────────────────────────────
+  const identity = signals.filter(s => s.dimension === "identity").reduce((a, s) => a + s.points, 0);
+  const history = signals.filter(s => s.dimension === "history").reduce((a, s) => a + s.points, 0);
+  const capability = signals.filter(s => s.dimension === "capability").reduce((a, s) => a + s.points, 0);
+  const community = signals.filter(s => s.dimension === "community").reduce((a, s) => a + s.points, 0);
+  const transparency = signals.filter(s => s.dimension === "transparency").reduce((a, s) => a + s.points, 0);
   const total = identity + history + capability + community + transparency;
 
-  return { total, identity, history, capability, community, transparency };
+  // ── Opportunities: unearned signals with maxPoints >= 3 ──────────────────
+  const opportunities: TrustOpportunity[] = signals
+    .filter(s => !s.earned && s.maxPoints >= 3)
+    .map(s => ({
+      signal: s.name,
+      dimension: s.dimension,
+      maxPoints: s.maxPoints,
+      hint: getOpportunityHint(s.name),
+    }));
+
+  return { total, identity, history, capability, community, transparency, signals, opportunities };
 }
 
 export async function recalculateScore(agentId: string): Promise<TrustScoreBreakdown | null> {
@@ -124,7 +344,7 @@ export async function recalculateScore(agentId: string): Promise<TrustScoreBreak
   let crossChainCount = 0;
   try {
     const result = await db.execute(sql`
-      SELECT COUNT(DISTINCT chain_id) as cnt FROM agents 
+      SELECT COUNT(DISTINCT chain_id) as cnt FROM agents
       WHERE controller_address = ${agent.controllerAddress}
     `);
     crossChainCount = Number((result as any).rows?.[0]?.cnt ?? 0);
@@ -136,11 +356,14 @@ export async function recalculateScore(agentId: string): Promise<TrustScoreBreak
   } catch {}
 
   const breakdown = calculateTrustScore(agent, feedback, eventCount, crossChainCount);
+  const signalHash = computeSignalHash(agent, feedback, eventCount, crossChainCount);
 
   await db.update(agents).set({
     trustScore: breakdown.total,
     trustScoreBreakdown: breakdown,
     trustScoreUpdatedAt: new Date(),
+    trustSignalHash: signalHash,
+    trustMethodologyVersion: METHODOLOGY_VERSION,
   }).where(eq(agents.id, agentId));
 
   return breakdown;
@@ -187,22 +410,26 @@ async function prefetchScoreLookups() {
 }
 
 /** Batch-update trust scores for a set of agents in a single SQL statement. */
-async function batchUpdateScores(updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown }>) {
+async function batchUpdateScores(updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown; signalHash: string }>) {
   if (updates.length === 0) return;
   const now = new Date();
   const ids = updates.map(u => u.id);
   const scores = updates.map(u => u.score);
   const breakdowns = updates.map(u => JSON.stringify(u.breakdown));
+  const hashes = updates.map(u => u.signalHash);
 
   await db.execute(sql`
     UPDATE agents SET
       trust_score = batch.score,
       trust_score_breakdown = batch.breakdown::jsonb,
-      trust_score_updated_at = ${now}
+      trust_score_updated_at = ${now},
+      trust_signal_hash = batch.hash,
+      trust_methodology_version = ${METHODOLOGY_VERSION}
     FROM (
       SELECT unnest(${ids}::text[]) AS id,
              unnest(${scores}::int[]) AS score,
-             unnest(${breakdowns}::text[]) AS breakdown
+             unnest(${breakdowns}::text[]) AS breakdown,
+             unnest(${hashes}::text[]) AS hash
     ) AS batch
     WHERE agents.id = batch.id
   `);
@@ -220,14 +447,15 @@ export async function recalculateAllScores(): Promise<{ updated: number; elapsed
 
   for (let i = 0; i < allAgents.length; i += BATCH_SIZE) {
     const batch = allAgents.slice(i, i + BATCH_SIZE);
-    const updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown }> = [];
+    const updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown; signalHash: string }> = [];
 
     for (const agent of batch) {
       const feedback = feedbackMap.get(agent.id) ?? null;
       const evtCount = eventCounts.get(agent.id) ?? 0;
       const crossChain = controllerChains.get(agent.controllerAddress) ?? 0;
       const breakdown = calculateTrustScore(agent, feedback, evtCount, crossChain);
-      updates.push({ id: agent.id, score: breakdown.total, breakdown });
+      const signalHash = computeSignalHash(agent, feedback, evtCount, crossChain);
+      updates.push({ id: agent.id, score: breakdown.total, breakdown, signalHash });
     }
 
     await batchUpdateScores(updates);
@@ -246,7 +474,7 @@ export async function recalculateAllScores(): Promise<{ updated: number; elapsed
 export async function ensureScoresCalculated(): Promise<void> {
   try {
     const result = await db.execute(sql`
-      SELECT 
+      SELECT
         COUNT(*) FILTER (WHERE trust_score IS NULL) as unscored,
         COUNT(*) as total
       FROM agents
@@ -266,13 +494,14 @@ export async function ensureScoresCalculated(): Promise<void> {
         const batch = await db.select().from(agents).where(isNull(agents.trustScore)).limit(500);
         if (batch.length === 0) break;
 
-        const updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown }> = [];
+        const updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown; signalHash: string }> = [];
         for (const agent of batch) {
           const feedback = feedbackMap.get(agent.id) ?? null;
           const evtCount = eventCounts.get(agent.id) ?? 0;
           const crossChain = controllerChains.get(agent.controllerAddress) ?? 0;
           const breakdown = calculateTrustScore(agent, feedback, evtCount, crossChain);
-          updates.push({ id: agent.id, score: breakdown.total, breakdown });
+          const signalHash = computeSignalHash(agent, feedback, evtCount, crossChain);
+          updates.push({ id: agent.id, score: breakdown.total, breakdown, signalHash });
         }
 
         await batchUpdateScores(updates);
