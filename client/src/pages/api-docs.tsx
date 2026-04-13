@@ -17,6 +17,7 @@ import {
   ChevronRight,
   BookOpen,
   Zap,
+  Lock,
 } from "lucide-react";
 import { SEO } from "@/components/seo";
 import { useToast } from "@/hooks/use-toast";
@@ -70,6 +71,7 @@ interface Endpoint {
   method: "GET" | "POST";
   path: string;
   description: string;
+  gated?: boolean;
   params?: Param[];
   exampleCurl: string;
   exampleResponse: string;
@@ -78,19 +80,19 @@ interface Endpoint {
 
 const BASE_URL = "https://trustadd.com";
 
-const endpoints: Endpoint[] = [
+const freeEndpoints: Endpoint[] = [
   {
     method: "GET",
     path: "/api/agents",
     description:
-      "Get a list of all discovered agents, with search and filtering.",
+      "Get a list of all discovered agents, with search and filtering. Rate limited to 10 requests per minute, max 20 results per page.",
     params: [
       {
         name: "limit",
         type: "number",
         required: false,
         description:
-          "Maximum number of agents to return. Defaults to 50.",
+          "Maximum number of agents to return. Defaults to 20, max 20.",
       },
       {
         name: "offset",
@@ -142,6 +144,8 @@ const endpoints: Endpoint[] = [
             firstSeenBlock: 19500000,
             tags: ["weather", "api"],
             x402Support: true,
+            verdict: "trusted",
+            reportAvailable: true,
           },
         ],
         total: 13202,
@@ -171,12 +175,20 @@ const endpoints: Endpoint[] = [
         field: "agents[].primaryContractAddress",
         description: "The contract address of the agent on its respective chain.",
       },
+      {
+        field: "agents[].verdict",
+        description: 'High-level trust signal derived from ecosystem data: "trusted", "neutral", "caution", or "unknown". Not a substitute for a full Trust Report.',
+      },
+      {
+        field: "agents[].reportAvailable",
+        description: "Whether a full Agent Trust Report is available for this agent via the x402-gated Trust Report API.",
+      },
     ],
   },
   {
     method: "GET",
     path: "/api/agents/:id",
-    description: "Get the full profile for a single agent by its internal ID.",
+    description: "Get the identity profile for a single agent by its internal ID. Returns identity, capability, and ecosystem metadata. Trust scores, score breakdowns, community signals, and transaction history are available via the Trust Report API.",
     params: [
       {
         name: "id",
@@ -202,6 +214,8 @@ const endpoints: Endpoint[] = [
         tags: ["weather", "api"],
         x402Support: true,
         imageUrl: "https://example.com/avatar.png",
+        verdict: "trusted",
+        reportAvailable: true,
       },
       null,
       2
@@ -230,126 +244,13 @@ const endpoints: Endpoint[] = [
         description:
           "Whether the agent supports the x402 payment protocol.",
       },
-    ],
-  },
-  {
-    method: "GET",
-    path: "/api/agents/:id/history",
-    description:
-      "Get the complete on-chain event history for a specific agent.",
-    params: [
       {
-        name: "id",
-        type: "string",
-        required: true,
-        description: "The internal UUID of the agent.",
-      },
-    ],
-    exampleCurl: `curl "${BASE_URL}/api/agents/abc-123/history"`,
-    exampleResponse: JSON.stringify(
-      [
-        {
-          id: "evt-1",
-          agentId: "abc-123",
-          txHash: "0xdef...789",
-          blockNumber: 19500000,
-          eventType: "AgentRegistered",
-          rawData: {},
-          createdAt: "2024-01-15T10:30:00Z",
-        },
-        {
-          id: "evt-2",
-          agentId: "abc-123",
-          txHash: "0xghi...012",
-          blockNumber: 19600000,
-          eventType: "MetadataUpdated",
-          rawData: {},
-          createdAt: "2024-02-20T14:15:00Z",
-        },
-      ],
-      null,
-      2
-    ),
-    responseFields: [
-      {
-        field: "eventType",
-        description:
-          'The type of on-chain event: "AgentRegistered", "MetadataUpdated", "FeedbackPosted", "ReputationUpdated", "EndorsementAdded", or "IdentityUpdated".',
+        field: "verdict",
+        description: 'High-level trust signal: "trusted", "neutral", "caution", or "unknown".',
       },
       {
-        field: "txHash",
-        description: "The transaction hash for this event on its respective chain.",
-      },
-      {
-        field: "blockNumber",
-        description: "The block number when this event occurred on its respective chain.",
-      },
-      {
-        field: "rawData",
-        description:
-          "The raw event data from the blockchain, varies by event type.",
-      },
-    ],
-  },
-  {
-    method: "GET",
-    path: "/api/agents/:id/feedback",
-    description:
-      "Get the reputation feedback summary for a specific agent, including feedback counts, unique reviewers, and individual feedback events.",
-    params: [
-      {
-        name: "id",
-        type: "string",
-        required: true,
-        description: "The internal UUID of the agent.",
-      },
-    ],
-    exampleCurl: `curl "${BASE_URL}/api/agents/abc-123/feedback"`,
-    exampleResponse: JSON.stringify(
-      {
-        feedbackCount: 3,
-        uniqueReviewers: 2,
-        firstFeedbackBlock: 19500000,
-        lastFeedbackBlock: 19700000,
-        events: [
-          {
-            id: "evt-10",
-            agentId: "abc-123",
-            txHash: "0xfeed...back",
-            blockNumber: 19700000,
-            eventType: "FeedbackPosted",
-            rawData: {
-              reviewer: "0xabcd...1234",
-              feedbackHash: "0x...",
-              feedbackURI: "ipfs://Qm...",
-            },
-            createdAt: "2024-03-01T09:00:00Z",
-          },
-        ],
-      },
-      null,
-      2
-    ),
-    responseFields: [
-      {
-        field: "feedbackCount",
-        description: "Total number of feedback/reputation events for this agent.",
-      },
-      {
-        field: "uniqueReviewers",
-        description: "Number of unique reviewer addresses who provided feedback.",
-      },
-      {
-        field: "firstFeedbackBlock",
-        description: "Block number of the earliest feedback event (null if none).",
-      },
-      {
-        field: "lastFeedbackBlock",
-        description: "Block number of the most recent feedback event (null if none).",
-      },
-      {
-        field: "events",
-        description: "Array of individual feedback/reputation event objects.",
+        field: "reportAvailable",
+        description: "Whether a full Agent Trust Report is available via the x402-gated Trust Report API.",
       },
     ],
   },
@@ -589,46 +490,9 @@ const endpoints: Endpoint[] = [
   },
   {
     method: "GET",
-    path: "/api/agents/:id/trust-score",
-    description:
-      "Get the TrustAdd Score breakdown for a specific agent. The score is a composite 0-100 metric based on identity, history, capability, community, and transparency signals.",
-    exampleCurl: `curl "${BASE_URL}/api/agents/{id}/trust-score"`,
-    exampleResponse: JSON.stringify(
-      {
-        score: 62,
-        breakdown: {
-          total: 62,
-          identity: 20,
-          history: 12,
-          capability: 10,
-          community: 10,
-          transparency: 10,
-        },
-        updatedAt: "2026-02-28T12:00:00.000Z",
-      },
-      null,
-      2
-    ),
-    responseFields: [
-      {
-        field: "score",
-        description: "The composite TrustAdd Score (0-100).",
-      },
-      {
-        field: "breakdown",
-        description: "Category scores: identity (0-25), history (0-20), capability (0-15), community (0-20), transparency (0-20).",
-      },
-      {
-        field: "updatedAt",
-        description: "When the score was last calculated.",
-      },
-    ],
-  },
-  {
-    method: "GET",
     path: "/api/trust-scores/top",
     description:
-      "Get the top-scoring agents by TrustAdd Score. Use for leaderboards and discovering the most trusted agents.",
+      "Get the top agents by TrustAdd Score. Use for leaderboards and discovering the most active agents in the ecosystem.",
     params: [
       {
         name: "limit",
@@ -651,6 +515,7 @@ const endpoints: Endpoint[] = [
           name: "WeatherBot",
           chainId: 1,
           trustScore: 85,
+          verdict: "trusted",
           image: "https://example.com/avatar.png",
         },
         {
@@ -658,6 +523,7 @@ const endpoints: Endpoint[] = [
           name: "DataOracle",
           chainId: 8453,
           trustScore: 78,
+          verdict: "trusted",
           image: null,
         },
       ],
@@ -676,6 +542,10 @@ const endpoints: Endpoint[] = [
       {
         field: "trustScore",
         description: "The agent's TrustAdd Score (0-100).",
+      },
+      {
+        field: "verdict",
+        description: 'High-level trust signal: "trusted", "neutral", "caution", or "unknown".',
       },
       {
         field: "chainId",
@@ -726,6 +596,340 @@ const endpoints: Endpoint[] = [
   },
 ];
 
+const paidEndpoints: Endpoint[] = [
+  {
+    method: "GET",
+    path: "/api/v1/trust/:address/exists",
+    gated: true,
+    description:
+      "Check whether a Trust Report exists for an agent address. Returns availability and pricing without consuming a report credit. Free probe — no x402 payment required.",
+    params: [
+      {
+        name: "address",
+        type: "string",
+        required: true,
+        description: "The agent's contract address (0x-prefixed).",
+      },
+    ],
+    exampleCurl: `curl "${BASE_URL}/api/v1/trust/0x1234...abcd/exists"`,
+    exampleResponse: JSON.stringify(
+      {
+        address: "0x1234...abcd",
+        exists: true,
+        reportAvailable: true,
+        price: "$0.01",
+      },
+      null,
+      2
+    ),
+    responseFields: [
+      {
+        field: "exists",
+        description: "Whether TrustAdd has indexed this agent address.",
+      },
+      {
+        field: "reportAvailable",
+        description: "Whether a full Trust Report can be retrieved for this address.",
+      },
+      {
+        field: "price",
+        description: "The cost to retrieve a full Trust Report for this address.",
+      },
+    ],
+  },
+  {
+    method: "GET",
+    path: "/api/v1/trust/:address",
+    gated: true,
+    description:
+      "Get the trust verdict and score for an agent address. Returns the verdict, TrustAdd Score, and report availability. Requires x402 micropayment (from $0.01). Returns HTTP 402 with payment details if no payment is provided.",
+    params: [
+      {
+        name: "address",
+        type: "string",
+        required: true,
+        description: "The agent's contract address (0x-prefixed).",
+      },
+    ],
+    exampleCurl: `curl "${BASE_URL}/api/v1/trust/0x1234...abcd"`,
+    exampleResponse: JSON.stringify(
+      {
+        address: "0x1234...abcd",
+        verdict: "trusted",
+        score: 82,
+        reportAvailable: true,
+        cachedUntil: "2026-04-13T00:00:00.000Z",
+      },
+      null,
+      2
+    ),
+    responseFields: [
+      {
+        field: "address",
+        description: "The queried agent contract address.",
+      },
+      {
+        field: "verdict",
+        description: 'Trust verdict: "trusted", "neutral", "caution", or "unknown".',
+      },
+      {
+        field: "score",
+        description: "The composite TrustAdd Score (0-100).",
+      },
+      {
+        field: "reportAvailable",
+        description: "Whether the full report endpoint is available for this address.",
+      },
+      {
+        field: "cachedUntil",
+        description: "Timestamp until which this response may be served from cache.",
+      },
+    ],
+  },
+  {
+    method: "GET",
+    path: "/api/v1/trust/:address/report",
+    gated: true,
+    description:
+      "Get the full Agent Trust Report for an address. Includes trust score breakdown (identity, history, capability, community, transparency), community signals, on-chain transaction history, spam flags, and a detailed verdict. Requires x402 micropayment (from $0.01). Returns HTTP 402 with payment details if no payment is provided.",
+    params: [
+      {
+        name: "address",
+        type: "string",
+        required: true,
+        description: "The agent's contract address (0x-prefixed).",
+      },
+    ],
+    exampleCurl: `curl "${BASE_URL}/api/v1/trust/0x1234...abcd/report"`,
+    exampleResponse: JSON.stringify(
+      {
+        address: "0x1234...abcd",
+        verdict: "trusted",
+        score: 82,
+        breakdown: {
+          total: 82,
+          identity: 22,
+          history: 18,
+          capability: 14,
+          community: 16,
+          transparency: 12,
+        },
+        qualityTier: "high",
+        spamFlags: [],
+        communitySignals: {
+          githubScore: 74,
+          farcasterEngagement: 12,
+          onChainFeedbackCount: 3,
+        },
+        transactionSummary: {
+          totalTransactions: 47,
+          uniquePayers: 31,
+          volumeUsdApprox: "312.00",
+        },
+        generatedAt: "2026-04-12T10:00:00.000Z",
+        cachedUntil: "2026-04-13T00:00:00.000Z",
+      },
+      null,
+      2
+    ),
+    responseFields: [
+      {
+        field: "verdict",
+        description: 'Trust verdict: "trusted", "neutral", "caution", or "unknown".',
+      },
+      {
+        field: "score",
+        description: "The composite TrustAdd Score (0-100).",
+      },
+      {
+        field: "breakdown",
+        description: "Category scores: identity (0-25), history (0-20), capability (0-15), community (0-20), transparency (0-20).",
+      },
+      {
+        field: "qualityTier",
+        description: 'Agent quality classification: "high", "medium", "low", or "minimal".',
+      },
+      {
+        field: "spamFlags",
+        description: "Array of spam or abuse signal strings identified for this agent.",
+      },
+      {
+        field: "communitySignals",
+        description: "Aggregated community reputation data including GitHub health score, Farcaster engagement, and on-chain feedback count.",
+      },
+      {
+        field: "transactionSummary",
+        description: "Summary of x402 payment activity: total transactions, unique payers, and approximate USD volume.",
+      },
+      {
+        field: "cachedUntil",
+        description: "Timestamp until which this report may be served from cache.",
+      },
+    ],
+  },
+  {
+    method: "GET",
+    path: "/api/agents/:id/history",
+    gated: true,
+    description:
+      "Get the complete on-chain event history for a specific agent. Available as part of the Agent Trust Report — access via /api/v1/trust/:address/report or request directly with x402 payment.",
+    params: [
+      {
+        name: "id",
+        type: "string",
+        required: true,
+        description: "The internal UUID of the agent.",
+      },
+    ],
+    exampleCurl: `curl "${BASE_URL}/api/agents/abc-123/history"`,
+    exampleResponse: JSON.stringify(
+      [
+        {
+          id: "evt-1",
+          agentId: "abc-123",
+          txHash: "0xdef...789",
+          blockNumber: 19500000,
+          eventType: "AgentRegistered",
+          rawData: {},
+          createdAt: "2024-01-15T10:30:00Z",
+        },
+        {
+          id: "evt-2",
+          agentId: "abc-123",
+          txHash: "0xghi...012",
+          blockNumber: 19600000,
+          eventType: "MetadataUpdated",
+          rawData: {},
+          createdAt: "2024-02-20T14:15:00Z",
+        },
+      ],
+      null,
+      2
+    ),
+    responseFields: [
+      {
+        field: "eventType",
+        description:
+          'The type of on-chain event: "AgentRegistered", "MetadataUpdated", "FeedbackPosted", "ReputationUpdated", "EndorsementAdded", or "IdentityUpdated".',
+      },
+      {
+        field: "txHash",
+        description: "The transaction hash for this event on its respective chain.",
+      },
+      {
+        field: "blockNumber",
+        description: "The block number when this event occurred on its respective chain.",
+      },
+      {
+        field: "rawData",
+        description:
+          "The raw event data from the blockchain, varies by event type.",
+      },
+    ],
+  },
+  {
+    method: "GET",
+    path: "/api/agents/:id/feedback",
+    gated: true,
+    description:
+      "Get the reputation feedback summary for a specific agent, including feedback counts, unique reviewers, and individual feedback events. Available as part of the Agent Trust Report.",
+    params: [
+      {
+        name: "id",
+        type: "string",
+        required: true,
+        description: "The internal UUID of the agent.",
+      },
+    ],
+    exampleCurl: `curl "${BASE_URL}/api/agents/abc-123/feedback"`,
+    exampleResponse: JSON.stringify(
+      {
+        feedbackCount: 3,
+        uniqueReviewers: 2,
+        firstFeedbackBlock: 19500000,
+        lastFeedbackBlock: 19700000,
+        events: [
+          {
+            id: "evt-10",
+            agentId: "abc-123",
+            txHash: "0xfeed...back",
+            blockNumber: 19700000,
+            eventType: "FeedbackPosted",
+            rawData: {
+              reviewer: "0xabcd...1234",
+              feedbackHash: "0x...",
+              feedbackURI: "ipfs://Qm...",
+            },
+            createdAt: "2024-03-01T09:00:00Z",
+          },
+        ],
+      },
+      null,
+      2
+    ),
+    responseFields: [
+      {
+        field: "feedbackCount",
+        description: "Total number of feedback/reputation events for this agent.",
+      },
+      {
+        field: "uniqueReviewers",
+        description: "Number of unique reviewer addresses who provided feedback.",
+      },
+      {
+        field: "firstFeedbackBlock",
+        description: "Block number of the earliest feedback event (null if none).",
+      },
+      {
+        field: "lastFeedbackBlock",
+        description: "Block number of the most recent feedback event (null if none).",
+      },
+      {
+        field: "events",
+        description: "Array of individual feedback/reputation event objects.",
+      },
+    ],
+  },
+  {
+    method: "GET",
+    path: "/api/agents/:id/trust-score",
+    gated: true,
+    description:
+      "Get the TrustAdd Score breakdown for a specific agent. The score is a composite 0-100 metric based on identity, history, capability, community, and transparency signals. Available as part of the Agent Trust Report.",
+    exampleCurl: `curl "${BASE_URL}/api/agents/{id}/trust-score"`,
+    exampleResponse: JSON.stringify(
+      {
+        score: 62,
+        breakdown: {
+          total: 62,
+          identity: 20,
+          history: 12,
+          capability: 10,
+          community: 10,
+          transparency: 10,
+        },
+        updatedAt: "2026-02-28T12:00:00.000Z",
+      },
+      null,
+      2
+    ),
+    responseFields: [
+      {
+        field: "score",
+        description: "The composite TrustAdd Score (0-100).",
+      },
+      {
+        field: "breakdown",
+        description: "Category scores: identity (0-25), history (0-20), capability (0-15), community (0-20), transparency (0-20).",
+      },
+      {
+        field: "updatedAt",
+        description: "When the score was last calculated.",
+      },
+    ],
+  },
+];
+
 function MethodBadge({ method }: { method: "GET" | "POST" }) {
   const styles =
     method === "GET"
@@ -750,6 +954,12 @@ function EndpointCard({ endpoint, index }: { endpoint: Endpoint; index: number }
           <code className="text-sm font-mono font-medium flex-1">
             {endpoint.path}
           </code>
+          {endpoint.gated && (
+            <span className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400 flex-shrink-0">
+              <Lock className="w-3 h-3" />
+              x402
+            </span>
+          )}
           <span className="text-sm text-muted-foreground hidden sm:block max-w-xs truncate">
             {endpoint.description}
           </span>
@@ -915,16 +1125,35 @@ export default function ApiDocs() {
       </section>
 
       <section className="mx-auto max-w-4xl px-4 pb-8">
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-2">
           <Zap className="w-4 h-4 text-primary" />
           <h2 className="text-lg font-semibold tracking-tight" data-testid="text-endpoints-heading">
-            Endpoints
+            Free Tier — Ecosystem Analytics
           </h2>
         </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          No authentication required. Agent discovery, ecosystem stats, and marketplace data are open to all.
+        </p>
 
-        <div className="space-y-3" data-testid="list-endpoints">
-          {endpoints.map((endpoint, i) => (
+        <div className="space-y-3 mb-10" data-testid="list-endpoints-free">
+          {freeEndpoints.map((endpoint, i) => (
             <EndpointCard key={endpoint.path} endpoint={endpoint} index={i} />
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 mb-2">
+          <Lock className="w-4 h-4 text-amber-500" />
+          <h2 className="text-lg font-semibold tracking-tight" data-testid="text-endpoints-paid-heading">
+            Paid Tier — Agent Trust Reports (x402)
+          </h2>
+        </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          Agent-specific trust intelligence is gated behind an x402 micropayment, from $0.01 per query. Endpoints return HTTP 402 with payment instructions when no valid payment is provided. Compatible with any x402-capable client.
+        </p>
+
+        <div className="space-y-3" data-testid="list-endpoints-paid">
+          {paidEndpoints.map((endpoint, i) => (
+            <EndpointCard key={endpoint.path} endpoint={endpoint} index={freeEndpoints.length + i} />
           ))}
         </div>
       </section>
@@ -938,11 +1167,15 @@ export default function ApiDocs() {
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li className="flex items-start gap-2">
               <span className="text-primary mt-0.5 flex-shrink-0">&#8226;</span>
-              <span>All endpoints return JSON. No authentication is required.</span>
+              <span>All endpoints return JSON. Free tier endpoints require no authentication.</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary mt-0.5 flex-shrink-0">&#8226;</span>
-              <span>Rate limited to 100 requests per minute per IP. Exceeding this returns a <code className="font-mono bg-muted px-1 rounded-md">429</code> status. Rate limit info is included in response headers.</span>
+              <span>Free tier is rate limited to 100 requests per minute per IP. <code className="font-mono bg-muted px-1 rounded-md">/api/agents</code> is additionally limited to 10 requests per minute with a max of 20 results per page. Exceeding limits returns a <code className="font-mono bg-muted px-1 rounded-md">429</code> status.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-primary mt-0.5 flex-shrink-0">&#8226;</span>
+              <span>x402-gated endpoints return HTTP 402 with a <code className="font-mono bg-muted px-1 rounded-md">X-Payment-Required</code> header describing the accepted payment methods and amount when no valid payment is attached.</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary mt-0.5 flex-shrink-0">&#8226;</span>

@@ -246,8 +246,7 @@ export default function Economy() {
   }>>({ queryKey: ["/api/economy/transactions/recent"] });
 
   const { data: topEarners } = useQuery<Array<{
-    agentId: string; agentName: string | null; agentSlug: string | null; chainId: number;
-    totalVolume: number; txCount: number; imageUrl: string | null;
+    rank: number; name: string; chainId: number;
   }>>({ queryKey: ["/api/economy/transactions/top-earners"] });
 
   const { data: volumeData } = useQuery<Array<{ date: string; volume: number; count: number }>>({
@@ -701,35 +700,25 @@ export default function Economy() {
                   <CardTitle className="text-lg flex items-center gap-2">
                     <TrendingUp className="w-4 h-4" />
                     Top Earning Agents
-                    <Badge variant="outline" className="text-[10px] ml-1">By USDC Volume</Badge>
+                    <Badge variant="outline" className="text-[10px] ml-1">By Activity</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-1">
-                    {topEarners.map((agent, idx) => (
-                      <Link key={agent.agentId} href={`/agent/${agent.agentSlug || agent.agentId}`}>
-                        <div
-                          className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer group"
-                          data-testid={`top-earner-${idx}`}
-                        >
-                          <span className="text-xs font-medium text-muted-foreground w-5 text-right">{idx + 1}</span>
-                          <Avatar className="w-7 h-7">
-                            {agent.imageUrl && <AvatarImage src={agent.imageUrl} alt={agent.agentName || ""} />}
-                            <AvatarFallback className="text-[10px]" style={{ backgroundColor: addressToColor(agent.agentId) }}>
-                              {getInitials(agent.agentName, agent.agentId)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <span className="text-sm font-medium truncate block">{agent.agentName || agent.agentId.slice(0, 8)}</span>
-                            <div className="flex items-center gap-1.5">
-                              <ChainBadge chainId={agent.chainId} size="xs" />
-                              <span className="text-[10px] text-muted-foreground">{agent.txCount} txns</span>
-                            </div>
+                    {topEarners.map((agent) => (
+                      <div
+                        key={agent.rank}
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg"
+                        data-testid={`top-earner-${agent.rank}`}
+                      >
+                        <span className="text-xs font-medium text-muted-foreground w-5 text-right">{agent.rank}</span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium truncate block">{agent.name}</span>
+                          <div className="flex items-center gap-1.5">
+                            <ChainBadge chainId={agent.chainId} size="xs" />
                           </div>
-                          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatUsd(agent.totalVolume)}</span>
-                          <ArrowRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
-                      </Link>
+                      </div>
                     ))}
                   </div>
                 </CardContent>

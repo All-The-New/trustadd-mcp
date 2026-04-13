@@ -210,9 +210,9 @@ export default function QualityPage() {
     queryKey: ["/api/quality/summary"],
   });
 
-  const { data: offenders, isLoading: offendersLoading } = useQuery<QualityOffenders>({
-    queryKey: ["/api/quality/offenders"],
-  });
+  // Per-agent quality analysis is now gated (x402). Disable this query to avoid 402 noise.
+  const offenders: QualityOffenders | undefined = undefined;
+  const offendersLoading = false;
 
   const pct = (n: number) =>
     data ? `${((n / data.totalAgents) * 100).toFixed(1)}%` : "";

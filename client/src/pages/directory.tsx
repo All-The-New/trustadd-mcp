@@ -1,9 +1,9 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { Agent } from "@shared/schema";
 import { getAllChains } from "@shared/chains";
 import { Layout } from "@/components/layout";
 import { AgentCard, AgentCardSkeleton } from "@/components/agent-card";
+import type { AgentWithVerdict } from "@/components/agent-card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -21,9 +21,9 @@ import { DIRECTORY } from "@/lib/content-zones";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 type FilterState = "all" | "has-metadata" | "x402-enabled" | "has-reputation" | "has-feedback";
-type SortState = "newest" | "oldest" | "trust-score" | "name";
+type SortState = "newest" | "oldest" | "name";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 20;
 
 const chains = getAllChains();
 
@@ -36,7 +36,6 @@ const FILTER_OPTIONS: { key: FilterState; label: string }[] = [
 ];
 
 const SORT_OPTIONS: { key: SortState; label: string }[] = [
-  { key: "trust-score", label: "Trust Score" },
   { key: "newest", label: "Newest" },
   { key: "oldest", label: "Oldest" },
   { key: "name", label: "Name" },
@@ -45,7 +44,7 @@ const SORT_OPTIONS: { key: SortState; label: string }[] = [
 export default function Directory() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterState>("all");
-  const [sort, setSort] = useState<SortState>("trust-score");
+  const [sort, setSort] = useState<SortState>("newest");
   const [chainFilter, setChainFilter] = useState<number | null>(null);
   const [page, setPage] = useState(0);
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -84,7 +83,7 @@ export default function Directory() {
     let count = 0;
     if (chainFilter !== null) count++;
     if (filter !== "all") count++;
-    if (sort !== "trust-score") count++;
+    if (sort !== "newest") count++;
     if (!qualityGate) count++;
     return count;
   }, [chainFilter, filter, sort, qualityGate]);
@@ -105,11 +104,11 @@ export default function Directory() {
         onRemove: () => handleFilterChange("all"),
       });
     }
-    if (sort !== "trust-score") {
+    if (sort !== "newest") {
       const opt = SORT_OPTIONS.find((o) => o.key === sort);
       chips.push({
         label: `Sort: ${opt?.label ?? sort}`,
-        onRemove: () => { setSort("trust-score"); setPage(0); },
+        onRemove: () => { setSort("newest"); setPage(0); },
       });
     }
     if (!qualityGate) {
@@ -130,16 +129,14 @@ export default function Directory() {
   if (chainFilter !== null) params.set("chainId", String(chainFilter));
   if (sort !== "newest") params.set("sort", sort);
   if (qualityGate) {
-    params.set("minTrustScore", "20");
     params.set("excludeSpam", "true");
   }
 
   const { data, isLoading } = useQuery<{
-    agents: Agent[];
+    agents: AgentWithVerdict[];
     total: number;
     limit: number;
     offset: number;
-    communityFeedback?: Record<string, { githubStars: number | null; githubHealthScore: number | null; farcasterFollowers: number | null }>;
   }>({
     queryKey: ["/api/agents", { limit: PAGE_SIZE, offset, search: debouncedSearch, filter, chainId: chainFilter, sort, qualityGate }],
     queryFn: () => fetch(`/api/agents?${params.toString()}`).then((r) => r.json()),
@@ -161,7 +158,7 @@ export default function Directory() {
   }>({
     queryKey: ["/api/stats/filters", qualityGate],
     queryFn: async () => {
-      const baseParams = qualityGate ? "minTrustScore=20&excludeSpam=true" : "";
+      const baseParams = qualityGate ? "excludeSpam=true" : "";
       const sep = baseParams ? "&" : "";
       const [all, hasMeta, x402, hasRep, hasFeedback] = await Promise.all([
         fetch(`/api/agents?limit=1${baseParams ? "&" + baseParams : ""}`).then((r) => r.json()),

@@ -40,8 +40,29 @@ interface AgentRow {
   erc8004Id: string;
   chainId: number;
   trustScore: number | null;
+  qualityTier: string | null;
+  spamFlags: number | null;
+  lifecycleStatus: string | null;
   imageUrl: string | null;
   primaryContractAddress: string | null;
+}
+
+type Verdict = "TRUSTED" | "CAUTION" | "UNTRUSTED";
+
+function computeVerdict(agent: AgentRow): Verdict | null {
+  const { trustScore, qualityTier, spamFlags, lifecycleStatus } = agent;
+  if (trustScore == null) return null;
+  if (lifecycleStatus === "spam" || lifecycleStatus === "archived") return "UNTRUSTED";
+  if (qualityTier === "spam" || qualityTier === "archived") return "UNTRUSTED";
+  if (trustScore < 30) return "UNTRUSTED";
+  if (
+    trustScore >= 60 &&
+    (qualityTier === "high" || qualityTier === "medium") &&
+    (spamFlags == null || spamFlags === 0)
+  ) {
+    return "TRUSTED";
+  }
+  return "CAUTION";
 }
 
 async function fetchAgent(idOrSlug: string): Promise<AgentRow | null> {
@@ -58,9 +79,10 @@ async function fetchAgent(idOrSlug: string): Promise<AgentRow | null> {
   try {
     // Try UUID first, then slug
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+    const cols = `id, name, slug, description, erc8004_id as "erc8004Id", chain_id as "chainId", trust_score as "trustScore", quality_tier as "qualityTier", spam_flags as "spamFlags", lifecycle_status as "lifecycleStatus", image_url as "imageUrl", primary_contract_address as "primaryContractAddress"`;
     const query = isUuid
-      ? `SELECT id, name, slug, description, erc8004_id as "erc8004Id", chain_id as "chainId", trust_score as "trustScore", image_url as "imageUrl", primary_contract_address as "primaryContractAddress" FROM agents WHERE id = $1 LIMIT 1`
-      : `SELECT id, name, slug, description, erc8004_id as "erc8004Id", chain_id as "chainId", trust_score as "trustScore", image_url as "imageUrl", primary_contract_address as "primaryContractAddress" FROM agents WHERE slug = $1 LIMIT 1`;
+      ? `SELECT ${cols} FROM agents WHERE id = $1 LIMIT 1`
+      : `SELECT ${cols} FROM agents WHERE slug = $1 LIMIT 1`;
 
     const result = await pool.query(query, [idOrSlug]);
     return result.rows[0] ?? null;
@@ -90,12 +112,10 @@ function injectAgentMeta(html: string, agent: AgentRow): string {
   const chainName = CHAIN_NAMES[agent.chainId] ?? "EVM";
   const agentName = agent.name ?? `Agent #${agent.erc8004Id}`;
   const title = escapeHtml(`${agentName} \u2014 Agent Profile | TrustAdd`);
-  const description = escapeHtml(
-    truncate(
-      agent.description ?? `AI agent #${agent.erc8004Id} on ${chainName}. View trust score, metadata, and on-chain history.`,
-      160,
-    ),
-  );
+  const verdict = computeVerdict(agent);
+  const verdictSuffix = verdict ? ` Verdict: ${verdict}.` : "";
+  const baseDesc = agent.description ?? `AI agent #${agent.erc8004Id} on ${chainName}. View trust score, metadata, and on-chain history.`;
+  const description = escapeHtml(truncate(baseDesc + verdictSuffix, 160));
   const canonicalSlug = agent.slug ?? agent.id;
   const canonicalUrl = `${BASE_URL}/agent/${canonicalSlug}`;
 
@@ -154,15 +174,6 @@ function injectAgentMeta(html: string, agent: AgentRow): string {
   };
   if (agent.primaryContractAddress) {
     jsonLd.identifier = agent.primaryContractAddress;
-  }
-  if (agent.trustScore != null) {
-    jsonLd.aggregateRating = {
-      "@type": "AggregateRating",
-      ratingValue: agent.trustScore,
-      bestRating: 100,
-      worstRating: 0,
-      ratingCount: 1,
-    };
   }
 
   // Inject canonical link + JSON-LD before </head>

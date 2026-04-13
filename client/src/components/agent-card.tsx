@@ -4,7 +4,15 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ChainBadge } from "@/components/chain-badge";
-import { Shield, CreditCard, Globe, Hash, Bot } from "lucide-react";
+import { Shield, AlertTriangle, ShieldOff, HelpCircle, CreditCard, Globe, Hash, Bot } from "lucide-react";
+
+type Verdict = "TRUSTED" | "CAUTION" | "UNTRUSTED" | "UNKNOWN";
+
+// The list API returns a synthetic `verdict` field instead of trustScore
+export type AgentWithVerdict = Agent & {
+  verdict?: Verdict;
+  reportAvailable?: boolean;
+};
 
 function addressToColor(address: string): string {
   const hash = address.slice(2, 8);
@@ -32,17 +40,32 @@ function getInitials(name: string | null, address: string): string {
   return address.slice(2, 4).toUpperCase();
 }
 
-function getTrustScoreColor(score: number): string {
-  if (score >= 70) return "text-emerald-600 dark:text-emerald-400";
-  if (score >= 40) return "text-amber-600 dark:text-amber-400";
-  return "text-red-500 dark:text-red-400";
-}
-
-function getTrustScoreBg(score: number): string {
-  if (score >= 70) return "bg-emerald-500/10 border-emerald-500/30";
-  if (score >= 40) return "bg-amber-500/10 border-amber-500/30";
-  return "bg-red-500/10 border-red-500/30";
-}
+const VERDICT_CONFIG: Record<Verdict, {
+  className: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  label: string;
+}> = {
+  TRUSTED: {
+    className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+    Icon: Shield,
+    label: "Trusted",
+  },
+  CAUTION: {
+    className: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+    Icon: AlertTriangle,
+    label: "Caution",
+  },
+  UNTRUSTED: {
+    className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+    Icon: ShieldOff,
+    label: "Untrusted",
+  },
+  UNKNOWN: {
+    className: "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400",
+    Icon: HelpCircle,
+    label: "Unknown",
+  },
+};
 
 function getProfileCompleteness(agent: Agent): number {
   const fields = [
@@ -56,7 +79,7 @@ function getProfileCompleteness(agent: Agent): number {
 }
 
 interface AgentCardProps {
-  agent: Agent;
+  agent: AgentWithVerdict;
 }
 
 function getEndpointCount(endpoints: unknown): number {
@@ -72,6 +95,9 @@ export function AgentCard({ agent }: AgentCardProps) {
   const initials = getInitials(agent.name, agent.primaryContractAddress);
   const endpointCount = getEndpointCount(agent.endpoints);
   const profilePct = getProfileCompleteness(agent);
+  const verdict = agent.verdict ?? "UNKNOWN";
+  const verdictCfg = VERDICT_CONFIG[verdict];
+  const VerdictIcon = verdictCfg.Icon;
 
   return (
     <Link href={`/agent/${agent.slug || agent.id}`}>
@@ -80,7 +106,7 @@ export function AgentCard({ agent }: AgentCardProps) {
         data-testid={`card-agent-${agent.id}`}
       >
         <div className="flex items-stretch gap-3.5">
-          {/* Left column: avatar top, trust score bottom */}
+          {/* Left column: avatar top, verdict badge bottom */}
           <div className="flex flex-col items-center justify-between flex-shrink-0">
             <Avatar className="h-16 w-16 ring-2 ring-border/50">
               {agent.imageUrl && (
@@ -93,15 +119,14 @@ export function AgentCard({ agent }: AgentCardProps) {
                 {initials}
               </AvatarFallback>
             </Avatar>
-            {agent.trustScore != null && (
-              <div
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-md border text-xs font-bold ${getTrustScoreBg(agent.trustScore)}`}
-                data-testid={`badge-trust-score-${agent.id}`}
-              >
-                <Shield className={`w-3.5 h-3.5 ${getTrustScoreColor(agent.trustScore)}`} fill="currentColor" stroke="none" />
-                <span className={getTrustScoreColor(agent.trustScore)}>{agent.trustScore}</span>
-              </div>
-            )}
+            <Badge
+              className={`flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold border-0 no-default-hover-elevate no-default-active-elevate ${verdictCfg.className}`}
+              data-testid={`badge-verdict-${agent.id}`}
+            >
+              <VerdictIcon className="w-3 h-3 shrink-0" />
+              <span className="sm:hidden">{verdictCfg.label.slice(0, 3)}</span>
+              <span className="hidden sm:inline">{verdictCfg.label}</span>
+            </Badge>
           </div>
 
           {/* Right column: name, description, badge row */}

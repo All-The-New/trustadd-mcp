@@ -1,10 +1,10 @@
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import type { Agent } from "@shared/schema";
 import { HOME, SEO as SEO_CONTENT } from "@/lib/content-zones";
 import { Layout } from "@/components/layout";
 import { SEO } from "@/components/seo";
 import { AgentCard, AgentCardSkeleton } from "@/components/agent-card";
+import type { AgentWithVerdict } from "@/components/agent-card";
 import { StatsBar } from "@/components/stats-bar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -25,9 +25,8 @@ const featureIcons = { Layers, Shield, Bot } as const;
 const pillarIcons = { Shield, Star, Eye } as const;
 
 type AgentsResponse = {
-  agents: Agent[];
+  agents: AgentWithVerdict[];
   total: number;
-  communityFeedback?: Record<string, { githubStars: number | null; githubHealthScore: number | null; farcasterFollowers: number | null }>;
 };
 
 export default function Landing() {
@@ -37,8 +36,8 @@ export default function Landing() {
   });
 
   const { data: topData, isLoading: topLoading } = useQuery<AgentsResponse>({
-    queryKey: ["/api/agents", { limit: 10, filter: "has-metadata", sort: "trust-score" }],
-    queryFn: () => fetch("/api/agents?limit=10&filter=has-metadata&sort=trust-score").then((r) => r.json()),
+    queryKey: ["/api/agents", { limit: 10, sort: "newest" }],
+    queryFn: () => fetch("/api/agents?limit=10&sort=newest").then((r) => r.json()),
   });
 
   const { data: stats, isLoading: statsLoading } = useQuery<{

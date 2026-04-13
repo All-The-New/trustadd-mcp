@@ -42,6 +42,7 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - **Database-first types**: All types flow from `shared/schema.ts` via Drizzle ORM + drizzle-zod
 - **Background services**: Trigger.dev scheduled tasks with per-chain sub-tasks, metadata tracking, and queue concurrency control
 - **Multi-chain**: 9 EVM chains share the same contract addresses; chain config in `shared/chains.ts`
+- **API tiering**: Free tier = ecosystem analytics + redacted agent directory (verdict badges, no scores). Paid tier (x402) = per-agent trust intelligence (scores, breakdowns, community signals, transactions). See `docs/api-tiering.md`
 - **ESM imports**: All relative imports use `.js` extensions for Vercel serverless compatibility
 
 ## Important Files
@@ -60,6 +61,7 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - `server/trust-report-compiler.ts` — Trust Data Product report compiler (verdict logic, address resolution, cache management)
 - `server/lib/x402-gate.ts` — x402 payment middleware for Trust Data Product (CDP facilitator on Base)
 - `docs/trust-product.md` — Trust Data Product specification (tiers, pricing, verdict logic, payment flow)
+- `docs/api-tiering.md` — API tiering architecture: free ecosystem analytics vs x402-gated trust intelligence
 - `docs/trust-api.yaml` — OpenAPI 3.1 spec for Trust API v1 endpoints
 - `script/sync-trigger-env.ts` — Env var sync script for Trigger.dev (manual run)
 - `server/lib/admin-auth.ts` — Cookie-based admin auth (HMAC tokens, IP whitelist, session middleware)

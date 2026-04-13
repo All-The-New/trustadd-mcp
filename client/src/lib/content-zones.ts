@@ -37,7 +37,7 @@ export const HOME = {
     {
       icon: "Bot" as const,
       title: "Human & Machine Readable",
-      desc: "Clear profiles anyone can understand, plus a free public REST API so other agents and apps can query trust programmatically.",
+      desc: "Clear profiles anyone can understand, plus a public REST API for ecosystem analytics. Agent Trust Reports available via x402 micropayment.",
     },
   ],
   pillars: {
@@ -69,12 +69,12 @@ export const HOME = {
     ],
   },
   api: {
-    title: "Public API",
-    desc: "Everything in TrustAdd is available via a simple REST API. Query agents, read trust scores, and integrate multi-protocol agent data into your own systems.",
+    title: "API & Trust Reports",
+    desc: "Ecosystem analytics are free via REST API — no auth required. Agent-specific trust intelligence is available through our x402-gated Trust Report API, from $0.01 per query.",
     cta: "View Documentation",
   },
   topTrusted: {
-    heading: "Top Trusted Agents",
+    heading: "Top Agents",
     viewAll: "View leaderboard",
     emptyState: "Trust scores are being calculated. Check back soon.",
   },
@@ -122,8 +122,8 @@ export const ABOUT = {
         desc: "We present data as-is. No endorsements, no rankings manipulation. The score is a formula applied equally to every agent.",
       },
       {
-        title: "Open & Free",
-        desc: "All data is accessible via our public REST API at no cost. No authentication required. Build on top of TrustAdd freely.",
+        title: "Open Ecosystem",
+        desc: "Ecosystem analytics are free and open — no auth required. Agent trust intelligence is available via x402 micropayment, from $0.01 per query.",
       },
       {
         title: "Discovery-First",
@@ -251,10 +251,10 @@ export const API_DOCS = {
   seo: {
     title: "API Documentation",
     description:
-      "Free public REST API for querying AI agent trust scores, identities, and on-chain events across protocols and EVM chains. No authentication required.",
+      "Public REST API for AI agent ecosystem analytics across 9 EVM chains. Free agent discovery, ecosystem stats, and marketplace data. Agent Trust Reports available via x402.",
   },
   intro:
-    "Access everything in TrustAdd programmatically. Query agents, read trust scores and on-chain history, and integrate multi-protocol agent data into your own applications. No authentication required.",
+    "Ecosystem analytics are free and open — no authentication required. Agent-specific trust intelligence (scores, breakdowns, community signals, transaction history) is available via our x402-gated Trust Report API.",
   usageNotes: {
     dataSource:
       "Agent data is sourced from 9 active EVM chains (Ethereum, Base, Polygon, Arbitrum, BNB Chain, Celo, Gnosis, Optimism, Avalanche) via multiple protocols including ERC-8004 and x402. Data freshness depends on indexer status. Use the chainId parameter to filter by chain.",

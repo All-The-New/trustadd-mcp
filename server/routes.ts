@@ -23,7 +23,61 @@ import {
   computeVerdict,
   type QuickCheckData,
   type FullReportData,
+  type Verdict,
 } from "./trust-report-compiler.js";
+
+// ─── API Tiering ─────────────────────────────────────────────────
+// Free tier: ecosystem analytics, agent discovery (redacted), verdict badges
+// Paid tier (x402): trust scores, breakdowns, community signals, transactions
+// See docs/api-tiering.md for the full classification.
+
+/** Strip trust-intelligence fields from an agent object for public (free) responses. */
+function redactAgentForPublic(agent: Record<string, unknown>): Record<string, unknown> {
+  const verdict = computeVerdict(
+    (agent.trustScore as number) ?? 0,
+    (agent.qualityTier as string) ?? null,
+    (agent.spamFlags as string[]) ?? null,
+    (agent.lifecycleStatus as string) ?? null,
+  );
+  const {
+    trustScore: _ts,
+    trustScoreBreakdown: _tsb,
+    trustScoreUpdatedAt: _tsu,
+    qualityTier: _qt,
+    spamFlags: _sf,
+    lifecycleStatus: _ls,
+    ...publicFields
+  } = agent;
+  return {
+    ...publicFields,
+    verdict,
+    reportAvailable: true,
+  };
+}
+
+// ─── Rate Limiting ───────────────────────────────────────────────
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(ip: string, windowMs: number, maxRequests: number): boolean {
+  const now = Date.now();
+  const bucket = rateLimitBuckets.get(ip);
+  if (!bucket || bucket.resetAt <= now) {
+    rateLimitBuckets.set(ip, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  bucket.count++;
+  return bucket.count <= maxRequests;
+}
+
+// Periodic cleanup of expired rate-limit buckets (every 5 min)
+setInterval(() => {
+  const now = Date.now();
+  const keys = Array.from(rateLimitBuckets.keys());
+  for (const ip of keys) {
+    const bucket = rateLimitBuckets.get(ip);
+    if (bucket && bucket.resetAt <= now) rateLimitBuckets.delete(ip);
+  }
+}, 300_000);
 
 // Lightweight in-memory TTL cache for expensive query results.
 // Serverless functions are ephemeral, so memory is naturally bounded.
@@ -105,27 +159,30 @@ export async function registerRoutes(
 
   app.get("/api/agents", async (req, res) => {
     try {
-      const limit = req.query.limit ? Math.min(Math.max(parseInt(req.query.limit as string, 10) || 20, 1), 200) : undefined;
+      // Rate limit: 10 requests per minute per IP
+      const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
+      if (!checkRateLimit(`agents-list:${clientIp}`, 60_000, 10)) {
+        res.set("Retry-After", "60");
+        return res.status(429).json({ message: "Rate limit exceeded. Max 10 requests per minute." });
+      }
+
+      const limit = req.query.limit ? Math.min(Math.max(parseInt(req.query.limit as string, 10) || 20, 1), 20) : undefined;
       const offset = req.query.offset ? Math.max(parseInt(req.query.offset as string, 10) || 0, 0) : undefined;
       const search = req.query.search as string | undefined;
       const filter = req.query.filter as "all" | "claimed" | "unclaimed" | "has-metadata" | "x402-enabled" | "has-reputation" | "has-feedback" | undefined;
       const chainId = parseChainId(req.query.chainId);
-      const sort = req.query.sort as "newest" | "oldest" | "trust-score" | "name" | undefined;
-      const minTrustScore = req.query.minTrustScore ? parseInt(req.query.minTrustScore as string, 10) : undefined;
+      // "trust-score" sort is no longer available on the free tier — fall back to "newest"
+      const rawSort = req.query.sort as string | undefined;
+      const sort = rawSort === "trust-score" ? "newest" as const : rawSort as "newest" | "oldest" | "name" | undefined;
       const excludeSpam = req.query.excludeSpam === "true" ? true : undefined;
-      const result = await storage.getAgents({ limit, offset, search, filter, chainId, sort, minTrustScore, excludeSpam });
+      const result = await storage.getAgents({ limit, offset, search, filter, chainId, sort, excludeSpam });
 
-      const agentIds = result.agents.map((a: { id: string }) => a.id);
-      const summaries = agentIds.length > 0
-        ? await storage.getCommunityFeedbackSummariesByAgentIds(agentIds)
-        : [];
-      const feedbackMap: Record<string, { githubStars: number | null; githubHealthScore: number | null; farcasterFollowers: number | null }> = {};
-      for (const s of summaries) {
-        feedbackMap[s.agentId] = { githubStars: s.githubStars, githubHealthScore: s.githubHealthScore, farcasterFollowers: s.farcasterFollowers };
-      }
+      // Redact trust fields from each agent in the list
+      const redactedAgents = result.agents.map((a: Record<string, unknown>) => redactAgentForPublic(a));
 
       res.set("Cache-Control", "public, s-maxage=10, stale-while-revalidate=30");
-      res.json({ ...result, communityFeedback: feedbackMap });
+      res.set("X-TrustAdd-Tier", "free");
+      res.json({ ...result, agents: redactedAgents });
     } catch (err) {
       logger.error("Error fetching agents", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch agents" });
@@ -139,21 +196,29 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Agent not found" });
       }
       res.set("Cache-Control", "public, s-maxage=10, stale-while-revalidate=30");
-      res.json(agent);
+      res.set("X-TrustAdd-Tier", "free");
+      res.json(redactAgentForPublic(agent as unknown as Record<string, unknown>));
     } catch (err) {
       logger.error("Error fetching agent", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch agent" });
     }
   });
 
+  // Gated: per-agent on-chain history is paid intelligence
   app.get("/api/agents/:id/history", async (req, res) => {
     try {
       const agent = await storage.getAgent(req.params.id);
       if (!agent) {
         return res.status(404).json({ message: "Agent not found" });
       }
-      const events = await storage.getAgentEvents(agent.id);
-      res.json(events);
+      res.set("X-TrustAdd-Tier", "gated");
+      res.status(402).json({
+        message: "Agent on-chain history is available in the Full Trust Report ($0.05 USDC via x402).",
+        endpoint: `/api/v1/trust/${agent.primaryContractAddress}/report`,
+        fullReportPrice: "$0.05",
+        paymentNetwork: "eip155:8453",
+        paymentToken: "USDC",
+      });
     } catch (err) {
       logger.error("Error fetching agent history", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch agent history" });
@@ -652,85 +717,55 @@ export async function registerRoutes(
     }
   });
 
+  // Gated: per-agent community feedback is paid intelligence (available in Full Report)
   app.get("/api/agents/:id/community-feedback", async (req, res) => {
     try {
       const agent = await storage.getAgent(req.params.id);
       if (!agent) return res.status(404).json({ message: "Agent not found" });
-      const id = agent.id;
-      const summary = await storage.getCommunityFeedbackSummary(id);
-      const sources = await storage.getCommunityFeedbackSources(id);
 
-      let github = null;
-      const githubSource = sources.find((s) => s.platform === "github");
-      if (githubSource) {
-        const items = await storage.getCommunityFeedbackItems(id, "github", undefined, 20);
-        github = { source: githubSource, items };
-      }
-
-      let farcaster = null;
-      const farcasterSource = sources.find((s) => s.platform === "farcaster");
-      if (farcasterSource) {
-        const items = await storage.getCommunityFeedbackItems(id, "farcaster", undefined, 30);
-        farcaster = { source: farcasterSource, items };
-      }
-
-      res.json({ summary: summary || null, github, farcaster, twitter: null });
+      // Return a teaser with source availability, but no detail
+      const summary = await storage.getCommunityFeedbackSummary(agent.id);
+      res.set("X-TrustAdd-Tier", "gated");
+      res.status(402).json({
+        message: "Community feedback details are available in the Full Trust Report ($0.05 USDC via x402).",
+        endpoint: `/api/v1/trust/${agent.primaryContractAddress}/report`,
+        preview: {
+          totalSources: summary?.totalSources ?? 0,
+          hasGithub: (summary?.githubStars ?? 0) > 0 || (summary?.githubHealthScore ?? 0) > 0,
+          hasFarcaster: (summary?.farcasterFollowers ?? 0) > 0,
+        },
+        quickCheckPrice: "$0.01",
+        fullReportPrice: "$0.05",
+        paymentNetwork: "eip155:8453",
+        paymentToken: "USDC",
+      });
     } catch (err) {
       res.status(500).json({ error: "Failed to get community feedback" });
     }
   });
 
   app.get("/api/agents/:id/community-feedback/github", async (req, res) => {
-    try {
-      const agent = await storage.getAgent(req.params.id);
-      if (!agent) return res.status(404).json({ message: "Agent not found" });
-      const id = agent.id;
-      const sources = await storage.getCommunityFeedbackSources(id, "github");
-      if (sources.length === 0) {
-        return res.json({ source: null, repoStats: null, issues: [], healthScore: null });
-      }
-      const source = sources[0];
-      const items = await storage.getCommunityFeedbackItems(id, "github", undefined, 20);
-      const repoStats = items.find((i) => i.itemType === "repo_stats");
-      const issues = items.filter((i) => i.itemType === "issue");
-      const summary = await storage.getCommunityFeedbackSummary(id);
-
-      res.json({
-        source,
-        repoStats: repoStats || null,
-        issues,
-        healthScore: summary?.githubHealthScore ?? null,
-        summary: summary || null,
-      });
-    } catch (err) {
-      res.status(500).json({ error: "Failed to get GitHub feedback" });
-    }
+    const agent = await storage.getAgent(req.params.id);
+    if (!agent) return res.status(404).json({ message: "Agent not found" });
+    res.set("X-TrustAdd-Tier", "gated");
+    res.status(402).json({
+      message: "GitHub signals are available in the Full Trust Report ($0.05 USDC via x402).",
+      endpoint: `/api/v1/trust/${agent.primaryContractAddress}/report`,
+      fullReportPrice: "$0.05",
+      paymentNetwork: "eip155:8453",
+    });
   });
 
   app.get("/api/agents/:id/community-feedback/farcaster", async (req, res) => {
-    try {
-      const agent = await storage.getAgent(req.params.id);
-      if (!agent) return res.status(404).json({ message: "Agent not found" });
-      const id = agent.id;
-      const sources = await storage.getCommunityFeedbackSources(id, "farcaster");
-      if (sources.length === 0) {
-        return res.json({ source: null, profile: null, casts: [], summary: null });
-      }
-      const source = sources[0];
-      const items = await storage.getCommunityFeedbackItems(id, "farcaster", undefined, 30);
-      const profile = items.find((i) => i.itemType === "profile_snapshot");
-      const casts = items.filter((i) => i.itemType === "cast");
-      const summary = await storage.getCommunityFeedbackSummary(id);
-
-      res.json({
-        source,
-        profile: profile || null,
-        casts,
-        summary: summary || null,
-      });
-    } catch (err) {
-      res.status(500).json({ error: "Failed to get Farcaster feedback" });
-    }
+    const agent = await storage.getAgent(req.params.id);
+    if (!agent) return res.status(404).json({ message: "Agent not found" });
+    res.set("X-TrustAdd-Tier", "gated");
+    res.status(402).json({
+      message: "Farcaster signals are available in the Full Trust Report ($0.05 USDC via x402).",
+      endpoint: `/api/v1/trust/${agent.primaryContractAddress}/report`,
+      fullReportPrice: "$0.05",
+      paymentNetwork: "eip155:8453",
+    });
   });
 
   app.get("/api/community-feedback/stats", async (_req, res) => {
@@ -742,12 +777,23 @@ export async function registerRoutes(
     }
   });
 
+  // Free tier: community leaderboard shows names and verdict only, no detailed metrics
   app.get("/api/community-feedback/leaderboard", async (req, res) => {
     try {
-      const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 20);
       const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
       const summaries = await storage.getAgentsWithCommunityFeedback(limit, offset);
-      res.json({ leaderboard: summaries });
+      // Redact: show only name, chain, verdict — no community metrics
+      const redacted = (summaries as any[]).map((entry: any) => ({
+        agentId: entry.agentId,
+        agentName: entry.agentName ?? entry.name ?? null,
+        agentSlug: entry.agentSlug ?? entry.slug ?? null,
+        chainId: entry.chainId,
+        imageUrl: entry.imageUrl ?? null,
+        hasCommunitySignals: true,
+      }));
+      res.set("X-TrustAdd-Tier", "free");
+      res.json({ leaderboard: redacted });
     } catch (err) {
       res.status(500).json({ error: "Failed to get leaderboard" });
     }
@@ -766,23 +812,27 @@ export async function registerRoutes(
     });
   });
 
+  // Free tier: verdict only. Full score/breakdown available via x402 trust report.
   app.get("/api/agents/:id/trust-score", async (req, res) => {
     try {
       const agent = await storage.getAgent(req.params.id);
       if (!agent) return res.status(404).json({ message: "Agent not found" });
 
-      if (agent.trustScore === null) {
-        const breakdown = await recalculateScore(agent.id);
-        if (breakdown) {
-          return res.json({ score: breakdown.total, breakdown, updatedAt: new Date().toISOString() });
-        }
-        return res.json({ score: null, breakdown: null, updatedAt: null });
-      }
+      const verdict = computeVerdict(
+        agent.trustScore ?? 0,
+        agent.qualityTier ?? null,
+        agent.spamFlags ?? null,
+        agent.lifecycleStatus ?? null,
+      );
 
+      res.set("X-TrustAdd-Tier", "free");
       res.json({
-        score: agent.trustScore,
-        breakdown: agent.trustScoreBreakdown,
-        updatedAt: agent.trustScoreUpdatedAt,
+        verdict,
+        updatedAt: agent.trustScoreUpdatedAt ?? null,
+        reportAvailable: true,
+        quickCheckPrice: "$0.01",
+        fullReportPrice: "$0.05",
+        message: "Full trust score and breakdown available via x402 Trust Report. See /api/v1/trust/:address",
       });
     } catch (err) {
       logger.error("Error fetching trust score", { error: (err as Error).message });
@@ -790,12 +840,31 @@ export async function registerRoutes(
     }
   });
 
+  // Free tier: leaderboard shows names + verdicts only, no numeric scores
   app.get("/api/trust-scores/top", async (req, res) => {
     try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+      const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string, 10), 20) : 20;
       const chainId = parseChainId(req.query.chain);
       const leaderboard = await storage.getTrustScoreLeaderboard(limit, chainId);
-      res.json(leaderboard);
+      // Redact: strip numeric scores, show verdict only
+      const redacted = (leaderboard as any[]).map((entry: any) => {
+        const verdict = computeVerdict(
+          entry.trustScore ?? 0,
+          entry.qualityTier ?? null,
+          entry.spamFlags ?? null,
+          entry.lifecycleStatus ?? null,
+        );
+        return {
+          id: entry.id,
+          name: entry.name,
+          slug: entry.slug,
+          chainId: entry.chainId,
+          imageUrl: entry.imageUrl,
+          verdict,
+        };
+      });
+      res.set("X-TrustAdd-Tier", "free");
+      res.json(redacted);
     } catch (err) {
       logger.error("Error fetching trust score leaderboard", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch leaderboard" });
@@ -813,14 +882,15 @@ export async function registerRoutes(
     }
   });
 
+  // Free tier: aggregate score distribution and chain stats (no per-agent scores)
   app.get("/api/analytics/trust-scores", async (req, res) => {
     try {
-      const [distribution, byChain, top] = await Promise.all([
+      const [distribution, byChain] = await Promise.all([
         storage.getTrustScoreDistribution(),
         storage.getTrustScoreStatsByChain(),
-        storage.getTrustScoreLeaderboard(20),
       ]);
-      res.json({ distribution, byChain, topAgents: top });
+      res.set("X-TrustAdd-Tier", "free");
+      res.json({ distribution, byChain });
     } catch (err) {
       logger.error("Error fetching trust score analytics", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch trust score analytics" });
@@ -879,14 +949,15 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/economy/payment-addresses", async (_req, res) => {
-    try {
-      const addresses = await storage.getAgentsWithPaymentAddresses();
-      res.json(addresses);
-    } catch (err) {
-      logger.error("Error fetching payment addresses", { error: (err as Error).message });
-      res.status(500).json({ message: "Failed to fetch payment addresses" });
-    }
+  // Gated: per-agent payment addresses are part of the paid trust intelligence
+  app.get("/api/economy/payment-addresses", (_req, res) => {
+    res.set("X-TrustAdd-Tier", "gated");
+    res.status(402).json({
+      message: "Per-agent payment address data is available in the Full Trust Report ($0.05 USDC via x402).",
+      fullReportPrice: "$0.05",
+      paymentNetwork: "eip155:8453",
+      paymentToken: "USDC",
+    });
   });
 
   app.get("/api/economy/transactions/stats", async (_req, res) => {
@@ -921,25 +992,37 @@ export async function registerRoutes(
     }
   });
 
+  // Free tier: top earners with agent name + chain only, no IDs/addresses/scores
   app.get("/api/economy/transactions/top-earners", async (req, res) => {
     try {
-      const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+      const limit = Math.min(parseInt(req.query.limit as string) || 20, 20);
       const topEarners = await storage.getTopEarningAgents(limit);
-      res.json(topEarners);
+      const redacted = (topEarners as any[]).map((entry: any, idx: number) => ({
+        rank: idx + 1,
+        name: entry.agentName ?? entry.name ?? "Unknown Agent",
+        chainId: entry.chainId,
+      }));
+      res.set("X-TrustAdd-Tier", "free");
+      res.json(redacted);
     } catch (err) {
       logger.error("Error fetching top earners", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch top earners" });
     }
   });
 
+  // Gated: per-agent transaction history is paid intelligence
   app.get("/api/agents/:id/transactions", async (req, res) => {
     try {
       const agent = await storage.getAgent(req.params.id);
       if (!agent) return res.status(404).json({ message: "Agent not found" });
-      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
-      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
-      const transactions = await storage.getTransactions({ agentId: agent.id, limit, offset });
-      res.json(transactions);
+      res.set("X-TrustAdd-Tier", "gated");
+      res.status(402).json({
+        message: "Agent transaction history is available in the Full Trust Report ($0.05 USDC via x402).",
+        endpoint: `/api/v1/trust/${agent.primaryContractAddress}/report`,
+        fullReportPrice: "$0.05",
+        paymentNetwork: "eip155:8453",
+        paymentToken: "USDC",
+      });
     } catch (err) {
       logger.error("Error fetching agent transactions", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch agent transactions" });
@@ -950,8 +1033,14 @@ export async function registerRoutes(
     try {
       const agent = await storage.getAgent(req.params.id);
       if (!agent) return res.status(404).json({ message: "Agent not found" });
-      const stats = await storage.getAgentTransactionStats(agent.id);
-      res.json(stats);
+      res.set("X-TrustAdd-Tier", "gated");
+      res.status(402).json({
+        message: "Agent transaction stats are available in the Full Trust Report ($0.05 USDC via x402).",
+        endpoint: `/api/v1/trust/${agent.primaryContractAddress}/report`,
+        fullReportPrice: "$0.05",
+        paymentNetwork: "eip155:8453",
+        paymentToken: "USDC",
+      });
     } catch (err) {
       logger.error("Error fetching agent transaction stats", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch agent transaction stats" });
@@ -990,14 +1079,15 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/quality/offenders", async (_req, res) => {
-    try {
-      const data = await storage.getQualityOffenders();
-      res.json(data);
-    } catch (err) {
-      logger.error("Error fetching quality offenders", { error: (err as Error).message });
-      res.status(500).json({ message: "Failed to fetch quality offenders" });
-    }
+  // Removed: per-agent quality offender data is gated (exposes spam flags per agent)
+  app.get("/api/quality/offenders", (_req, res) => {
+    res.set("X-TrustAdd-Tier", "gated");
+    res.status(402).json({
+      message: "Per-agent quality analysis is available via the Trust Report API.",
+      quickCheckPrice: "$0.01",
+      fullReportPrice: "$0.05",
+      paymentNetwork: "eip155:8453",
+    });
   });
 
   app.post("/api/admin/community-feedback/discover", requireAdmin(), async (req, res) => {
@@ -1221,15 +1311,12 @@ export async function registerRoutes(
           LIMIT 50
         `);
         return (result.rows as any[]).map(r => ({
-          payTo: r.pay_to,
           serviceName: r.service_name,
           category: r.category,
           priceUsd: r.price_usd != null ? Number(r.price_usd) : null,
-          agentId: r.agent_id,
           agentName: r.agent_name,
           agentSlug: r.agent_slug,
           chainId: Number(r.chain_id),
-          trustScore: r.trust_score != null ? Number(r.trust_score) : null,
           imageUrl: r.image_url,
           matchType: r.match_type,
         }));
