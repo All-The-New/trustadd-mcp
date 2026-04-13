@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const BASE_URL = "https://trustadd.com";
-const DEFAULT_TITLE = "TrustAdd \u2014 Trust Ratings for AI Agents";
+const DEFAULT_TITLE = "TrustAdd \u2014 The Trust Oracle for the Agent Economy";
 const DEFAULT_DESC =
-  "TrustAdd is a public, neutral trust rating platform for AI agents across protocols and EVM chains. Discover, verify, and compare agents with the TrustAdd Score.";
+  "TrustAdd is the trust oracle for AI agents. We index identity, payments, and reputation across 9 EVM chains into queryable trust verdicts \u2014 from $0.01 per query via x402.";
 
 // Cache the HTML template in module scope (warm serverless instances reuse it)
 let htmlTemplate: string | null = null;
@@ -114,7 +114,7 @@ function injectAgentMeta(html: string, agent: AgentRow): string {
   const title = escapeHtml(`${agentName} \u2014 Agent Profile | TrustAdd`);
   const verdict = computeVerdict(agent);
   const verdictSuffix = verdict !== "UNKNOWN" ? ` Verdict: ${verdict}.` : "";
-  const baseDesc = agent.description ?? `AI agent #${agent.erc8004Id} on ${chainName}. View trust score, metadata, and on-chain history.`;
+  const baseDesc = agent.description ?? `AI agent #${agent.erc8004Id} on ${chainName}. Trust verdict, score breakdown, and on-chain history from TrustAdd.`;
   const description = escapeHtml(truncate(baseDesc + verdictSuffix, 160));
   const canonicalSlug = agent.slug ?? agent.id;
   const rawCanonicalUrl = `${BASE_URL}/agent/${canonicalSlug}`;
@@ -168,7 +168,7 @@ function injectAgentMeta(html: string, agent: AgentRow): string {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     name: agentName,
-    description: agent.description ?? `An AI agent on ${chainName} tracked by TrustAdd.`,
+    description: agent.description ?? `An AI agent on ${chainName} indexed by the TrustAdd oracle.`,
     url: rawCanonicalUrl,
     applicationCategory: "AI Agent",
     operatingSystem: chainName,
