@@ -388,5 +388,52 @@ export async function evaluateAlerts(): Promise<Alert[]> {
     // non-critical — tx indexer may not have run yet
   }
 
+  // Pipeline health circuit breaker checks
+  try {
+    const { getAllPipelineHealth, STALENESS_SLAS } = await import("./pipeline-health.js");
+    const healthStatuses = await getAllPipelineHealth();
+    for (const h of healthStatuses) {
+      if (h.circuitState === "open") {
+        alerts.push({
+          id: `circuit_open_${h.taskId}`,
+          severity: "critical",
+          chainId: null,
+          title: "Circuit Breaker Open",
+          message: `${h.taskName} has failed ${h.consecutiveFailures} consecutive times. Last error: ${(h.lastError ?? "unknown").slice(0, 200)}`,
+          firstSeen: h.openedAt ?? now,
+          lastSeen: now,
+        });
+      } else if (h.lastSuccessAt) {
+        const sla = STALENESS_SLAS[h.taskId];
+        if (sla) {
+          const ageMinutes = (now.getTime() - h.lastSuccessAt.getTime()) / (60 * 1000);
+          if (ageMinutes > sla.criticalMinutes) {
+            alerts.push({
+              id: `stale_critical_${h.taskId}`,
+              severity: "critical",
+              chainId: null,
+              title: `${h.taskName} Critically Stale`,
+              message: `Last successful run was ${Math.round(ageMinutes / 60)}h ago (SLA: ${Math.round(sla.criticalMinutes / 60)}h)`,
+              firstSeen: h.lastSuccessAt,
+              lastSeen: now,
+            });
+          } else if (ageMinutes > sla.warningMinutes) {
+            alerts.push({
+              id: `stale_warning_${h.taskId}`,
+              severity: "warning",
+              chainId: null,
+              title: `${h.taskName} Stale`,
+              message: `Last successful run was ${Math.round(ageMinutes / 60)}h ago (SLA: ${Math.round(sla.warningMinutes / 60)}h)`,
+              firstSeen: h.lastSuccessAt,
+              lastSeen: now,
+            });
+          }
+        }
+      }
+    }
+  } catch {
+    // pipeline_health table may not exist yet
+  }
+
   return alerts;
 }

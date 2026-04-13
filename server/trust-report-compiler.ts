@@ -9,6 +9,7 @@ import {
 } from "../shared/schema.js";
 import { CHAIN_CONFIGS } from "../shared/chains.js";
 import { type TrustScoreBreakdown, calculateTrustScore } from "./trust-score.js";
+import { computeConfidence } from "./trust-confidence.js";
 import { storage } from "./storage.js";
 import { db } from "./db.js";
 import { eq, sql, lt, and } from "drizzle-orm";
@@ -57,6 +58,16 @@ export interface FullReportData {
     flags: string[];
     lifecycleStatus: string;
     updatedAt: string | null;
+    signalHash: string | null;
+    methodologyVersion: number;
+    confidence: {
+      level: string;
+      score: number;
+      sourcesActive: number;
+      sourcesTotal: number;
+      missing: string[];
+      flags: string[];
+    };
   };
   onChain: {
     firstSeenAt: string | null;
@@ -92,9 +103,15 @@ export interface FullReportData {
       community: string | null;
     };
   };
+  provenance: {
+    signalHash: string | null;
+    methodologyVersion: number;
+    scoredAt: string | null;
+    disclaimer: string;
+  };
 }
 
-const REPORT_VERSION = 1;
+const REPORT_VERSION = 2;
 const REPORT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 // --- Verdict Logic ---
@@ -283,6 +300,7 @@ export function compileFullReport(
     }
   }
 
+  const hasEndpoints = endpointList.length > 0;
   const latestProbeAt = probes.length > 0 ? probes[0].probedAt.toISOString() : null;
 
   return {
@@ -306,6 +324,18 @@ export function compileFullReport(
       flags: agent.spamFlags ?? [],
       lifecycleStatus: agent.lifecycleStatus ?? "active",
       updatedAt: agent.trustScoreUpdatedAt?.toISOString() ?? null,
+      signalHash: agent.trustSignalHash ?? null,
+      methodologyVersion: agent.trustMethodologyVersion ?? 1,
+      confidence: computeConfidence({
+        hasIdentity: !!(agent.name && agent.name.trim().length > 0),
+        hasProbes: probes.length > 0,
+        hasTransactions: txStats.count > 0,
+        hasGithub: (feedback?.githubHealthScore ?? 0) > 0,
+        hasFarcaster: (feedback?.farcasterScore ?? 0) > 0,
+      }, {
+        x402ActiveButNoTransactions: agent.x402Support === true && txStats.count === 0,
+        endpointsDeclaredButAllFail: !!hasEndpoints && probes.length > 0 && probes.every(p => p.probeStatus !== "success"),
+      }),
     },
     onChain: {
       firstSeenAt: agent.createdAt.toISOString(),
@@ -340,6 +370,12 @@ export function compileFullReport(
         transactions: txStats.lastTxAt,
         community: feedback?.lastUpdatedAt?.toISOString() ?? null,
       },
+    },
+    provenance: {
+      signalHash: agent.trustSignalHash ?? null,
+      methodologyVersion: agent.trustMethodologyVersion ?? 1,
+      scoredAt: agent.trustScoreUpdatedAt?.toISOString() ?? null,
+      disclaimer: "TrustAdd scores reflect available evidence as of the assessment timestamp. They are not guarantees of safety. Verify independently for high-value decisions.",
     },
   };
 }

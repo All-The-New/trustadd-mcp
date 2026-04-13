@@ -26,6 +26,7 @@ import {
   type Verdict,
 } from "./trust-report-compiler.js";
 import { getMethodology } from "./trust-methodology.js";
+import { getAllPipelineHealth } from "./pipeline-health.js";
 
 // ─── API Tiering ─────────────────────────────────────────────────
 // Free tier: ecosystem analytics, agent discovery (redacted), verdict badges
@@ -1361,6 +1362,26 @@ export async function registerRoutes(
   // Free endpoint — methodology description for the trust scoring rubric
   app.get("/api/v1/trust/methodology", (_req, res) => {
     res.json(getMethodology());
+  });
+
+  // Free endpoint — pipeline health for circuit breaker status
+  app.get("/api/v1/trust/pipeline-health", async (_req, res) => {
+    try {
+      const health = await getAllPipelineHealth();
+      const hasOpen = health.some(h => h.circuitState === "open");
+      res.json({
+        status: hasOpen ? "degraded" : "healthy",
+        pipelines: health.map(h => ({
+          taskId: h.taskId,
+          name: h.taskName,
+          lastSuccessAt: h.lastSuccessAt?.toISOString() ?? null,
+          consecutiveFailures: h.consecutiveFailures,
+          circuitState: h.circuitState,
+        })),
+      });
+    } catch (err) {
+      res.json({ status: "unknown", pipelines: [] });
+    }
   });
 
   // Free endpoint — registered before the x402 gate. The gate's route regex only

@@ -59,12 +59,12 @@ export async function recordFailure(taskId: string, taskName: string, error: str
   `);
 }
 
-export async function getAllPipelineHealth(): Promise<unknown[]> {
+export async function getAllPipelineHealth(): Promise<import("../shared/schema.js").PipelineHealth[]> {
   const { db } = await import("./db.js");
-  const { sql } = await import("drizzle-orm");
+  const { pipelineHealth } = await import("../shared/schema.js");
 
-  const result = await db.execute(sql`SELECT * FROM pipeline_health ORDER BY task_id`);
-  return result.rows as unknown[];
+  const result = await db.select().from(pipelineHealth).orderBy(pipelineHealth.taskId);
+  return result;
 }
 
 export async function hasOpenCircuit(): Promise<boolean> {
