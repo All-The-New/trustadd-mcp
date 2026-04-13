@@ -193,11 +193,12 @@ export default function AdminStatusDetails() {
               </div>
             </div>
 
-            {/* Chain Status Cards */}
+            {/* Chain Status Cards (live status + 24h metrics combined) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {chains.map((chain: any) => {
                 const minutesSinceUpdate = chain.updatedAt ? (Date.now() - new Date(chain.updatedAt).getTime()) / 60_000 : Infinity;
                 const isActive = minutesSinceUpdate < 10;
+                const m = perChainTotals.find((c) => c.chainId === chain.chainId);
                 return (
                   <Card key={chain.chainId}>
                     <CardContent className="p-4">
@@ -210,7 +211,7 @@ export default function AdminStatusDetails() {
                           {isActive ? (chain.lastError ? "Degraded" : "Active") : "Stale"}
                         </Badge>
                       </div>
-                      <div className="space-y-2 text-sm">
+                      <div className="space-y-1.5 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Last Block</span>
                           <span className="font-mono">{chain.lastBlock?.toLocaleString()}</span>
@@ -226,6 +227,24 @@ export default function AdminStatusDetails() {
                           <span className="text-muted-foreground">Updated</span>
                           <span>{timeAgo(chain.updatedAt)}</span>
                         </div>
+                        {m && (
+                          <>
+                            <div className="border-t my-2" />
+                            <p className="text-[10px] text-muted-foreground uppercase font-medium">24h Metrics</p>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">Blocks indexed</span>
+                              <span className="font-medium">{fmtNumber(m.blocks)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">Agents found</span>
+                              <span className="font-medium">{m.agents}</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">RPC calls</span>
+                              <span className="font-medium">{fmtNumber(m.rpcReqs)}{m.rpcErrs > 0 && <span className="text-amber-600"> / {m.rpcErrs} err</span>}</span>
+                            </div>
+                          </>
+                        )}
                         {chain.lastError && (
                           <div className="mt-2 p-2 rounded bg-red-500/5 border border-red-500/20">
                             <p className="text-xs text-red-600 break-words line-clamp-2">{chain.lastError}</p>
@@ -237,25 +256,6 @@ export default function AdminStatusDetails() {
                 );
               })}
             </div>
-
-            {/* Per-Chain 24h Strip */}
-            {perChainTotals.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                {perChainTotals.map((c) => (
-                  <Card key={c.chainId}>
-                    <CardContent className="p-3">
-                      <ChainBadge chainId={c.chainId} size="sm" />
-                      <div className="space-y-1 text-xs mt-2">
-                        <div className="flex justify-between"><span className="text-muted-foreground">Blocks</span><span className="font-medium">{fmtNumber(c.blocks)}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Cycles</span><span><span className="text-green-600">{c.ok}</span>{c.fail > 0 && <span className="text-red-600"> / {c.fail}</span>}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Agents</span><span>{c.agents}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">RPC</span><span>{fmtNumber(c.rpcReqs)}{c.rpcErrs > 0 && <span className="text-amber-600"> / {c.rpcErrs}</span>}</span></div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
 
             {/* Charts */}
             <div className="grid md:grid-cols-2 gap-6">
