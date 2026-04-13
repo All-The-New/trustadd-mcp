@@ -31,17 +31,24 @@ import {
 // Paid tier (x402): trust scores, breakdowns, community signals, transactions
 // See docs/api-tiering.md for the full classification.
 
+/** Null-safe wrapper around computeVerdict — returns UNKNOWN for unscored agents. */
+function verdictFor(
+  score: number | null,
+  tier: string | null,
+  flags: string[] | null,
+  status: string | null,
+): Verdict {
+  return score == null ? "UNKNOWN" : computeVerdict(score, tier, flags, status);
+}
+
 /** Strip trust-intelligence fields from an agent object for public (free) responses. */
 function redactAgentForPublic(agent: Record<string, unknown>): Record<string, unknown> {
-  const rawScore = agent.trustScore as number | null;
-  const verdict: Verdict = rawScore == null
-    ? "UNKNOWN"
-    : computeVerdict(
-        rawScore,
-        (agent.qualityTier as string) ?? null,
-        (agent.spamFlags as string[]) ?? null,
-        (agent.lifecycleStatus as string) ?? null,
-      );
+  const verdict = verdictFor(
+    agent.trustScore as number | null,
+    (agent.qualityTier as string) ?? null,
+    (agent.spamFlags as string[]) ?? null,
+    (agent.lifecycleStatus as string) ?? null,
+  );
   const {
     trustScore: _ts,
     trustScoreBreakdown: _tsb,
@@ -54,7 +61,7 @@ function redactAgentForPublic(agent: Record<string, unknown>): Record<string, un
   return {
     ...publicFields,
     verdict,
-    reportAvailable: (agent.trustScore as number | null) != null,
+    reportAvailable: true,
   };
 }
 
@@ -834,20 +841,13 @@ export async function registerRoutes(
       const agent = await storage.getAgent(req.params.id);
       if (!agent) return res.status(404).json({ message: "Agent not found" });
 
-      const verdict: Verdict = agent.trustScore == null
-        ? "UNKNOWN"
-        : computeVerdict(
-            agent.trustScore,
-            agent.qualityTier ?? null,
-            agent.spamFlags ?? null,
-            agent.lifecycleStatus ?? null,
-          );
+      const verdict = verdictFor(agent.trustScore ?? null, agent.qualityTier ?? null, agent.spamFlags ?? null, agent.lifecycleStatus ?? null);
 
       res.set("X-TrustAdd-Tier", "free");
       res.json({
         verdict,
         updatedAt: agent.trustScoreUpdatedAt ?? null,
-        reportAvailable: agent.trustScore != null,
+        reportAvailable: true,
         quickCheckPrice: "$0.01",
         fullReportPrice: "$0.05",
         message: "Full trust score and breakdown available via x402 Trust Report. See /api/v1/trust/:address",
@@ -865,24 +865,14 @@ export async function registerRoutes(
       const chainId = parseChainId(req.query.chain);
       const leaderboard = await storage.getTrustScoreLeaderboard(limit, chainId);
       // Redact: strip numeric scores, show verdict only
-      const redacted = (leaderboard as any[]).map((entry: any) => {
-        const verdict: Verdict = entry.trustScore == null
-          ? "UNKNOWN"
-          : computeVerdict(
-              entry.trustScore,
-              entry.qualityTier ?? null,
-              entry.spamFlags ?? null,
-              entry.lifecycleStatus ?? null,
-            );
-        return {
-          id: entry.id,
-          name: entry.name,
-          slug: entry.slug,
-          chainId: entry.chainId,
-          imageUrl: entry.imageUrl,
-          verdict,
-        };
-      });
+      const redacted = (leaderboard as any[]).map((entry: any) => ({
+        id: entry.id,
+        name: entry.name,
+        slug: entry.slug,
+        chainId: entry.chainId,
+        imageUrl: entry.imageUrl,
+        verdict: verdictFor(entry.trustScore ?? null, entry.qualityTier ?? null, entry.spamFlags ?? null, entry.lifecycleStatus ?? null),
+      }));
       res.set("X-TrustAdd-Tier", "free");
       res.json(redacted);
     } catch (err) {
@@ -1199,11 +1189,14 @@ export async function registerRoutes(
     }
   });
 
+  // Free tier: strip trust scores from notable agents
   app.get("/api/skills/notable-agents", async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
       const data = await storage.getSkillsNotableAgents(limit);
-      res.json(data);
+      const redacted = (data as any[]).map(({ trustScore: _ts, ...safe }: any) => safe);
+      res.set("X-TrustAdd-Tier", "free");
+      res.json(redacted);
     } catch (err) {
       logger.error("Error fetching notable agents", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch notable agents" });
