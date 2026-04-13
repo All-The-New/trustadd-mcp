@@ -184,9 +184,7 @@ export async function registerRoutes(
       const search = req.query.search as string | undefined;
       const filter = req.query.filter as "all" | "claimed" | "unclaimed" | "has-metadata" | "x402-enabled" | "has-reputation" | "has-feedback" | undefined;
       const chainId = parseChainId(req.query.chainId);
-      // "trust-score" sort is no longer available on the free tier — fall back to "newest"
-      const rawSort = req.query.sort as string | undefined;
-      const sort = rawSort === "trust-score" ? "newest" as const : rawSort as "newest" | "oldest" | "name" | undefined;
+      const sort = req.query.sort as "newest" | "oldest" | "trust-score" | "name" | undefined;
       const excludeSpam = req.query.excludeSpam === "true" ? true : undefined;
       const result = await storage.getAgents({ limit, offset, search, filter, chainId, sort, excludeSpam });
 
