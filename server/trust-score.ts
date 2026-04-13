@@ -4,6 +4,7 @@ import { db } from "./db.js";
 import { eq, isNull, sql } from "drizzle-orm";
 import { log } from "./lib/log.js";
 import { computeSignalHash, METHODOLOGY_VERSION } from "./trust-provenance.js";
+import { computeConfidence } from "./trust-confidence.js";
 
 function looksLikeImageUrl(url: string): boolean {
   if (!url || url.length < 5) return false;
@@ -357,6 +358,13 @@ export async function recalculateScore(agentId: string): Promise<TrustScoreBreak
 
   const breakdown = calculateTrustScore(agent, feedback, eventCount, crossChainCount);
   const signalHash = computeSignalHash(agent, feedback, eventCount, crossChainCount);
+  const confidence = computeConfidence({
+    hasIdentity: !!(agent.name && agent.name.trim().length > 0),
+    hasProbes: agent.x402Support === true,
+    hasTransactions: false, // Known gap: single-agent path doesn't prefetch tx counts
+    hasGithub: (feedback?.githubHealthScore ?? 0) > 0,
+    hasFarcaster: (feedback?.farcasterScore ?? 0) > 0,
+  });
 
   await db.update(agents).set({
     trustScore: breakdown.total,
@@ -364,6 +372,8 @@ export async function recalculateScore(agentId: string): Promise<TrustScoreBreak
     trustScoreUpdatedAt: new Date(),
     trustSignalHash: signalHash,
     trustMethodologyVersion: METHODOLOGY_VERSION,
+    confidenceScore: confidence.score,
+    confidenceLevel: confidence.level,
   }).where(eq(agents.id, agentId));
 
   return breakdown;
@@ -410,13 +420,15 @@ async function prefetchScoreLookups() {
 }
 
 /** Batch-update trust scores for a set of agents in a single SQL statement. */
-async function batchUpdateScores(updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown; signalHash: string }>) {
+async function batchUpdateScores(updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown; signalHash: string; confidenceScore: number; confidenceLevel: string }>) {
   if (updates.length === 0) return;
   const now = new Date();
   const ids = updates.map(u => u.id);
   const scores = updates.map(u => u.score);
   const breakdowns = updates.map(u => JSON.stringify(u.breakdown));
   const hashes = updates.map(u => u.signalHash);
+  const confScores = updates.map(u => u.confidenceScore);
+  const confLevels = updates.map(u => u.confidenceLevel);
 
   await db.execute(sql`
     UPDATE agents SET
@@ -424,12 +436,16 @@ async function batchUpdateScores(updates: Array<{ id: string; score: number; bre
       trust_score_breakdown = batch.breakdown::jsonb,
       trust_score_updated_at = ${now},
       trust_signal_hash = batch.hash,
-      trust_methodology_version = ${METHODOLOGY_VERSION}
+      trust_methodology_version = ${METHODOLOGY_VERSION},
+      confidence_score = batch.conf_score,
+      confidence_level = batch.conf_level
     FROM (
       SELECT unnest(${ids}::text[]) AS id,
              unnest(${scores}::int[]) AS score,
              unnest(${breakdowns}::text[]) AS breakdown,
-             unnest(${hashes}::text[]) AS hash
+             unnest(${hashes}::text[]) AS hash,
+             unnest(${confScores}::real[]) AS conf_score,
+             unnest(${confLevels}::text[]) AS conf_level
     ) AS batch
     WHERE agents.id = batch.id
   `);
@@ -447,7 +463,7 @@ export async function recalculateAllScores(): Promise<{ updated: number; elapsed
 
   for (let i = 0; i < allAgents.length; i += BATCH_SIZE) {
     const batch = allAgents.slice(i, i + BATCH_SIZE);
-    const updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown; signalHash: string }> = [];
+    const updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown; signalHash: string; confidenceScore: number; confidenceLevel: string }> = [];
 
     for (const agent of batch) {
       const feedback = feedbackMap.get(agent.id) ?? null;
@@ -455,7 +471,14 @@ export async function recalculateAllScores(): Promise<{ updated: number; elapsed
       const crossChain = controllerChains.get(agent.controllerAddress) ?? 0;
       const breakdown = calculateTrustScore(agent, feedback, evtCount, crossChain);
       const signalHash = computeSignalHash(agent, feedback, evtCount, crossChain);
-      updates.push({ id: agent.id, score: breakdown.total, breakdown, signalHash });
+      const confidence = computeConfidence({
+        hasIdentity: !!(agent.name && agent.name.trim().length > 0),
+        hasProbes: agent.x402Support === true,
+        hasTransactions: false, // Known gap: batch prefetch doesn't include per-agent tx counts
+        hasGithub: (feedback?.githubHealthScore ?? 0) > 0,
+        hasFarcaster: (feedback?.farcasterScore ?? 0) > 0,
+      });
+      updates.push({ id: agent.id, score: breakdown.total, breakdown, signalHash, confidenceScore: confidence.score, confidenceLevel: confidence.level });
     }
 
     await batchUpdateScores(updates);
@@ -494,14 +517,21 @@ export async function ensureScoresCalculated(): Promise<void> {
         const batch = await db.select().from(agents).where(isNull(agents.trustScore)).limit(500);
         if (batch.length === 0) break;
 
-        const updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown; signalHash: string }> = [];
+        const updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown; signalHash: string; confidenceScore: number; confidenceLevel: string }> = [];
         for (const agent of batch) {
           const feedback = feedbackMap.get(agent.id) ?? null;
           const evtCount = eventCounts.get(agent.id) ?? 0;
           const crossChain = controllerChains.get(agent.controllerAddress) ?? 0;
           const breakdown = calculateTrustScore(agent, feedback, evtCount, crossChain);
           const signalHash = computeSignalHash(agent, feedback, evtCount, crossChain);
-          updates.push({ id: agent.id, score: breakdown.total, breakdown, signalHash });
+          const confidence = computeConfidence({
+            hasIdentity: !!(agent.name && agent.name.trim().length > 0),
+            hasProbes: agent.x402Support === true,
+            hasTransactions: false, // Known gap: batch prefetch doesn't include per-agent tx counts
+            hasGithub: (feedback?.githubHealthScore ?? 0) > 0,
+            hasFarcaster: (feedback?.farcasterScore ?? 0) > 0,
+          });
+          updates.push({ id: agent.id, score: breakdown.total, breakdown, signalHash, confidenceScore: confidence.score, confidenceLevel: confidence.level });
         }
 
         await batchUpdateScores(updates);
