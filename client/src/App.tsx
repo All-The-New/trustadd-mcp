@@ -18,6 +18,12 @@ import Quality from "@/pages/quality";
 import Skills from "@/pages/skills";
 import Bazaar from "@/pages/bazaar";
 import NotFound from "@/pages/not-found";
+import AdminLogin from "@/pages/admin/login";
+import AdminDashboard from "@/pages/admin/dashboard";
+import AdminUsage from "@/pages/admin/usage";
+import AdminStatusDetails from "@/pages/admin/status-details";
+import AdminTasks from "@/pages/admin/tasks";
+import AdminAuditLog from "@/pages/admin/audit-log";
 
 function Router() {
   return (
@@ -34,6 +40,13 @@ function Router() {
       <Route path="/protocols" component={Protocols} />
       <Route path="/skills" component={Skills} />
       <Route path="/bazaar" component={Bazaar} />
+      {/* Admin routes — specific paths before the catch-all /admin */}
+      <Route path="/admin/login" component={AdminLogin} />
+      <Route path="/admin/usage" component={AdminUsage} />
+      <Route path="/admin/status" component={AdminStatusDetails} />
+      <Route path="/admin/tasks" component={AdminTasks} />
+      <Route path="/admin/audit-log" component={AdminAuditLog} />
+      <Route path="/admin" component={AdminDashboard} />
       <Route component={NotFound} />
     </Switch>
   );

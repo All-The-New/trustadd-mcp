@@ -62,8 +62,11 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - `docs/trust-product.md` — Trust Data Product specification (tiers, pricing, verdict logic, payment flow)
 - `docs/trust-api.yaml` — OpenAPI 3.1 spec for Trust API v1 endpoints
 - `script/sync-trigger-env.ts` — Env var sync script for Trigger.dev (manual run)
+- `server/lib/admin-auth.ts` — Cookie-based admin auth (HMAC tokens, IP whitelist, session middleware)
+- `client/src/components/admin-layout.tsx` — Admin shell with nav, session guard, logout
+- `client/src/pages/admin/*.tsx` — 6 admin pages: login, dashboard, usage, status-details, tasks, audit-log
 - `vercel.json` — Vercel routing and build configuration
-- `client/src/App.tsx` — React routing (12 pages)
+- `client/src/App.tsx` — React routing (18 pages: 12 public + 6 admin)
 
 ## Required Environment Variables
 
@@ -88,6 +91,13 @@ DATABASE_URL=postgresql://trustadd_app.agfyfdhvgekekliujoxc:...@aws-1-us-east-2.
 - Must use **transaction-mode pooler** (port 6543), NOT direct connection (port 5432)
 - DB user is `trustadd_app` (not `postgres`) — has full privileges on all tables
 - Supabase project: `agfyfdhvgekekliujoxc` (us-east-2)
+
+Admin-specific variables:
+```
+ADMIN_PASSWORD=<password for /admin/login>
+ADMIN_SECRET=<HMAC signing key for session cookies>
+ADMIN_WHITELIST_IPS=<comma-separated IPs for auto-auth bypass>
+```
 
 See `bootstrap.md` for the full list of environment variables including API keys and feature flags.
 
@@ -118,6 +128,7 @@ npx vercel deploy --prod         # Manual deploy if needed
 - **Trigger.dev env vars**: Set in dashboard (Settings > Environment Variables > Production). Feature flags (`ENABLE_TX_INDEXER`, `ENABLE_PROBER`, `ENABLE_RERESOLVE`) must be lowercase `true`. `SENTRY_DSN` enables error tracking.
 - **GitHub Actions**: `TRIGGER_ACCESS_TOKEN` secret (PAT starting with `tr_pat_`) must be set in repo for auto-deploy workflow to function. Workflow also deploys to preview environment on PRs.
 - **Trigger.dev deploy paths**: Workflow triggers on changes to `trigger/`, `trigger.config.ts`, `server/`, `shared/`, `package.json`, `package-lock.json`, `.npmrc`, and the workflow file itself.
+- **Admin queryFn pattern**: The default TanStack Query `queryFn` joins `queryKey` array elements with `/`, so `["/api/foo", "?bar=1"]` becomes `/api/foo/?bar=1`. Admin pages with URL params MUST use a custom `queryFn` with direct `fetch()` calls instead of relying on the default.
 
 ## Style & Conventions
 

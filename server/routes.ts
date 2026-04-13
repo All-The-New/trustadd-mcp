@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { type Server } from "http";
 import { createLogger } from "./lib/logger.js";
 import { requireAdmin } from "./lib/admin-audit.js";
+import { handleAdminLogin, handleAdminSession, handleAdminLogout, requireAdminSession } from "./lib/admin-auth.js";
 import { pool } from "./db.js";
 import { storage } from "./storage.js";
 
@@ -1148,6 +1149,98 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/bazaar/price-distribution", async (_req, res) => {
+    try {
+      const data = await cached("bazaar:price-dist", 300_000, async () => {
+        const { db } = await import("./db.js");
+        const { sql } = await import("drizzle-orm");
+        const result = await db.execute(sql`
+          SELECT
+            CASE
+              WHEN price_usd < 0.001 THEN 'Under $0.001'
+              WHEN price_usd < 0.01 THEN '$0.001 - $0.01'
+              WHEN price_usd < 0.1 THEN '$0.01 - $0.10'
+              WHEN price_usd < 1 THEN '$0.10 - $1.00'
+              WHEN price_usd < 10 THEN '$1.00 - $10.00'
+              ELSE '$10.00+'
+            END AS bucket,
+            COUNT(*)::int AS count,
+            CASE
+              WHEN price_usd < 0.001 THEN 0
+              WHEN price_usd < 0.01 THEN 1
+              WHEN price_usd < 0.1 THEN 2
+              WHEN price_usd < 1 THEN 3
+              WHEN price_usd < 10 THEN 4
+              ELSE 5
+            END AS sort_order
+          FROM bazaar_services
+          WHERE is_active = TRUE AND price_usd IS NOT NULL AND price_usd > 0
+          GROUP BY bucket, sort_order
+          ORDER BY sort_order
+        `);
+        return (result.rows as any[]).map(r => ({
+          bucket: r.bucket,
+          count: Number(r.count),
+        }));
+      });
+      res.set("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+      res.json(data);
+    } catch (err) {
+      logger.error("Error fetching price distribution", { error: (err as Error).message });
+      res.status(500).json({ message: "Failed to fetch price distribution" });
+    }
+  });
+
+  app.get("/api/bazaar/crossref", async (_req, res) => {
+    try {
+      const data = await cached("bazaar:crossref", 300_000, async () => {
+        const { db } = await import("./db.js");
+        const { sql } = await import("drizzle-orm");
+        // Find bazaar services whose payTo address matches a TrustAdd agent's
+        // payment address (from x402 probes) or controller address
+        const result = await db.execute(sql`
+          SELECT DISTINCT ON (bs.pay_to)
+            bs.pay_to,
+            bs.name AS service_name,
+            bs.category,
+            bs.price_usd,
+            a.id AS agent_id,
+            a.name AS agent_name,
+            a.slug AS agent_slug,
+            a.chain_id,
+            a.trust_score,
+            a.image_url,
+            'payment_address' AS match_type
+          FROM bazaar_services bs
+          INNER JOIN x402_probes xp ON LOWER(xp.payment_address) = LOWER(bs.pay_to)
+          INNER JOIN agents a ON a.id = xp.agent_id
+          WHERE bs.is_active = TRUE AND bs.pay_to IS NOT NULL
+            AND (a.quality_tier IS NULL OR a.quality_tier NOT IN ('spam', 'archived'))
+          ORDER BY bs.pay_to, a.trust_score DESC NULLS LAST
+          LIMIT 50
+        `);
+        return (result.rows as any[]).map(r => ({
+          payTo: r.pay_to,
+          serviceName: r.service_name,
+          category: r.category,
+          priceUsd: r.price_usd != null ? Number(r.price_usd) : null,
+          agentId: r.agent_id,
+          agentName: r.agent_name,
+          agentSlug: r.agent_slug,
+          chainId: Number(r.chain_id),
+          trustScore: r.trust_score != null ? Number(r.trust_score) : null,
+          imageUrl: r.image_url,
+          matchType: r.match_type,
+        }));
+      });
+      res.set("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+      res.json(data);
+    } catch (err) {
+      logger.error("Error fetching bazaar crossref", { error: (err as Error).message });
+      res.status(500).json({ message: "Failed to fetch bazaar crossref" });
+    }
+  });
+
   // === Trust Data Product API v1 (x402-gated) ===
 
   const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
@@ -1275,6 +1368,247 @@ export async function registerRoutes(
     } catch (err) {
       logger.error("Error fetching trust product stats", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch trust product stats" });
+    }
+  });
+
+  // ─── Admin Auth (cookie-based) ────────────────────────────────
+  app.post("/api/admin/login", handleAdminLogin);
+  app.get("/api/admin/session", handleAdminSession);
+  app.post("/api/admin/logout", handleAdminLogout);
+
+  // ─── Admin Dashboard API (session-protected) ──────────────────
+
+  // Detailed API usage with hourly breakdown (admin-only, heavier queries)
+  app.get("/api/admin/usage/detailed", requireAdminSession(), async (req, res) => {
+    try {
+      const days = Math.min(parseInt(req.query.days as string) || 7, 90);
+      const data = await cached(`admin:usage-detailed:${days}`, 60_000, async () => {
+        const since = new Date(Date.now() - days * 86400000).toISOString();
+
+        const [summary, topPaths, topUsers, hourly, statusBreakdown, slowEndpoints, countryBreakdown] = await Promise.all([
+          pool.query(
+            `SELECT count(*)::int as total_requests,
+                    count(DISTINCT ip)::int as unique_ips,
+                    count(DISTINCT date_trunc('day', ts))::int as active_days,
+                    round(avg(duration_ms))::int as avg_duration_ms,
+                    percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms)::int as p50_ms,
+                    percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms)::int as p95_ms,
+                    percentile_cont(0.99) WITHIN GROUP (ORDER BY duration_ms)::int as p99_ms,
+                    count(*) FILTER (WHERE status_code >= 400)::int as error_count,
+                    count(*) FILTER (WHERE status_code >= 500)::int as server_error_count,
+                    max(ts) as last_request_at
+             FROM api_request_log WHERE ts >= $1`,
+            [since],
+          ),
+          pool.query(
+            `SELECT path, count(*)::int as hits, count(DISTINCT ip)::int as unique_ips,
+                    round(avg(duration_ms))::int as avg_ms,
+                    percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms)::int as p95_ms,
+                    count(*) FILTER (WHERE status_code >= 400)::int as errors
+             FROM api_request_log WHERE ts >= $1
+             GROUP BY path ORDER BY hits DESC LIMIT 30`,
+            [since],
+          ),
+          // Full IPs for admin (not masked)
+          pool.query(
+            `SELECT ip, count(*)::int as hits,
+                    count(DISTINCT path)::int as endpoints_used,
+                    count(DISTINCT date_trunc('day', ts))::int as active_days,
+                    min(ts) as first_seen, max(ts) as last_seen,
+                    mode() WITHIN GROUP (ORDER BY country) as country,
+                    mode() WITHIN GROUP (ORDER BY user_agent) as user_agent
+             FROM api_request_log WHERE ts >= $1 AND ip IS NOT NULL
+             GROUP BY ip ORDER BY hits DESC LIMIT 50`,
+            [since],
+          ),
+          pool.query(
+            `SELECT date_trunc('hour', ts) as hour,
+                    count(*)::int as requests,
+                    count(DISTINCT ip)::int as unique_ips,
+                    round(avg(duration_ms))::int as avg_ms,
+                    count(*) FILTER (WHERE status_code >= 400)::int as errors
+             FROM api_request_log WHERE ts >= $1
+             GROUP BY hour ORDER BY hour`,
+            [since],
+          ),
+          pool.query(
+            `SELECT status_code, count(*)::int as count
+             FROM api_request_log WHERE ts >= $1
+             GROUP BY status_code ORDER BY count DESC`,
+            [since],
+          ),
+          pool.query(
+            `SELECT path, round(avg(duration_ms))::int as avg_ms,
+                    percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms)::int as p95_ms,
+                    count(*)::int as hits
+             FROM api_request_log WHERE ts >= $1
+             GROUP BY path HAVING count(*) >= 5
+             ORDER BY avg_ms DESC LIMIT 15`,
+            [since],
+          ),
+          pool.query(
+            `SELECT country, count(*)::int as hits, count(DISTINCT ip)::int as unique_ips
+             FROM api_request_log WHERE ts >= $1 AND country IS NOT NULL
+             GROUP BY country ORDER BY hits DESC LIMIT 20`,
+            [since],
+          ),
+        ]);
+
+        return {
+          period: { days, since },
+          summary: summary.rows[0],
+          topPaths: topPaths.rows,
+          topUsers: topUsers.rows,
+          hourly: hourly.rows,
+          statusBreakdown: statusBreakdown.rows,
+          slowEndpoints: slowEndpoints.rows,
+          countryBreakdown: countryBreakdown.rows,
+        };
+      });
+      res.json(data);
+    } catch (err) {
+      logger.error("Error fetching admin usage details", { error: (err as Error).message });
+      res.status(500).json({ message: "Failed to fetch usage details" });
+    }
+  });
+
+  // Admin: recent raw log entries with pagination
+  app.get("/api/admin/usage/log", requireAdminSession(), async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+      const path = req.query.path as string | undefined;
+      const ip = req.query.ip as string | undefined;
+      const minStatus = parseInt(req.query.minStatus as string) || 0;
+
+      const conditions = ["1=1"];
+      const params: unknown[] = [];
+      let paramIdx = 0;
+
+      if (path) {
+        paramIdx++;
+        conditions.push(`path LIKE $${paramIdx}`);
+        params.push(`%${path}%`);
+      }
+      if (ip) {
+        paramIdx++;
+        conditions.push(`ip = $${paramIdx}`);
+        params.push(ip);
+      }
+      if (minStatus > 0) {
+        paramIdx++;
+        conditions.push(`status_code >= $${paramIdx}`);
+        params.push(minStatus);
+      }
+
+      paramIdx++;
+      params.push(limit);
+      paramIdx++;
+      params.push(offset);
+
+      const result = await pool.query(
+        `SELECT id, ts, method, path, status_code, duration_ms, ip, user_agent, referer, country
+         FROM api_request_log
+         WHERE ${conditions.join(" AND ")}
+         ORDER BY ts DESC
+         LIMIT $${paramIdx - 1} OFFSET $${paramIdx}`,
+        params,
+      );
+
+      const countResult = await pool.query(
+        `SELECT count(*)::int as total FROM api_request_log WHERE ${conditions.join(" AND ")}`,
+        params.slice(0, params.length - 2),
+      );
+
+      res.json({ entries: result.rows, total: countResult.rows[0].total, limit, offset });
+    } catch (err) {
+      logger.error("Error fetching usage log", { error: (err as Error).message });
+      res.status(500).json({ message: "Failed to fetch usage log" });
+    }
+  });
+
+  // Admin: system overview for dashboard
+  app.get("/api/admin/dashboard", requireAdminSession(), async (_req, res) => {
+    try {
+      const data = await cached("admin:dashboard", 30_000, async () => {
+        const [stats, recentAudit, taskStatus, recentErrors, apiSummary] = await Promise.all([
+          storage.getStats(),
+          pool.query(
+            `SELECT * FROM admin_audit_log ORDER BY timestamp DESC LIMIT 10`,
+          ),
+          pool.query(
+            `SELECT chain_id, last_processed_block, is_running, last_error, last_synced_at, updated_at
+             FROM indexer_state ORDER BY chain_id`,
+          ),
+          pool.query(
+            `SELECT chain_id, event_type, message, created_at
+             FROM indexer_events
+             WHERE event_type IN ('error', 'timeout', 'connection_error')
+             AND created_at >= NOW() - INTERVAL '24 hours'
+             ORDER BY created_at DESC LIMIT 20`,
+          ),
+          pool.query(
+            `SELECT count(*)::int as total_24h,
+                    count(DISTINCT ip)::int as unique_ips_24h,
+                    count(*) FILTER (WHERE status_code >= 500)::int as errors_24h,
+                    round(avg(duration_ms))::int as avg_ms_24h
+             FROM api_request_log WHERE ts >= NOW() - INTERVAL '24 hours'`,
+          ),
+        ]);
+
+        return {
+          stats,
+          recentAuditEntries: recentAudit.rows,
+          indexerStates: taskStatus.rows,
+          recentErrors: recentErrors.rows,
+          apiSummary: apiSummary.rows[0],
+        };
+      });
+      res.json(data);
+    } catch (err) {
+      logger.error("Error fetching admin dashboard", { error: (err as Error).message });
+      res.status(500).json({ message: "Failed to fetch dashboard" });
+    }
+  });
+
+  // Admin: audit log with filtering
+  app.get("/api/admin/audit-log/detailed", requireAdminSession(), async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+      const successFilter = req.query.success as string | undefined;
+
+      const conditions = ["1=1"];
+      const params: unknown[] = [];
+      let idx = 0;
+
+      if (successFilter === "true" || successFilter === "false") {
+        idx++;
+        conditions.push(`success = $${idx}`);
+        params.push(successFilter === "true");
+      }
+
+      idx++;
+      params.push(limit);
+      idx++;
+      params.push(offset);
+
+      const result = await pool.query(
+        `SELECT * FROM admin_audit_log
+         WHERE ${conditions.join(" AND ")}
+         ORDER BY timestamp DESC
+         LIMIT $${idx - 1} OFFSET $${idx}`,
+        params,
+      );
+
+      const countResult = await pool.query(
+        `SELECT count(*)::int as total FROM admin_audit_log WHERE ${conditions.join(" AND ")}`,
+        params.slice(0, params.length - 2),
+      );
+
+      res.json({ entries: result.rows, total: countResult.rows[0].total, limit, offset });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch audit log" });
     }
   });
 

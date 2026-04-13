@@ -9,6 +9,7 @@ process.on("unhandledRejection", (reason) => {
 
 import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes.js";
 import { serveStatic } from "./static.js";
@@ -41,11 +42,12 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
 
 app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(",") || ["https://trustadd.com"],
+  origin: process.env.CORS_ORIGIN?.split(",") || ["http://localhost:5000", "https://trustadd.com"],
   methods: ["GET", "POST"],
-  credentials: false,
+  credentials: true,
 }));
 
 app.use((_req, res, next) => {

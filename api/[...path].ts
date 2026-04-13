@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { registerRoutes } from "../server/routes.js";
 import { createLogger } from "../server/lib/logger.js";
 import { requestStore, generateRequestId } from "../server/lib/request-context.js";
@@ -9,6 +10,8 @@ import { requestLogger } from "../server/lib/request-logger.js";
 
 const app = express();
 app.set("trust proxy", 1);
+
+app.use(cookieParser());
 
 app.use(
   express.json({
@@ -23,11 +26,20 @@ app.use(express.urlencoded({ extended: false }));
 // Trust Data Product API: open CORS for agent-to-agent access
 app.use("/api/v1/trust", cors({ origin: "*", methods: ["GET"], credentials: false }));
 
-// All other API routes: restricted CORS
-app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(",") || ["https://trustadd.com"],
+const allowedOrigins = process.env.CORS_ORIGIN?.split(",") || ["https://trustadd.com"];
+
+// Admin routes: credentials required for cookie auth
+app.use("/api/admin", cors({
+  origin: allowedOrigins,
   methods: ["GET", "POST"],
-  credentials: false,
+  credentials: true,
+}));
+
+// All other API routes: restricted CORS (credentials needed for cookie-based auth)
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ["GET", "POST"],
+  credentials: true,
 }));
 
 app.use((_req: any, res: any, next: any) => {
@@ -39,7 +51,9 @@ app.use((_req: any, res: any, next: any) => {
 });
 
 // DB-backed rate limiting (shared across all Vercel serverless instances)
-app.use("/api/admin", createRateLimiter({ prefix: "admin", windowMs: 60 * 60 * 1000, limit: 2 }));
+// Admin write actions (POST): strict limit. Admin reads (GET): generous limit for dashboard use.
+app.post("/api/admin", createRateLimiter({ prefix: "admin-write", windowMs: 60 * 60 * 1000, limit: 10 }));
+app.get("/api/admin", createRateLimiter({ prefix: "admin-read", windowMs: 60 * 1000, limit: 60 }));
 app.use("/api", createRateLimiter({ prefix: "api", windowMs: 60 * 1000, limit: 100 }));
 
 // Persist API requests to DB for usage analytics
