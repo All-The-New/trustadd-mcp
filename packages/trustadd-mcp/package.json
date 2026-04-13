@@ -1,0 +1,43 @@
+{
+  "name": "@trustadd/mcp",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "MCP server for TrustAdd — AI agent trust oracle. Check trust scores before transacting with agents.",
+  "bin": {
+    "trustadd-mcp": "./build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "tsc && chmod 755 build/index.js",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "trust",
+    "agent",
+    "erc8004",
+    "x402",
+    "claude",
+    "ai-agent",
+    "blockchain"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/All-The-New/trustadd",
+    "directory": "packages/trustadd-mcp"
+  },
+  "license": "MIT"
+}
