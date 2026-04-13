@@ -21,7 +21,7 @@ import { DIRECTORY } from "@/lib/content-zones";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 type FilterState = "all" | "has-metadata" | "x402-enabled" | "has-reputation" | "has-feedback";
-type SortState = "newest" | "oldest" | "name";
+type SortState = "newest" | "oldest" | "name" | "trust-score";
 
 const PAGE_SIZE = 20;
 
@@ -36,6 +36,7 @@ const FILTER_OPTIONS: { key: FilterState; label: string }[] = [
 ];
 
 const SORT_OPTIONS: { key: SortState; label: string }[] = [
+  { key: "trust-score", label: "Top Trusted" },
   { key: "newest", label: "Newest" },
   { key: "oldest", label: "Oldest" },
   { key: "name", label: "Name" },
@@ -44,7 +45,7 @@ const SORT_OPTIONS: { key: SortState; label: string }[] = [
 export default function Directory() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterState>("all");
-  const [sort, setSort] = useState<SortState>("newest");
+  const [sort, setSort] = useState<SortState>("trust-score");
   const [chainFilter, setChainFilter] = useState<number | null>(null);
   const [page, setPage] = useState(0);
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -83,7 +84,7 @@ export default function Directory() {
     let count = 0;
     if (chainFilter !== null) count++;
     if (filter !== "all") count++;
-    if (sort !== "newest") count++;
+    if (sort !== "trust-score") count++;
     if (!qualityGate) count++;
     return count;
   }, [chainFilter, filter, sort, qualityGate]);
@@ -104,7 +105,7 @@ export default function Directory() {
         onRemove: () => handleFilterChange("all"),
       });
     }
-    if (sort !== "newest") {
+    if (sort !== "trust-score") {
       const opt = SORT_OPTIONS.find((o) => o.key === sort);
       chips.push({
         label: `Sort: ${opt?.label ?? sort}`,
