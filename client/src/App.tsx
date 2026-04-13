@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Analytics as VercelAnalytics } from "@vercel/analytics/react";
 import Landing from "@/pages/landing";
 import Directory from "@/pages/directory";
 import AgentProfile from "@/pages/agent-profile";
@@ -45,6 +46,7 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <Router />
+          <VercelAnalytics />
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
