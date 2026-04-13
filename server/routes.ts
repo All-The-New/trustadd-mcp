@@ -869,6 +869,11 @@ export async function registerRoutes(
         slug: entry.slug,
         chainId: entry.chainId,
         imageUrl: entry.imageUrl,
+        primaryContractAddress: entry.primaryContractAddress,
+        erc8004Id: entry.erc8004Id,
+        description: entry.description,
+        x402Support: entry.x402Support,
+        endpoints: entry.endpoints,
         verdict: verdictFor(entry.trustScore ?? null, entry.qualityTier ?? null, entry.spamFlags ?? null, entry.lifecycleStatus ?? null),
       }));
       res.set("X-TrustAdd-Tier", "free");

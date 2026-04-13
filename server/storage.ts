@@ -134,7 +134,7 @@ export interface IStorage {
   getCommunityFeedbackSummariesByAgentIds(agentIds: string[]): Promise<CommunityFeedbackSummary[]>;
   getCommunityFeedbackStats(): Promise<{ totalAgentsWithFeedback: number; totalItems: number; platformBreakdown: Array<{ platform: string; count: number }> }>;
 
-  getTrustScoreLeaderboard(limit?: number, chainId?: number): Promise<Array<{ id: string; name: string | null; imageUrl: string | null; chainId: number; trustScore: number; trustScoreBreakdown: any }>>;
+  getTrustScoreLeaderboard(limit?: number, chainId?: number): Promise<Array<{ id: string; name: string | null; imageUrl: string | null; chainId: number; trustScore: number; trustScoreBreakdown: any; slug: string | null; primaryContractAddress: string | null; erc8004Id: string | null; description: string | null; x402Support: boolean | null; endpoints: any; qualityTier: string | null; spamFlags: any; lifecycleStatus: string | null }>>;
   getTrustScoreDistribution(chainId?: number): Promise<Array<{ bucket: string; count: number }>>;
   getTrustScoreStatsByChain(): Promise<Array<{ chainId: number; avgScore: number; agentCount: number }>>;
 
@@ -1226,7 +1226,7 @@ export class DatabaseStorage implements IStorage {
       platformBreakdown: breakdown.map(b => ({ platform: b.platform, count: Number(b.count) })),
     };
   }
-  async getTrustScoreLeaderboard(limit = 20, chainId?: number): Promise<Array<{ id: string; name: string | null; imageUrl: string | null; chainId: number; trustScore: number; trustScoreBreakdown: any; slug: string | null }>> {
+  async getTrustScoreLeaderboard(limit = 20, chainId?: number): Promise<Array<{ id: string; name: string | null; imageUrl: string | null; chainId: number; trustScore: number; trustScoreBreakdown: any; slug: string | null; primaryContractAddress: string | null; erc8004Id: string | null; description: string | null; x402Support: boolean | null; endpoints: any; qualityTier: string | null; spamFlags: any; lifecycleStatus: string | null }>> {
     const conditions = [isNotNull(agents.trustScore)];
     if (chainId) conditions.push(eq(agents.chainId, chainId));
 
@@ -1238,6 +1238,14 @@ export class DatabaseStorage implements IStorage {
       trustScore: agents.trustScore,
       trustScoreBreakdown: agents.trustScoreBreakdown,
       slug: agents.slug,
+      primaryContractAddress: agents.primaryContractAddress,
+      erc8004Id: agents.erc8004Id,
+      description: agents.description,
+      x402Support: agents.x402Support,
+      endpoints: agents.endpoints,
+      qualityTier: agents.qualityTier,
+      spamFlags: agents.spamFlags,
+      lifecycleStatus: agents.lifecycleStatus,
     }).from(agents)
       .where(and(...conditions))
       .orderBy(sql`${agents.trustScore} DESC`)
