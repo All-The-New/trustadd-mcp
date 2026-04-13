@@ -4,6 +4,9 @@ const CDP_BASE_URL = "https://api.cdp.coinbase.com/platform/v2/x402/discovery/re
 const SCOUT_CATALOG_URL = "https://x402scout.com/catalog";
 const PAGE_SIZE = 100;
 const REQUEST_DELAY_MS = 500;
+const USDC_BASE_CONTRACT = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+const ALCHEMY_BATCH_SIZE = 25;
+const ALCHEMY_DELAY_MS = 350;
 
 interface CdpResource {
   resource: string;
@@ -242,7 +245,108 @@ export const bazaarIndexerTask = schedules.task({
       await storage.markBazaarServicesInactive(runStartedAt);
     }
 
-    // Step 4: Compute and store daily snapshot
+    // Step 4: Fetch USDC payment volume per payTo wallet via Alchemy
+    const alchemyKey = process.env.API_KEY_ALCHEMY;
+    let paymentWalletsUpdated = 0;
+
+    if (alchemyKey) {
+      metadata.set("status", "fetching-payments");
+      logger.info("Starting payment volume fetch via Alchemy");
+
+      const { db: payDb } = await import("../server/db.js");
+      const { sql: paySql } = await import("drizzle-orm");
+
+      // Get distinct active payTo wallets
+      const walletResult = await payDb.execute(paySql`
+        SELECT DISTINCT pay_to FROM bazaar_services
+        WHERE is_active = TRUE AND pay_to IS NOT NULL
+      `);
+      const payToWallets = (walletResult.rows as any[]).map(r => r.pay_to as string);
+
+      logger.info(`Found ${payToWallets.length} unique payTo wallets to check`);
+      metadata.set("paymentWalletsTotal", payToWallets.length);
+
+      const alchemyUrl = `https://base-mainnet.g.alchemy.com/v2/${alchemyKey}`;
+
+      for (let i = 0; i < payToWallets.length; i += ALCHEMY_BATCH_SIZE) {
+        const batch = payToWallets.slice(i, i + ALCHEMY_BATCH_SIZE);
+
+        for (const wallet of batch) {
+          try {
+            let totalVolume = 0;
+            let totalCount = 0;
+            let pageKey: string | undefined;
+
+            // Paginate through all USDC transfers to this wallet
+            do {
+              const params: any = {
+                toAddress: wallet,
+                category: ["erc20"],
+                contractAddresses: [USDC_BASE_CONTRACT],
+                withMetadata: false,
+                maxCount: "0x3e8", // 1000
+                order: "asc",
+              };
+              if (pageKey) params.pageKey = pageKey;
+
+              const resp = await fetch(alchemyUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  jsonrpc: "2.0",
+                  id: 1,
+                  method: "alchemy_getAssetTransfers",
+                  params: [params],
+                }),
+              });
+
+              if (!resp.ok) {
+                logger.warn(`Alchemy HTTP ${resp.status} for ${wallet.slice(0, 10)}...`);
+                break;
+              }
+
+              const data = await resp.json();
+              if (data.error) {
+                logger.warn(`Alchemy RPC error for ${wallet.slice(0, 10)}...: ${data.error.message || JSON.stringify(data.error)}`);
+                break;
+              }
+
+              const transfers = data.result?.transfers ?? [];
+              for (const t of transfers) {
+                // value is already human-readable decimal (USDC dollars)
+                totalVolume += t.value ?? 0;
+                totalCount++;
+              }
+
+              pageKey = data.result?.pageKey;
+            } while (pageKey);
+
+            // Update all services with this payTo address
+            await storage.updateBazaarPaymentVolume(wallet, totalVolume, totalCount);
+            paymentWalletsUpdated++;
+
+            if (paymentWalletsUpdated % 50 === 0) {
+              metadata.set("paymentWalletsUpdated", paymentWalletsUpdated);
+              logger.info(`Payment volume: ${paymentWalletsUpdated}/${payToWallets.length} wallets processed`);
+            }
+          } catch (err) {
+            logger.warn(`Payment volume fetch failed for ${wallet.slice(0, 10)}...`, { error: (err as Error).message });
+          }
+        }
+
+        // Delay between batches to respect rate limits
+        if (i + ALCHEMY_BATCH_SIZE < payToWallets.length) {
+          await sleep(ALCHEMY_DELAY_MS);
+        }
+      }
+
+      metadata.set("paymentWalletsUpdated", paymentWalletsUpdated);
+      logger.info(`Payment volume fetch complete: ${paymentWalletsUpdated}/${payToWallets.length} wallets updated`);
+    } else {
+      logger.warn("API_KEY_ALCHEMY not set — skipping payment volume fetch");
+    }
+
+    // Step 5: Compute and store daily snapshot
     metadata.set("status", "snapshotting");
     try {
       const stats = await storage.getBazaarStats();
@@ -311,6 +415,7 @@ export const bazaarIndexerTask = schedules.task({
       totalFetched: allResources.length,
       upserted,
       scoutEnriched: scoutServices.length,
+      paymentWalletsUpdated,
     };
   },
 });

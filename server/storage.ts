@@ -235,10 +235,13 @@ export interface IStorage {
     networkBreakdown: Array<{ network: string; count: number }>;
     priceStats: { median: number | null; mean: number | null; min: number | null; max: number | null };
     totalPayToWallets: number;
+    totalPaymentVolumeUsdc: number;
+    totalPaymentCount: number;
   }>;
   getBazaarSnapshots(limit?: number): Promise<BazaarSnapshot[]>;
   createBazaarSnapshot(data: InsertBazaarSnapshot): Promise<BazaarSnapshot>;
   getBazaarTopServices(limit?: number): Promise<BazaarService[]>;
+  updateBazaarPaymentVolume(payTo: string, volumeUsdc: number, paymentCount: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2434,6 +2437,7 @@ export class DatabaseStorage implements IStorage {
     switch (opts.sortBy) {
       case "price_asc": orderBy = asc(bazaarServices.priceUsd); break;
       case "price_desc": orderBy = desc(bazaarServices.priceUsd); break;
+      case "volume": orderBy = desc(bazaarServices.paymentVolumeUsdc); break;
       case "trust": orderBy = desc(bazaarServices.trustScore); break;
       case "latency": orderBy = asc(bazaarServices.avgLatencyMs); break;
       case "newest": orderBy = desc(bazaarServices.firstSeenAt); break;
@@ -2455,8 +2459,10 @@ export class DatabaseStorage implements IStorage {
     networkBreakdown: Array<{ network: string; count: number }>;
     priceStats: { median: number | null; mean: number | null; min: number | null; max: number | null };
     totalPayToWallets: number;
+    totalPaymentVolumeUsdc: number;
+    totalPaymentCount: number;
   }> {
-    const [totals, categories, networks, prices, wallets] = await Promise.all([
+    const [totals, categories, networks, prices, wallets, payments] = await Promise.all([
       db.execute(sql`
         SELECT
           COUNT(*) AS total,
@@ -2486,10 +2492,18 @@ export class DatabaseStorage implements IStorage {
         SELECT COUNT(DISTINCT pay_to)::int AS count
         FROM bazaar_services WHERE is_active = TRUE AND pay_to IS NOT NULL
       `),
+      db.execute(sql`
+        SELECT
+          COALESCE(SUM(payment_volume_usdc), 0) AS total_volume,
+          COALESCE(SUM(payment_count), 0)::int AS total_count
+        FROM bazaar_services
+        WHERE is_active = TRUE AND pay_to IS NOT NULL
+      `),
     ]);
 
     const t = totals.rows[0] as any;
     const p = prices.rows[0] as any;
+    const pv = payments.rows[0] as any;
 
     return {
       totalServices: Number(t.total),
@@ -2503,6 +2517,8 @@ export class DatabaseStorage implements IStorage {
         max: p.max != null ? Number(p.max) : null,
       },
       totalPayToWallets: Number((wallets.rows[0] as any).count),
+      totalPaymentVolumeUsdc: Number(pv.total_volume),
+      totalPaymentCount: Number(pv.total_count),
     };
   }
 
@@ -2540,6 +2556,16 @@ export class DatabaseStorage implements IStorage {
       ))
       .orderBy(desc(bazaarServices.trustScore), asc(bazaarServices.avgLatencyMs))
       .limit(limit);
+  }
+
+  async updateBazaarPaymentVolume(payTo: string, volumeUsdc: number, paymentCount: number): Promise<void> {
+    await db.execute(sql`
+      UPDATE bazaar_services
+      SET payment_volume_usdc = ${volumeUsdc},
+          payment_count = ${paymentCount},
+          payment_last_checked_at = NOW()
+      WHERE pay_to = ${payTo} AND is_active = TRUE
+    `);
   }
 }
 
