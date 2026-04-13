@@ -35,6 +35,10 @@ export const agents = pgTable("agents", {
   metadataFingerprint: text("metadata_fingerprint"),
   nextEnrichmentAt: timestamp("next_enrichment_at"),
   lastQualityEvaluatedAt: timestamp("last_quality_evaluated_at"),
+  trustSignalHash: text("trust_signal_hash"),
+  trustMethodologyVersion: integer("trust_methodology_version").default(1),
+  confidenceScore: real("confidence_score"),
+  confidenceLevel: text("confidence_level").default("unknown"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   index("idx_agents_chain_id").on(table.chainId),
@@ -244,6 +248,22 @@ export const alertDeliveries = pgTable("alert_deliveries", {
   alertId: text("alert_id").primaryKey(),
   lastDeliveredAt: timestamp("last_delivered_at").notNull().defaultNow(),
 });
+
+// Pipeline health tracking (circuit breakers)
+export const pipelineHealth = pgTable("pipeline_health", {
+  taskId: text("task_id").primaryKey(),
+  taskName: text("task_name").notNull(),
+  lastSuccessAt: timestamp("last_success_at"),
+  lastRunAt: timestamp("last_run_at"),
+  lastError: text("last_error"),
+  consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+  circuitState: text("circuit_state").notNull().default("closed"),
+  openedAt: timestamp("opened_at"),
+  expectedIntervalMinutes: integer("expected_interval_minutes").notNull().default(60),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type PipelineHealth = typeof pipelineHealth.$inferSelect;
 
 // Rate limit sliding window entries
 export const rateLimitEntries = pgTable("rate_limit_entries", {
