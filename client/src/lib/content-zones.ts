@@ -75,7 +75,7 @@ export const HOME = {
   },
   topTrusted: {
     heading: "Top Trusted Agents",
-    viewAll: "View leaderboard",
+    viewAll: "View all agents",
     emptyState: "Trust scores are being calculated. Check back soon.",
   },
   recentlyDiscovered: {
