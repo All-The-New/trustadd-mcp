@@ -35,9 +35,9 @@ export default function Landing() {
     queryFn: () => fetch("/api/agents?limit=10&filter=has-metadata&sort=newest").then((r) => r.json()),
   });
 
-  const { data: topData, isLoading: topLoading } = useQuery<AgentsResponse>({
-    queryKey: ["/api/agents", { limit: 10, sort: "newest" }],
-    queryFn: () => fetch("/api/agents?limit=10&sort=newest").then((r) => r.json()),
+  const { data: topData, isLoading: topLoading } = useQuery<AgentWithVerdict[]>({
+    queryKey: ["/api/trust-scores/top", { limit: 10 }],
+    queryFn: () => fetch("/api/trust-scores/top?limit=10").then((r) => r.json()),
   });
 
   const { data: stats, isLoading: statsLoading } = useQuery<{
@@ -53,7 +53,7 @@ export default function Landing() {
   });
 
   const recentAgents = recentData?.agents ?? [];
-  const topAgents = topData?.agents ?? [];
+  const topAgents = topData ?? [];
 
   return (
     <Layout>
