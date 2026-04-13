@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Shield, Bot, BarChart3, BookOpen, Activity, Info, Coins, Layers, ChevronDown, ShieldCheck, Sparkles } from "lucide-react";
+import { Shield, Bot, BarChart3, BookOpen, Activity, Info, Coins, Layers, ChevronDown, ShieldCheck, Sparkles, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,7 +12,7 @@ import { ThemeToggle } from "./theme-toggle";
 export function Header() {
   const [location] = useLocation();
 
-  const secondaryActive = ["/status", "/api-docs", "/about", "/quality", "/protocols"].includes(location);
+  const secondaryActive = ["/status", "/api-docs", "/about", "/quality", "/protocols", "/skills"].includes(location);
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
@@ -57,14 +57,14 @@ export function Header() {
               <span className="hidden sm:inline">Economy</span>
             </Button>
           </Link>
-          <Link href="/skills">
+          <Link href="/bazaar">
             <Button
-              variant={location === "/skills" ? "secondary" : "ghost"}
+              variant={location === "/bazaar" ? "secondary" : "ghost"}
               className="gap-2"
-              data-testid="link-skills"
+              data-testid="link-bazaar"
             >
-              <Sparkles className="w-4 h-4" />
-              <span className="hidden sm:inline">Skills</span>
+              <Store className="w-4 h-4" />
+              <span className="hidden sm:inline">Bazaar</span>
             </Button>
           </Link>
           <DropdownMenu>
@@ -79,6 +79,12 @@ export function Header() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
+              <Link href="/skills">
+                <DropdownMenuItem className="gap-2 cursor-pointer" data-testid="link-skills">
+                  <Sparkles className="w-4 h-4" />
+                  Skills
+                </DropdownMenuItem>
+              </Link>
               <Link href="/protocols">
                 <DropdownMenuItem className="gap-2 cursor-pointer" data-testid="link-protocols">
                   <Layers className="w-4 h-4" />

@@ -254,6 +254,77 @@ export const rateLimitEntries = pgTable("rate_limit_entries", {
   uniqueIndex("uq_rate_limit_key_window").on(table.key, table.windowStart),
 ]);
 
+// --- Bazaar (x402 marketplace) ---
+
+export const bazaarServices = pgTable("bazaar_services", {
+  id: serial("id").primaryKey(),
+  resourceUrl: text("resource_url").notNull(),
+  name: text("name"),
+  description: text("description"),
+  category: text("category").notNull().default("other"),
+  network: text("network").notNull(),
+  asset: text("asset"),
+  assetName: text("asset_name"),
+  priceRaw: text("price_raw"),
+  priceUsd: real("price_usd"),
+  payTo: text("pay_to"),
+  scheme: text("scheme"),
+  x402Version: integer("x402_version"),
+  method: text("method"),
+  healthStatus: text("health_status"),
+  uptimePct: real("uptime_pct"),
+  avgLatencyMs: real("avg_latency_ms"),
+  trustScore: integer("trust_score"),
+  lastHealthCheck: timestamp("last_health_check"),
+  firstSeenAt: timestamp("first_seen_at").notNull().defaultNow(),
+  lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
+  isActive: boolean("is_active").notNull().default(true),
+  metadata: jsonb("metadata"),
+  scoutData: jsonb("scout_data"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("uq_bazaar_resource_url").on(table.resourceUrl),
+  index("idx_bazaar_category").on(table.category),
+  index("idx_bazaar_network").on(table.network),
+  index("idx_bazaar_pay_to").on(table.payTo),
+  index("idx_bazaar_price_usd").on(table.priceUsd),
+  index("idx_bazaar_is_active").on(table.isActive),
+]);
+
+export const bazaarSnapshots = pgTable("bazaar_snapshots", {
+  id: serial("id").primaryKey(),
+  snapshotDate: timestamp("snapshot_date").notNull(),
+  totalServices: integer("total_services").notNull().default(0),
+  activeServices: integer("active_services").notNull().default(0),
+  newServicesCount: integer("new_services_count").notNull().default(0),
+  categoryBreakdown: jsonb("category_breakdown"),
+  networkBreakdown: jsonb("network_breakdown"),
+  priceStats: jsonb("price_stats"),
+  priceByCategoryStats: jsonb("price_by_category_stats"),
+  totalPayToWallets: integer("total_pay_to_wallets").notNull().default(0),
+  topServices: jsonb("top_services"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("uq_bazaar_snapshot_date").on(table.snapshotDate),
+]);
+
+export const insertBazaarServiceSchema = createInsertSchema(bazaarServices).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertBazaarSnapshotSchema = createInsertSchema(bazaarSnapshots).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type BazaarService = typeof bazaarServices.$inferSelect;
+export type InsertBazaarService = z.infer<typeof insertBazaarServiceSchema>;
+export type BazaarSnapshot = typeof bazaarSnapshots.$inferSelect;
+export type InsertBazaarSnapshot = z.infer<typeof insertBazaarSnapshotSchema>;
+
+// --- End Bazaar ---
+
 export const insertAgentSchema = createInsertSchema(agents).omit({
   id: true,
   createdAt: true,

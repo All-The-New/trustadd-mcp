@@ -15,6 +15,7 @@ import Economy from "@/pages/economy";
 import Protocols from "@/pages/protocols";
 import Quality from "@/pages/quality";
 import Skills from "@/pages/skills";
+import Bazaar from "@/pages/bazaar";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -31,6 +32,7 @@ function Router() {
       <Route path="/economy" component={Economy} />
       <Route path="/protocols" component={Protocols} />
       <Route path="/skills" component={Skills} />
+      <Route path="/bazaar" component={Bazaar} />
       <Route component={NotFound} />
     </Switch>
   );

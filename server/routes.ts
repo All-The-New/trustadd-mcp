@@ -1017,4 +1017,60 @@ export async function registerRoutes(
     }
   });
 
+  // --- Bazaar (x402 marketplace analytics) ---
+
+  app.get("/api/bazaar/stats", async (_req, res) => {
+    try {
+      const data = await cached("bazaar:stats", 300_000, () => storage.getBazaarStats());
+      res.set("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+      res.json(data);
+    } catch (err) {
+      logger.error("Error fetching bazaar stats", { error: (err as Error).message });
+      res.status(500).json({ message: "Failed to fetch bazaar stats" });
+    }
+  });
+
+  app.get("/api/bazaar/services", async (req, res) => {
+    try {
+      const opts = {
+        category: req.query.category as string | undefined,
+        network: req.query.network as string | undefined,
+        search: req.query.search as string | undefined,
+        sortBy: req.query.sortBy as string | undefined,
+        limit: parseInt(req.query.limit as string) || 50,
+        offset: parseInt(req.query.offset as string) || 0,
+      };
+      const data = await storage.getBazaarServices(opts);
+      res.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=120");
+      res.json(data);
+    } catch (err) {
+      logger.error("Error fetching bazaar services", { error: (err as Error).message });
+      res.status(500).json({ message: "Failed to fetch bazaar services" });
+    }
+  });
+
+  app.get("/api/bazaar/trends", async (req, res) => {
+    try {
+      const days = Math.min(parseInt(req.query.days as string) || 90, 365);
+      const data = await cached(`bazaar:trends:${days}`, 300_000, () => storage.getBazaarSnapshots(days));
+      res.set("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+      res.json(data);
+    } catch (err) {
+      logger.error("Error fetching bazaar trends", { error: (err as Error).message });
+      res.status(500).json({ message: "Failed to fetch bazaar trends" });
+    }
+  });
+
+  app.get("/api/bazaar/top-services", async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+      const data = await cached(`bazaar:top:${limit}`, 300_000, () => storage.getBazaarTopServices(limit));
+      res.set("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+      res.json(data);
+    } catch (err) {
+      logger.error("Error fetching bazaar top services", { error: (err as Error).message });
+      res.status(500).json({ message: "Failed to fetch bazaar top services" });
+    }
+  });
+
 }

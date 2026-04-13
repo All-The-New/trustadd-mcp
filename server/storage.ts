@@ -29,6 +29,12 @@ import {
   transactionSyncState,
   type AgentTransaction,
   type InsertAgentTransaction,
+  bazaarServices,
+  bazaarSnapshots,
+  type BazaarService,
+  type InsertBazaarService,
+  type BazaarSnapshot,
+  type InsertBazaarSnapshot,
 } from "../shared/schema.js";
 import { db } from "./db.js";
 import { eq, desc, sql, ilike, or, and, isNotNull, count, gt, lt, isNull, lte, asc, inArray } from "drizzle-orm";
@@ -216,6 +222,23 @@ export interface IStorage {
     mcp: { declaring: number; adoptionRate: number };
     a2a: { declaring: number; adoptionRate: number };
   }>;
+
+  // Bazaar (x402 marketplace)
+  upsertBazaarService(data: InsertBazaarService): Promise<BazaarService>;
+  upsertBazaarServices(data: InsertBazaarService[]): Promise<number>;
+  markBazaarServicesInactive(seenCutoff: Date): Promise<number>;
+  getBazaarServices(opts?: { category?: string; network?: string; search?: string; sortBy?: string; limit?: number; offset?: number }): Promise<{ services: BazaarService[]; total: number }>;
+  getBazaarStats(): Promise<{
+    totalServices: number;
+    activeServices: number;
+    categoryBreakdown: Array<{ category: string; count: number }>;
+    networkBreakdown: Array<{ network: string; count: number }>;
+    priceStats: { median: number | null; mean: number | null; min: number | null; max: number | null };
+    totalPayToWallets: number;
+  }>;
+  getBazaarSnapshots(limit?: number): Promise<BazaarSnapshot[]>;
+  createBazaarSnapshot(data: InsertBazaarSnapshot): Promise<BazaarSnapshot>;
+  getBazaarTopServices(limit?: number): Promise<BazaarService[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2308,6 +2331,215 @@ export class DatabaseStorage implements IStorage {
       skillCount: Number(r.skill_count),
       capabilities: r.capabilities || [],
     }));
+  }
+
+  // --- Bazaar ---
+
+  async upsertBazaarService(data: InsertBazaarService): Promise<BazaarService> {
+    const [result] = await db.insert(bazaarServices).values(data)
+      .onConflictDoUpdate({
+        target: bazaarServices.resourceUrl,
+        set: {
+          name: data.name,
+          description: data.description,
+          category: data.category,
+          network: data.network,
+          asset: data.asset,
+          assetName: data.assetName,
+          priceRaw: data.priceRaw,
+          priceUsd: data.priceUsd,
+          payTo: data.payTo,
+          scheme: data.scheme,
+          x402Version: data.x402Version,
+          method: data.method,
+          healthStatus: data.healthStatus,
+          uptimePct: data.uptimePct,
+          avgLatencyMs: data.avgLatencyMs,
+          trustScore: data.trustScore,
+          lastHealthCheck: data.lastHealthCheck,
+          lastSeenAt: sql`NOW()`,
+          isActive: true,
+          metadata: data.metadata,
+          scoutData: data.scoutData,
+        },
+      })
+      .returning();
+    return result;
+  }
+
+  async upsertBazaarServices(data: InsertBazaarService[]): Promise<number> {
+    if (data.length === 0) return 0;
+    // Batch in chunks of 100
+    let total = 0;
+    for (let i = 0; i < data.length; i += 100) {
+      const chunk = data.slice(i, i + 100);
+      await db.insert(bazaarServices).values(chunk)
+        .onConflictDoUpdate({
+          target: bazaarServices.resourceUrl,
+          set: {
+            name: sql`EXCLUDED.name`,
+            description: sql`EXCLUDED.description`,
+            category: sql`EXCLUDED.category`,
+            network: sql`EXCLUDED.network`,
+            asset: sql`EXCLUDED.asset`,
+            assetName: sql`EXCLUDED.asset_name`,
+            priceRaw: sql`EXCLUDED.price_raw`,
+            priceUsd: sql`EXCLUDED.price_usd`,
+            payTo: sql`EXCLUDED.pay_to`,
+            scheme: sql`EXCLUDED.scheme`,
+            x402Version: sql`EXCLUDED.x402_version`,
+            method: sql`EXCLUDED.method`,
+            lastSeenAt: sql`NOW()`,
+            isActive: sql`TRUE`,
+            metadata: sql`EXCLUDED.metadata`,
+          },
+        });
+      total += chunk.length;
+    }
+    return total;
+  }
+
+  async markBazaarServicesInactive(seenCutoff: Date): Promise<number> {
+    // Mark as inactive any active service whose last_seen_at is older than the cutoff.
+    // The indexer sets last_seen_at = NOW() on every upsert, so anything not touched
+    // in this run will have an older timestamp.
+    await db.execute(sql`
+      UPDATE bazaar_services SET is_active = FALSE
+      WHERE is_active = TRUE AND last_seen_at < ${seenCutoff}
+    `);
+    return 0;
+  }
+
+  async getBazaarServices(opts: { category?: string; network?: string; search?: string; sortBy?: string; limit?: number; offset?: number } = {}): Promise<{ services: BazaarService[]; total: number }> {
+    const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+    const offset = Math.max(opts.offset ?? 0, 0);
+
+    const conditions = [eq(bazaarServices.isActive, true)];
+    if (opts.category) conditions.push(eq(bazaarServices.category, opts.category));
+    if (opts.network) conditions.push(eq(bazaarServices.network, opts.network));
+    if (opts.search) {
+      // Escape SQL LIKE special characters to prevent pattern injection
+      const safeSearch = opts.search.replace(/[%_\\]/g, "\\$&");
+      conditions.push(
+        or(
+          ilike(bazaarServices.name, `%${safeSearch}%`),
+          ilike(bazaarServices.description, `%${safeSearch}%`),
+        )!
+      );
+    }
+
+    const where = and(...conditions);
+
+    let orderBy;
+    switch (opts.sortBy) {
+      case "price_asc": orderBy = asc(bazaarServices.priceUsd); break;
+      case "price_desc": orderBy = desc(bazaarServices.priceUsd); break;
+      case "trust": orderBy = desc(bazaarServices.trustScore); break;
+      case "latency": orderBy = asc(bazaarServices.avgLatencyMs); break;
+      case "newest": orderBy = desc(bazaarServices.firstSeenAt); break;
+      default: orderBy = desc(bazaarServices.lastSeenAt);
+    }
+
+    const [services, countResult] = await Promise.all([
+      db.select().from(bazaarServices).where(where).orderBy(orderBy).limit(limit).offset(offset),
+      db.select({ count: count() }).from(bazaarServices).where(where),
+    ]);
+
+    return { services, total: Number(countResult[0]?.count ?? 0) };
+  }
+
+  async getBazaarStats(): Promise<{
+    totalServices: number;
+    activeServices: number;
+    categoryBreakdown: Array<{ category: string; count: number }>;
+    networkBreakdown: Array<{ network: string; count: number }>;
+    priceStats: { median: number | null; mean: number | null; min: number | null; max: number | null };
+    totalPayToWallets: number;
+  }> {
+    const [totals, categories, networks, prices, wallets] = await Promise.all([
+      db.execute(sql`
+        SELECT
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE is_active) AS active
+        FROM bazaar_services
+      `),
+      db.execute(sql`
+        SELECT category, COUNT(*)::int AS count
+        FROM bazaar_services WHERE is_active = TRUE
+        GROUP BY category ORDER BY count DESC
+      `),
+      db.execute(sql`
+        SELECT network, COUNT(*)::int AS count
+        FROM bazaar_services WHERE is_active = TRUE
+        GROUP BY network ORDER BY count DESC
+      `),
+      db.execute(sql`
+        SELECT
+          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY price_usd) AS median,
+          AVG(price_usd) AS mean,
+          MIN(price_usd) AS min,
+          MAX(price_usd) AS max
+        FROM bazaar_services
+        WHERE is_active = TRUE AND price_usd IS NOT NULL AND price_usd > 0
+      `),
+      db.execute(sql`
+        SELECT COUNT(DISTINCT pay_to)::int AS count
+        FROM bazaar_services WHERE is_active = TRUE AND pay_to IS NOT NULL
+      `),
+    ]);
+
+    const t = totals.rows[0] as any;
+    const p = prices.rows[0] as any;
+
+    return {
+      totalServices: Number(t.total),
+      activeServices: Number(t.active),
+      categoryBreakdown: (categories.rows as any[]).map(r => ({ category: r.category, count: Number(r.count) })),
+      networkBreakdown: (networks.rows as any[]).map(r => ({ network: r.network, count: Number(r.count) })),
+      priceStats: {
+        median: p.median != null ? Number(p.median) : null,
+        mean: p.mean != null ? Number(p.mean) : null,
+        min: p.min != null ? Number(p.min) : null,
+        max: p.max != null ? Number(p.max) : null,
+      },
+      totalPayToWallets: Number((wallets.rows[0] as any).count),
+    };
+  }
+
+  async getBazaarSnapshots(limit = 90): Promise<BazaarSnapshot[]> {
+    return db.select().from(bazaarSnapshots)
+      .orderBy(desc(bazaarSnapshots.snapshotDate))
+      .limit(limit);
+  }
+
+  async createBazaarSnapshot(data: InsertBazaarSnapshot): Promise<BazaarSnapshot> {
+    const [result] = await db.insert(bazaarSnapshots).values(data)
+      .onConflictDoUpdate({
+        target: bazaarSnapshots.snapshotDate,
+        set: {
+          totalServices: data.totalServices,
+          activeServices: data.activeServices,
+          newServicesCount: data.newServicesCount,
+          categoryBreakdown: data.categoryBreakdown,
+          networkBreakdown: data.networkBreakdown,
+          priceStats: data.priceStats,
+          priceByCategoryStats: data.priceByCategoryStats,
+          totalPayToWallets: data.totalPayToWallets,
+          topServices: data.topServices,
+        },
+      })
+      .returning();
+    return result;
+  }
+
+  async getBazaarTopServices(limit = 20): Promise<BazaarService[]> {
+    return db.select().from(bazaarServices)
+      .where(and(
+        eq(bazaarServices.isActive, true),
+        isNotNull(bazaarServices.trustScore),
+      ))
+      .orderBy(desc(bazaarServices.trustScore), asc(bazaarServices.avgLatencyMs))
+      .limit(limit);
   }
 }
 
