@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { Shield } from "lucide-react";
 
 export function Footer() {
@@ -12,16 +13,15 @@ export function Footer() {
             <span className="text-sm font-medium">TrustAdd</span>
           </div>
           <p className="text-xs text-muted-foreground text-center">
-            Neutral public infrastructure for AI agent trust ratings.
+            The trust oracle for the agent economy.
           </p>
           <div className="flex items-center gap-4">
-            <a
-              href="/api/agents"
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              data-testid="link-api"
-            >
-              API
-            </a>
+            <Link href="/trust-api" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              Trust API
+            </Link>
+            <Link href="/api-docs" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              Docs
+            </Link>
             <span className="text-xs text-muted-foreground">
               v1.0
             </span>
