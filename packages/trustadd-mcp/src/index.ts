@@ -3,21 +3,28 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8"));
 
 const API_BASE = process.env.TRUSTADD_API_URL || "https://trustadd.com";
+const TIMEOUT_MS = 15_000;
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 
 const server = new McpServer({
-  name: "trustadd",
-  version: "1.0.0",
+  name: pkg.name,
+  version: pkg.version,
 });
 
 // --- Helpers ---
 
-async function apiGet(path: string): Promise<{ status: number; data: unknown; headers: Headers }> {
-  const res = await fetch(`${API_BASE}${path}`);
+async function apiGet(path: string): Promise<{ status: number; data: unknown }> {
+  const res = await fetch(`${API_BASE}${path}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
   const data = await res.json().catch(() => null);
-  return { status: res.status, data, headers: res.headers };
+  return { status: res.status, data };
 }
 
 function textResult(data: unknown) {
@@ -26,6 +33,29 @@ function textResult(data: unknown) {
 
 function errorResult(message: string) {
   return { content: [{ type: "text" as const, text: message }], isError: true as const };
+}
+
+/** Shared handler for the two paid x402-gated endpoints. */
+async function paidTrustHandler(
+  path: string,
+  price: string,
+): Promise<ReturnType<typeof textResult> | ReturnType<typeof errorResult>> {
+  const { status, data } = await apiGet(path);
+
+  if (status === 402) {
+    return textResult({
+      paymentRequired: true,
+      message:
+        `This endpoint requires x402 payment (${price} USDC on Base). ` +
+        "The TrustAdd MCP server does not handle x402 payments directly — " +
+        "use the REST API with an x402-compatible HTTP client, or visit trustadd.com.",
+      details: data,
+    });
+  }
+  if (status === 404) return textResult({ verdict: "UNKNOWN", message: "No agent found for this address" });
+  if (status === 400) return errorResult("Invalid address format");
+  if (status >= 500) return errorResult(`TrustAdd API error (HTTP ${status})`);
+  return textResult(data);
 }
 
 // --- Tool 1: Free lookup ---
@@ -56,7 +86,7 @@ server.registerTool(
   },
 );
 
-// --- Tool 2: Quick Check (x402-gated) ---
+// --- Tool 2: Quick Check (x402-gated, $0.01) ---
 
 server.registerTool(
   "check_agent_trust",
@@ -81,29 +111,14 @@ server.registerTool(
   async ({ address, chainId }) => {
     try {
       const params = chainId ? `?chainId=${chainId}` : "";
-      const { status, data } = await apiGet(`/api/v1/trust/${address}${params}`);
-
-      if (status === 402) {
-        return textResult({
-          paymentRequired: true,
-          message:
-            "This endpoint requires x402 payment ($0.01 USDC on Base). " +
-            "The TrustAdd MCP server does not handle x402 payments directly — " +
-            "use the REST API with an x402-compatible HTTP client, or visit trustadd.com.",
-          details: data,
-        });
-      }
-      if (status === 404) return textResult({ verdict: "UNKNOWN", message: "No agent found for this address" });
-      if (status === 400) return errorResult("Invalid address format");
-      if (status >= 500) return errorResult(`TrustAdd API error (HTTP ${status})`);
-      return textResult(data);
+      return await paidTrustHandler(`/api/v1/trust/${address}${params}`, "$0.01");
     } catch (err) {
       return errorResult(`Request failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   },
 );
 
-// --- Tool 3: Full Report (x402-gated) ---
+// --- Tool 3: Full Report (x402-gated, $0.05) ---
 
 server.registerTool(
   "get_trust_report",
@@ -128,22 +143,7 @@ server.registerTool(
   async ({ address, chainId }) => {
     try {
       const params = chainId ? `?chainId=${chainId}` : "";
-      const { status, data } = await apiGet(`/api/v1/trust/${address}/report${params}`);
-
-      if (status === 402) {
-        return textResult({
-          paymentRequired: true,
-          message:
-            "This endpoint requires x402 payment ($0.05 USDC on Base). " +
-            "The TrustAdd MCP server does not handle x402 payments directly — " +
-            "use the REST API with an x402-compatible HTTP client, or visit trustadd.com.",
-          details: data,
-        });
-      }
-      if (status === 404) return textResult({ verdict: "UNKNOWN", message: "No agent found for this address" });
-      if (status === 400) return errorResult("Invalid address format");
-      if (status >= 500) return errorResult(`TrustAdd API error (HTTP ${status})`);
-      return textResult(data);
+      return await paidTrustHandler(`/api/v1/trust/${address}/report${params}`, "$0.05");
     } catch (err) {
       return errorResult(`Request failed: ${err instanceof Error ? err.message : String(err)}`);
     }
