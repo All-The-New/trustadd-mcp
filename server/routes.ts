@@ -1293,11 +1293,13 @@ export async function registerRoutes(
     }
   });
 
-  // x402 payment gate — mounted AFTER free /exists endpoint, BEFORE paid endpoints
+  // x402 payment gate — mounted globally (not on sub-path) because the x402 middleware
+  // uses req.path for route matching, and Express strips the mount prefix from req.path
+  // when using app.use(prefix, middleware). Full-path routes in the config need full req.path.
   if (process.env.TRUST_PRODUCT_ENABLED === "true") {
     const gate = createTrustProductGate();
     if (gate) {
-      app.use("/api/v1/trust", gate);
+      app.use(gate);
       logger.info("Trust Data Product x402 gate active");
     }
   }
