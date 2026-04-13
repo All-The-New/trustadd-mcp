@@ -75,6 +75,10 @@ const adminLimiter = rateLimit({
 app.use("/api/admin", adminLimiter);
 app.use("/api", apiLimiter);
 
+// Persist API requests to DB for usage analytics
+import { requestLogger } from "./lib/request-logger.js";
+app.use(requestLogger());
+
 import { log } from "./lib/log.js";
 import { createLogger } from "./lib/logger.js";
 import { requestStore, generateRequestId } from "./lib/request-context.js";

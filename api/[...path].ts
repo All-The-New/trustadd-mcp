@@ -5,6 +5,7 @@ import { registerRoutes } from "../server/routes.js";
 import { createLogger } from "../server/lib/logger.js";
 import { requestStore, generateRequestId } from "../server/lib/request-context.js";
 import { createRateLimiter } from "../server/lib/rate-limiter.js";
+import { requestLogger } from "../server/lib/request-logger.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -36,6 +37,9 @@ app.use((_req: any, res: any, next: any) => {
 // DB-backed rate limiting (shared across all Vercel serverless instances)
 app.use("/api/admin", createRateLimiter({ prefix: "admin", windowMs: 60 * 60 * 1000, limit: 2 }));
 app.use("/api", createRateLimiter({ prefix: "api", windowMs: 60 * 1000, limit: 100 }));
+
+// Persist API requests to DB for usage analytics
+app.use(requestLogger());
 
 const reqLog = createLogger("http");
 

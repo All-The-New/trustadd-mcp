@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, boolean, integer, jsonb, timestamp, serial, real, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, boolean, integer, bigserial, jsonb, timestamp, serial, real, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -252,6 +252,24 @@ export const rateLimitEntries = pgTable("rate_limit_entries", {
   hitCount: integer("hit_count").notNull().default(1),
 }, (table) => [
   uniqueIndex("uq_rate_limit_key_window").on(table.key, table.windowStart),
+]);
+
+// API request log for usage analytics
+export const apiRequestLog = pgTable("api_request_log", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  ts: timestamp("ts").notNull().defaultNow(),
+  method: text("method").notNull(),
+  path: text("path").notNull(),
+  statusCode: integer("status_code"),
+  durationMs: integer("duration_ms"),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  referer: text("referer"),
+  country: text("country"),
+}, (table) => [
+  index("idx_api_request_log_ts").on(table.ts),
+  index("idx_api_request_log_ip").on(table.ip, table.ts),
+  index("idx_api_request_log_path").on(table.path, table.ts),
 ]);
 
 // --- Bazaar (x402 marketplace) ---

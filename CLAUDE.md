@@ -16,7 +16,8 @@ npm run dev                    # Express + Vite HMR on port 5000
 | Frontend | **Vercel** (static SPA) | React/Vite builds to `dist/public`, served as static files |
 | API | **Vercel** (serverless) | Express app wrapped in `api/[...path].ts` catch-all |
 | Database | **Supabase** PostgreSQL | Project `agfyfdhvgekekliujoxc` (us-east-2), Drizzle ORM |
-| Background Jobs | **Trigger.dev** | 9 tasks in `trigger/` directory (6 scheduled + 2 child tasks + 1 alert helper) |
+| Background Jobs | **Trigger.dev** | 10 tasks in `trigger/` directory (7 scheduled + 2 child tasks + 1 alert helper) |
+| Analytics | **Vercel Web Analytics** | `@vercel/analytics/react` in App.tsx, plus custom `api_request_log` table |
 | Error Tracking | **Sentry** | OTEL integration via `trigger.config.ts`, captures all task failures |
 | DNS/CDN | **Cloudflare** | trustadd.com → Vercel |
 
@@ -54,7 +55,8 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - `api/[...path].ts` — Vercel serverless catch-all (wraps Express app)
 - `api/agent/[id].ts` — SSR meta tag injection for agent pages (SEO: serves index.html with per-agent title, description, OG tags, canonical, JSON-LD)
 - `api/health.ts` — Standalone health check with DB connection test
-- `trigger/` — 9 Trigger.dev tasks: `blockchain-indexer` (orchestrator, */2 cron) → `chain-indexer` (per-chain child, 2 cycles + 90s checkpointed wait), `community-feedback` (orchestrator, daily 4am) → `community-scrape` (per-platform child), `transaction-indexer`, `x402-prober`, `recalculate-scores`, `watchdog`, + `alert` helper
+- `server/lib/request-logger.ts` — Fire-and-forget API request logging middleware (path normalization, 90-day stochastic cleanup)
+- `trigger/` — 10 Trigger.dev tasks: `blockchain-indexer` (orchestrator, */2 cron) → `chain-indexer` (per-chain child, 2 cycles + 90s checkpointed wait), `community-feedback` (orchestrator, daily 4am) → `community-scrape` (per-platform child), `transaction-indexer`, `x402-prober`, `recalculate-scores`, `watchdog`, `bazaar-indexer`, + `alert` helper
 - `script/sync-trigger-env.ts` — Env var sync script for Trigger.dev (manual run)
 - `vercel.json` — Vercel routing and build configuration
 - `client/src/App.tsx` — React routing (12 pages)

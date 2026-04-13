@@ -341,6 +341,72 @@ export async function registerRoutes(
     }
   });
 
+  // --- API Usage Analytics ---
+
+  app.get("/api/analytics/api-usage", async (req, res) => {
+    try {
+      const days = Math.min(parseInt(req.query.days as string) || 7, 90);
+      const data = await cached(`analytics:api-usage:${days}`, ANALYTICS_TTL, async () => {
+        const since = new Date(Date.now() - days * 86400000).toISOString();
+
+        const [summary, topPaths, topUsers, daily] = await Promise.all([
+          // Overall summary
+          pool.query(
+            `SELECT count(*)::int as total_requests,
+                    count(DISTINCT ip)::int as unique_ips,
+                    count(DISTINCT date_trunc('day', ts))::int as active_days,
+                    round(avg(duration_ms))::int as avg_duration_ms,
+                    count(*) FILTER (WHERE status_code >= 400)::int as error_count
+             FROM api_request_log WHERE ts >= $1`,
+            [since],
+          ),
+          // Top endpoints
+          pool.query(
+            `SELECT path, count(*)::int as hits, count(DISTINCT ip)::int as unique_ips,
+                    round(avg(duration_ms))::int as avg_ms
+             FROM api_request_log WHERE ts >= $1
+             GROUP BY path ORDER BY hits DESC LIMIT 20`,
+            [since],
+          ),
+          // Top users (by IP) — anonymize last octet for privacy
+          pool.query(
+            `SELECT regexp_replace(ip, '\\d+$', 'x') as ip_masked,
+                    count(*)::int as hits,
+                    count(DISTINCT path)::int as endpoints_used,
+                    count(DISTINCT date_trunc('day', ts))::int as active_days,
+                    min(ts) as first_seen, max(ts) as last_seen,
+                    mode() WITHIN GROUP (ORDER BY country) as country
+             FROM api_request_log WHERE ts >= $1 AND ip IS NOT NULL
+             GROUP BY ip ORDER BY hits DESC LIMIT 20`,
+            [since],
+          ),
+          // Daily traffic
+          pool.query(
+            `SELECT date_trunc('day', ts)::date as day,
+                    count(*)::int as requests,
+                    count(DISTINCT ip)::int as unique_ips
+             FROM api_request_log WHERE ts >= $1
+             GROUP BY day ORDER BY day`,
+            [since],
+          ),
+        ]);
+
+        return {
+          period: { days, since },
+          summary: summary.rows[0],
+          topPaths: topPaths.rows,
+          topUsers: topUsers.rows,
+          daily: daily.rows,
+        };
+      });
+      res.set("Cache-Control", ANALYTICS_CACHE);
+      res.json(data);
+    } catch (err) {
+      logger.error("Error fetching API usage analytics", { error: (err as Error).message });
+      res.status(500).json({ message: "Failed to fetch API usage analytics" });
+    }
+  });
+
   let syncInProgress = false;
 
   app.post("/api/admin/sync", requireAdmin(), async (req, res) => {
