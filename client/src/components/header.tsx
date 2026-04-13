@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Shield, Bot, BarChart3, BookOpen, Activity, Info, Coins, Layers, ChevronDown, ShieldCheck, Sparkles, Store } from "lucide-react";
+import { Shield, Bot, BarChart3, ChevronDown, Zap, Info, BookOpen, Layers, Activity, ShieldCheck, Sparkles, Store, Coins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,10 +9,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "./theme-toggle";
 
+const analyticsRoutes = ["/analytics", "/economy", "/skills", "/bazaar", "/quality", "/status"];
+const aboutRoutes = ["/about", "/protocols", "/api-docs"];
+
 export function Header() {
   const [location] = useLocation();
 
-  const secondaryActive = ["/status", "/api-docs", "/about", "/quality", "/protocols", "/skills"].includes(location);
+  const analyticsActive = analyticsRoutes.includes(location);
+  const aboutActive = aboutRoutes.includes(location);
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
@@ -29,7 +33,7 @@ export function Header() {
         <nav className="flex items-center gap-1">
           <Link href="/agents">
             <Button
-              variant={location === "/agents" ? "secondary" : "ghost"}
+              variant={location === "/agents" || location.startsWith("/agent/") ? "secondary" : "ghost"}
               className="gap-2"
               data-testid="link-directory"
             >
@@ -37,82 +41,98 @@ export function Header() {
               <span className="hidden sm:inline">Agents</span>
             </Button>
           </Link>
-          <Link href="/analytics">
-            <Button
-              variant={location === "/analytics" ? "secondary" : "ghost"}
-              className="gap-2"
-              data-testid="link-analytics"
-            >
-              <BarChart3 className="w-4 h-4" />
-              <span className="hidden sm:inline">Analytics</span>
-            </Button>
-          </Link>
-          <Link href="/economy">
-            <Button
-              variant={location === "/economy" ? "secondary" : "ghost"}
-              className="gap-2"
-              data-testid="link-economy"
-            >
-              <Coins className="w-4 h-4" />
-              <span className="hidden sm:inline">Economy</span>
-            </Button>
-          </Link>
-          <Link href="/bazaar">
-            <Button
-              variant={location === "/bazaar" ? "secondary" : "ghost"}
-              className="gap-2"
-              data-testid="link-bazaar"
-            >
-              <Store className="w-4 h-4" />
-              <span className="hidden sm:inline">Bazaar</span>
-            </Button>
-          </Link>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant={secondaryActive ? "secondary" : "ghost"}
+                variant={analyticsActive ? "secondary" : "ghost"}
                 className="gap-2"
-                data-testid="dropdown-more"
+                data-testid="dropdown-analytics"
               >
-                <span className="hidden sm:inline">More</span>
-                <ChevronDown className="w-4 h-4" />
+                <BarChart3 className="w-4 h-4" />
+                <span className="hidden sm:inline">Analytics</span>
+                <ChevronDown className="w-3 h-3" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuContent align="start" className="w-48">
+              <Link href="/analytics">
+                <DropdownMenuItem className="gap-2 cursor-pointer">
+                  <BarChart3 className="w-4 h-4" />
+                  Overview
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/economy">
+                <DropdownMenuItem className="gap-2 cursor-pointer">
+                  <Coins className="w-4 h-4" />
+                  Economy
+                </DropdownMenuItem>
+              </Link>
               <Link href="/skills">
-                <DropdownMenuItem className="gap-2 cursor-pointer" data-testid="link-skills">
+                <DropdownMenuItem className="gap-2 cursor-pointer">
                   <Sparkles className="w-4 h-4" />
                   Skills
                 </DropdownMenuItem>
               </Link>
-              <Link href="/protocols">
-                <DropdownMenuItem className="gap-2 cursor-pointer" data-testid="link-protocols">
-                  <Layers className="w-4 h-4" />
-                  Protocols
+              <Link href="/bazaar">
+                <DropdownMenuItem className="gap-2 cursor-pointer">
+                  <Store className="w-4 h-4" />
+                  Bazaar
                 </DropdownMenuItem>
               </Link>
               <Link href="/quality">
-                <DropdownMenuItem className="gap-2 cursor-pointer" data-testid="link-quality">
+                <DropdownMenuItem className="gap-2 cursor-pointer">
                   <ShieldCheck className="w-4 h-4" />
                   Quality
                 </DropdownMenuItem>
               </Link>
               <Link href="/status">
-                <DropdownMenuItem className="gap-2 cursor-pointer" data-testid="link-status">
+                <DropdownMenuItem className="gap-2 cursor-pointer">
                   <Activity className="w-4 h-4" />
-                  Status
+                  Oracle Status
+                </DropdownMenuItem>
+              </Link>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Link href="/trust-api">
+            <Button
+              variant={location === "/trust-api" ? "secondary" : "ghost"}
+              className="gap-2"
+              data-testid="link-trust-api"
+            >
+              <Zap className="w-4 h-4" />
+              <span className="hidden sm:inline">Trust API</span>
+            </Button>
+          </Link>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant={aboutActive ? "secondary" : "ghost"}
+                className="gap-2"
+                data-testid="dropdown-about"
+              >
+                <span className="hidden sm:inline">About</span>
+                <ChevronDown className="w-3 h-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <Link href="/about">
+                <DropdownMenuItem className="gap-2 cursor-pointer">
+                  <Info className="w-4 h-4" />
+                  About TrustAdd
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/protocols">
+                <DropdownMenuItem className="gap-2 cursor-pointer">
+                  <Layers className="w-4 h-4" />
+                  Protocols
                 </DropdownMenuItem>
               </Link>
               <Link href="/api-docs">
-                <DropdownMenuItem className="gap-2 cursor-pointer" data-testid="link-api-docs">
+                <DropdownMenuItem className="gap-2 cursor-pointer">
                   <BookOpen className="w-4 h-4" />
-                  API
-                </DropdownMenuItem>
-              </Link>
-              <Link href="/about">
-                <DropdownMenuItem className="gap-2 cursor-pointer" data-testid="link-about">
-                  <Info className="w-4 h-4" />
-                  About
+                  API Documentation
                 </DropdownMenuItem>
               </Link>
             </DropdownMenuContent>
