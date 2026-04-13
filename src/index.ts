@@ -54,8 +54,17 @@ async function paidTrustHandler(
   }
   if (status === 404) return textResult({ verdict: "UNKNOWN", message: "No agent found for this address" });
   if (status === 400) return errorResult("Invalid address format");
+  if (status === 429) return errorResult("Rate limit exceeded — retry after a short delay");
+  if (status === 503) return errorResult("Trust Data Product is temporarily unavailable");
   if (status >= 500) return errorResult(`TrustAdd API error (HTTP ${status})`);
   return textResult(data);
+}
+
+function formatError(err: unknown): string {
+  if (err instanceof Error && err.name === "TimeoutError") {
+    return `TrustAdd API timed out after ${TIMEOUT_MS / 1000}s — try again`;
+  }
+  return `Request failed: ${err instanceof Error ? err.message : String(err)}`;
 }
 
 // --- Tool 1: Free lookup ---
@@ -81,7 +90,7 @@ server.registerTool(
       if (status >= 500) return errorResult(`TrustAdd API error (HTTP ${status})`);
       return textResult(data);
     } catch (err) {
-      return errorResult(`Request failed: ${err instanceof Error ? err.message : String(err)}`);
+      return errorResult(formatError(err));
     }
   },
 );
@@ -113,7 +122,7 @@ server.registerTool(
       const params = chainId ? `?chainId=${chainId}` : "";
       return await paidTrustHandler(`/api/v1/trust/${address}${params}`, "$0.01");
     } catch (err) {
-      return errorResult(`Request failed: ${err instanceof Error ? err.message : String(err)}`);
+      return errorResult(formatError(err));
     }
   },
 );
@@ -145,7 +154,7 @@ server.registerTool(
       const params = chainId ? `?chainId=${chainId}` : "";
       return await paidTrustHandler(`/api/v1/trust/${address}/report${params}`, "$0.05");
     } catch (err) {
-      return errorResult(`Request failed: ${err instanceof Error ? err.message : String(err)}`);
+      return errorResult(formatError(err));
     }
   },
 );
