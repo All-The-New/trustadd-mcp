@@ -110,7 +110,7 @@ trustadd/
 
 ## Database Schema
 
-11 tables defined in `shared/schema.ts`:
+12 tables defined in `shared/schema.ts`:
 
 | Table | Purpose |
 |-------|---------|
@@ -125,6 +125,7 @@ trustadd/
 | `x402_probes` | Results of HTTP 402 endpoint probing |
 | `agent_transactions` | Token transfers (USDC, USDT, DAI, WETH, ETH) to/from agent payment addresses |
 | `transaction_sync_state` | Per-address sync progress for transaction indexing |
+| `trust_reports` | Cached compiled trust reports for x402-gated Trust Data Product API |
 
 Key relationships:
 - `agent_metadata_events.agent_id` → `agents.id`
@@ -132,6 +133,7 @@ Key relationships:
 - `community_feedback_items.source_id` → `community_feedback_sources.id`
 - `x402_probes.agent_id` → `agents.id`
 - `agent_transactions.agent_id` → `agents.id`
+- `trust_reports.agent_id` → `agents.id`
 
 Use `drizzle-kit push` to sync schema to database (no migration files needed).
 
@@ -166,6 +168,14 @@ Use `drizzle-kit push` to sync schema to database (no migration files needed).
 | `ENABLE_RERESOLVE` | Metadata re-resolution for agents with incomplete data | `false` |
 | `ENABLE_PROBER` | x402 endpoint prober (runs every 24h) | `false` |
 | `ENABLE_TX_INDEXER` | Transaction indexer via Alchemy (runs every 6h) | `false` |
+| `TRUST_PRODUCT_ENABLED` | x402-gated Trust Data Product API | `false` |
+
+### Trust Data Product (required when `TRUST_PRODUCT_ENABLED=true`)
+| Variable | Description |
+|----------|-------------|
+| `CDP_API_KEY_ID` | Coinbase Developer Platform API key ID (x402 facilitator) |
+| `CDP_PRIVATE_KEY` | CDP private key (base64-encoded) |
+| `TRUST_PRODUCT_PAY_TO` | Treasury wallet address on Base for receiving USDC payments |
 
 ---
 
@@ -298,12 +308,21 @@ All routes are in `server/routes.ts`:
 - `GET /api/skills/agents-by-skill`
 - `GET /api/skills/trust-correlation`
 
+### Trust Data Product API v1 (x402-gated)
+- `GET /api/v1/trust/:address/exists` — Free existence check (returns verdict preview + pricing)
+- `GET /api/v1/trust/:address` — Quick Check ($0.01 USDC via x402) — score, verdict, flags
+- `GET /api/v1/trust/:address/report` — Full Report ($0.05 USDC via x402) — complete evidence
+- Payment: x402 protocol on Base (USDC, gasless for payer, CDP facilitator)
+- Feature flag: `TRUST_PRODUCT_ENABLED=true`
+- See `docs/trust-product.md` for full spec, `docs/trust-api.yaml` for OpenAPI
+
 ### Admin
 - `POST /api/admin/sync` — Trigger prod-to-dev DB sync (requires `ADMIN_SECRET`)
 - `POST /api/admin/recalculate-scores` — Batch recalculate trust scores
 - `POST /api/admin/probe-all` — Trigger x402 probe cycle
 - `POST /api/admin/sync-transactions` — Trigger transaction sync
 - `POST /api/admin/discover-sources` — Trigger community source discovery
+- `GET /api/admin/trust-product/stats` — Trust data product usage analytics
 
 ### SEO
 - `GET /sitemap-agents.xml` — Dynamic XML sitemap (44k+ agent URLs, cached 1h)

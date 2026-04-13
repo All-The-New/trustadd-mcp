@@ -1152,16 +1152,10 @@ export async function registerRoutes(
 
   const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 
-  // x402 payment gate — only on paid endpoints
-  if (process.env.TRUST_PRODUCT_ENABLED === "true") {
-    const gate = createTrustProductGate();
-    if (gate) {
-      app.use("/api/v1/trust", gate);
-      logger.info("Trust Data Product x402 gate active");
-    }
-  }
-
-  // Free: existence check (no payment required)
+  // Free endpoint MUST be registered BEFORE the x402 gate so it's not payment-gated.
+  // Express matches routes in registration order; app.get takes priority over app.use
+  // for exact path matches, but /exists is a sub-path that the gate middleware would
+  // intercept. Register it first to ensure it's reachable without payment.
   app.get("/api/v1/trust/:address/exists", async (req, res) => {
     try {
       const { address } = req.params;
@@ -1205,6 +1199,15 @@ export async function registerRoutes(
       res.status(500).json({ message: "Internal error" });
     }
   });
+
+  // x402 payment gate — mounted AFTER free /exists endpoint, BEFORE paid endpoints
+  if (process.env.TRUST_PRODUCT_ENABLED === "true") {
+    const gate = createTrustProductGate();
+    if (gate) {
+      app.use("/api/v1/trust", gate);
+      logger.info("Trust Data Product x402 gate active");
+    }
+  }
 
   // Paid: Quick Check ($0.01 USDC via x402)
   app.get("/api/v1/trust/:address", async (req, res) => {

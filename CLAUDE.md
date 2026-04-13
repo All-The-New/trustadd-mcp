@@ -46,7 +46,7 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 
 ## Important Files
 
-- `shared/schema.ts` — All 11 database tables, insert schemas, and TypeScript types
+- `shared/schema.ts` — All 12 database tables, insert schemas, and TypeScript types
 - `shared/chains.ts` — Multi-chain configuration (9 EVM chains, RPC URLs, contract addresses)
 - `server/storage.ts` — Database abstraction layer (IStorage interface, ~2300 lines)
 - `server/routes.ts` — All API endpoints (~900 lines)
@@ -57,6 +57,10 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - `api/health.ts` — Standalone health check with DB connection test
 - `server/lib/request-logger.ts` — Fire-and-forget API request logging middleware (path normalization, 90-day stochastic cleanup)
 - `trigger/` — 10 Trigger.dev tasks: `blockchain-indexer` (orchestrator, */2 cron) → `chain-indexer` (per-chain child, 2 cycles + 90s checkpointed wait), `community-feedback` (orchestrator, daily 4am) → `community-scrape` (per-platform child), `transaction-indexer`, `x402-prober`, `recalculate-scores`, `watchdog`, `bazaar-indexer`, + `alert` helper
+- `server/trust-report-compiler.ts` — Trust Data Product report compiler (verdict logic, address resolution, cache management)
+- `server/lib/x402-gate.ts` — x402 payment middleware for Trust Data Product (CDP facilitator on Base)
+- `docs/trust-product.md` — Trust Data Product specification (tiers, pricing, verdict logic, payment flow)
+- `docs/trust-api.yaml` — OpenAPI 3.1 spec for Trust API v1 endpoints
 - `script/sync-trigger-env.ts` — Env var sync script for Trigger.dev (manual run)
 - `vercel.json` — Vercel routing and build configuration
 - `client/src/App.tsx` — React routing (12 pages)

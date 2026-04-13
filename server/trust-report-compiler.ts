@@ -2,19 +2,16 @@ import {
   type Agent,
   type CommunityFeedbackSummary,
   type X402Probe,
-  type AgentTransaction,
   type TrustReport,
   agents,
   trustReports,
   x402Probes,
-  agentTransactions,
-  communityFeedbackSummaries,
 } from "../shared/schema.js";
 import { CHAIN_CONFIGS } from "../shared/chains.js";
 import { type TrustScoreBreakdown, calculateTrustScore } from "./trust-score.js";
 import { storage } from "./storage.js";
 import { db } from "./db.js";
-import { eq, sql, lt, and, isNotNull } from "drizzle-orm";
+import { eq, sql, lt, and } from "drizzle-orm";
 import { log } from "./lib/log.js";
 
 // --- Types ---
@@ -180,44 +177,37 @@ async function getAgentTransactionStats(agentId: string): Promise<{
   lastTxAt: string | null;
 }> {
   try {
+    // Single query: aggregate stats + per-token breakdown + last timestamp
     const result = await db.execute(sql`
+      WITH stats AS (
+        SELECT
+          COUNT(*)::int as total_count,
+          COALESCE(SUM(amount_usd), 0)::float as total_volume_usd,
+          MAX(block_timestamp) as last_tx_at
+        FROM agent_transactions WHERE agent_id = ${agentId}
+      ),
+      tokens AS (
+        SELECT token_symbol, COUNT(*)::int as count,
+               COALESCE(SUM(amount_usd), 0)::float as volume_usd
+        FROM agent_transactions WHERE agent_id = ${agentId}
+        GROUP BY token_symbol ORDER BY volume_usd DESC LIMIT 5
+      )
       SELECT
-        COUNT(*)::int as count,
-        COALESCE(SUM(amount_usd), 0)::float as total_volume_usd
-      FROM agent_transactions
-      WHERE agent_id = ${agentId}
+        s.total_count, s.total_volume_usd, s.last_tx_at,
+        COALESCE(json_agg(json_build_object(
+          'symbol', t.token_symbol, 'count', t.count, 'volumeUsd', t.volume_usd
+        )) FILTER (WHERE t.token_symbol IS NOT NULL), '[]') as top_tokens
+      FROM stats s LEFT JOIN tokens t ON true
+      GROUP BY s.total_count, s.total_volume_usd, s.last_tx_at
     `);
-    const row = (result as any).rows?.[0] ?? {};
-
-    const tokenResult = await db.execute(sql`
-      SELECT
-        token_symbol,
-        COUNT(*)::int as count,
-        COALESCE(SUM(amount_usd), 0)::float as volume_usd
-      FROM agent_transactions
-      WHERE agent_id = ${agentId}
-      GROUP BY token_symbol
-      ORDER BY volume_usd DESC
-      LIMIT 5
-    `);
-    const topTokens = ((tokenResult as any).rows ?? []).map((r: any) => ({
-      symbol: r.token_symbol,
-      count: Number(r.count),
-      volumeUsd: Number(r.volume_usd),
-    }));
-
-    const lastResult = await db.execute(sql`
-      SELECT block_timestamp FROM agent_transactions
-      WHERE agent_id = ${agentId}
-      ORDER BY block_timestamp DESC LIMIT 1
-    `);
-    const lastTxAt = (lastResult as any).rows?.[0]?.block_timestamp?.toISOString() ?? null;
+    const row = (result as any).rows?.[0];
+    if (!row) return { count: 0, totalVolumeUsd: 0, topTokens: [], lastTxAt: null };
 
     return {
-      count: Number(row.count ?? 0),
+      count: Number(row.total_count ?? 0),
       totalVolumeUsd: Number(row.total_volume_usd ?? 0),
-      topTokens,
-      lastTxAt,
+      topTokens: (typeof row.top_tokens === "string" ? JSON.parse(row.top_tokens) : row.top_tokens) ?? [],
+      lastTxAt: row.last_tx_at?.toISOString?.() ?? (row.last_tx_at ? String(row.last_tx_at) : null),
     };
   } catch {
     return { count: 0, totalVolumeUsd: 0, topTokens: [], lastTxAt: null };
@@ -416,39 +406,37 @@ export async function compileAndCacheReport(agentId: string): Promise<TrustRepor
 
 /**
  * Resolve an agent by any address type: primary contract, controller, or payment address.
+ * Priority: contract address > controller address > payment address from x402 probes.
  */
 export async function resolveAgentByAddress(address: string, chainId?: number): Promise<Agent | null> {
   const addr = address.toLowerCase();
 
-  // 1. Primary contract address
+  // 1. Contract or controller address (single query with OR, prioritize contract match)
   try {
-    const result = await db.select().from(agents)
-      .where(chainId
-        ? and(sql`LOWER(primary_contract_address) = ${addr}`, eq(agents.chainId, chainId))
-        : sql`LOWER(primary_contract_address) = ${addr}`)
-      .limit(1);
-    if (result.length > 0) return result[0];
+    const chainFilter = chainId ? sql` AND chain_id = ${chainId}` : sql``;
+    const result = await db.execute(sql`
+      SELECT *,
+        CASE WHEN LOWER(primary_contract_address) = ${addr} THEN 0 ELSE 1 END as match_priority
+      FROM agents
+      WHERE (LOWER(primary_contract_address) = ${addr} OR LOWER(controller_address) = ${addr})
+      ${chainFilter}
+      ORDER BY match_priority, trust_score DESC NULLS LAST
+      LIMIT 1
+    `);
+    const rows = (result as any).rows ?? [];
+    if (rows.length > 0) {
+      // Re-fetch via storage to get proper typed object
+      return await storage.getAgent(rows[0].id);
+    }
   } catch {}
 
-  // 2. Controller address
-  try {
-    const result = await db.select().from(agents)
-      .where(chainId
-        ? and(sql`LOWER(controller_address) = ${addr}`, eq(agents.chainId, chainId))
-        : sql`LOWER(controller_address) = ${addr}`)
-      .orderBy(sql`trust_score DESC NULLS LAST`)
-      .limit(1);
-    if (result.length > 0) return result[0];
-  } catch {}
-
-  // 3. Payment address (from x402 probes)
+  // 2. Payment address (from x402 probes)
   try {
     const probeResult = await db.select({ agentId: x402Probes.agentId }).from(x402Probes)
       .where(sql`LOWER(payment_address) = ${addr}`)
       .limit(1);
     if (probeResult.length > 0) {
-      const agent = await storage.getAgent(probeResult[0].agentId);
-      if (agent) return agent;
+      return await storage.getAgent(probeResult[0].agentId);
     }
   } catch {}
 
@@ -457,17 +445,21 @@ export async function resolveAgentByAddress(address: string, chainId?: number): 
 
 /**
  * Get a cached report or compile on-demand if stale/missing.
+ * Resolves the agent first (by any address type), then checks cache by agentId.
+ * This ensures lookups by controller or payment address still hit the cache.
  */
 export async function getOrCompileReport(address: string, chainId?: number): Promise<{
   report: TrustReport;
   compiled: boolean;
 } | null> {
-  const addr = address.toLowerCase();
+  // Resolve agent first — handles contract, controller, and payment addresses
+  const agent = await resolveAgentByAddress(address, chainId);
+  if (!agent) return null;
 
-  // Check cache first
+  // Check cache by agentId (unique index) — works regardless of which address was used for lookup
   try {
     const cached = await db.select().from(trustReports)
-      .where(eq(trustReports.lookupAddress, addr))
+      .where(eq(trustReports.agentId, agent.id))
       .limit(1);
 
     if (cached.length > 0 && new Date(cached[0].expiresAt) > new Date()) {
@@ -475,10 +467,7 @@ export async function getOrCompileReport(address: string, chainId?: number): Pro
     }
   } catch {}
 
-  // Resolve agent and compile
-  const agent = await resolveAgentByAddress(address, chainId);
-  if (!agent) return null;
-
+  // Compile and cache
   const report = await compileAndCacheReport(agent.id);
   if (!report) return null;
 
