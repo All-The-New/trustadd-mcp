@@ -138,7 +138,10 @@ export const bazaarIndexerTask = schedules.task({
       const scoutResp = await fetch(`${SCOUT_CATALOG_URL}?limit=500`);
       if (scoutResp.ok) {
         const scoutData = await scoutResp.json();
-        scoutServices = Array.isArray(scoutData) ? scoutData : (scoutData.items || scoutData.services || []);
+        // x402Scout returns { endpoints: [...] }
+        scoutServices = Array.isArray(scoutData)
+          ? scoutData
+          : (scoutData.endpoints || scoutData.items || scoutData.services || []);
         logger.info(`x402Scout catalog: ${scoutServices.length} services`);
       } else {
         logger.warn(`x402Scout returned ${scoutResp.status}`);

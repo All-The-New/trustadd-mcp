@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   ChartContainer,
   ChartTooltip,
@@ -21,7 +22,10 @@ import {
 import {
   Store, DollarSign, Users, TrendingUp, AlertTriangle,
   Search, ExternalLink, Wifi, WifiOff, ChevronLeft, ChevronRight,
+  ChevronDown, ChevronUp, Fingerprint, Link2,
 } from "lucide-react";
+import { Link } from "wouter";
+import { CHAIN_NAMES } from "@shared/chains";
 
 const CATEGORY_COLORS: Record<string, string> = {
   ai: "#8b5cf6",
@@ -30,6 +34,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   blockchain: "#22c55e",
   content: "#ec4899",
   utility: "#06b6d4",
+  finance: "#f97316",
   other: "#6b7280",
 };
 
@@ -40,6 +45,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   blockchain: "Blockchain",
   content: "Content",
   utility: "Utility",
+  finance: "Finance",
   other: "Other",
 };
 
@@ -103,6 +109,10 @@ function truncateUrl(url: string, max = 60): string {
   return url.slice(0, max - 3) + "...";
 }
 
+function truncateAddress(addr: string): string {
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+
 function HealthBadge({ status }: { status: string | null }) {
   if (!status) return <Badge variant="outline" className="text-xs">Unknown</Badge>;
   if (status === "verified_up" || status === "up") {
@@ -124,12 +134,82 @@ function CategoryBadge({ category }: { category: string }) {
   );
 }
 
+type BazaarServiceRow = {
+  id: number;
+  resourceUrl: string;
+  name: string | null;
+  description: string | null;
+  category: string;
+  network: string;
+  priceUsd: number | null;
+  payTo: string | null;
+  healthStatus: string | null;
+  uptimePct: number | null;
+  avgLatencyMs: number | null;
+  trustScore: number | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  method: string | null;
+  assetName: string | null;
+  scheme: string | null;
+};
+
+function ServiceDetailRow({ service }: { service: BazaarServiceRow }) {
+  return (
+    <tr className="bg-muted/20">
+      <td colSpan={6} className="px-4 py-3">
+        <div className="grid sm:grid-cols-2 gap-4 text-xs">
+          <div className="space-y-1.5">
+            {service.description && (
+              <div>
+                <span className="text-muted-foreground">Description: </span>
+                <span>{service.description.length > 200 ? service.description.slice(0, 197) + "..." : service.description}</span>
+              </div>
+            )}
+            <div>
+              <span className="text-muted-foreground">URL: </span>
+              <a href={service.resourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline break-all">
+                {service.resourceUrl}
+              </a>
+            </div>
+            {service.payTo && (
+              <div>
+                <span className="text-muted-foreground">Pay To: </span>
+                <span className="font-mono">{service.payTo}</span>
+              </div>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            {service.method && (
+              <div><span className="text-muted-foreground">Method: </span><Badge variant="outline" className="text-xs">{service.method}</Badge></div>
+            )}
+            {service.assetName && (
+              <div><span className="text-muted-foreground">Token: </span>{service.assetName}</div>
+            )}
+            {service.scheme && (
+              <div><span className="text-muted-foreground">Scheme: </span>{service.scheme}</div>
+            )}
+            {service.uptimePct != null && (
+              <div><span className="text-muted-foreground">Uptime: </span>{service.uptimePct.toFixed(1)}%</div>
+            )}
+            <div>
+              <span className="text-muted-foreground">First Seen: </span>
+              {new Date(service.firstSeenAt).toLocaleDateString()}
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 export default function Bazaar() {
   const [searchInput, setSearchInput] = useState("");
   const searchQuery = useDeferredValue(searchInput);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [sortBy, setSortBy] = useState("newest");
   const [page, setPage] = useState(0);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const PAGE_SIZE = 25;
 
   const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery<{
@@ -144,22 +224,7 @@ export default function Bazaar() {
   });
 
   const { data: servicesData, isLoading: servicesLoading } = useQuery<{
-    services: Array<{
-      id: number;
-      resourceUrl: string;
-      name: string | null;
-      description: string | null;
-      category: string;
-      network: string;
-      priceUsd: number | null;
-      payTo: string | null;
-      healthStatus: string | null;
-      uptimePct: number | null;
-      avgLatencyMs: number | null;
-      trustScore: number | null;
-      firstSeenAt: string;
-      lastSeenAt: string;
-    }>;
+    services: BazaarServiceRow[];
     total: number;
   }>({
     queryKey: ["/api/bazaar/services", { category: selectedCategory, search: searchQuery, sortBy, offset: page * PAGE_SIZE, limit: PAGE_SIZE }],
@@ -197,6 +262,26 @@ export default function Bazaar() {
     healthStatus: string | null;
   }>>({
     queryKey: ["/api/bazaar/top-services"],
+  });
+
+  const { data: priceDist } = useQuery<Array<{ bucket: string; count: number }>>({
+    queryKey: ["/api/bazaar/price-distribution"],
+  });
+
+  const { data: crossref } = useQuery<Array<{
+    payTo: string;
+    serviceName: string | null;
+    category: string;
+    priceUsd: number | null;
+    agentId: string;
+    agentName: string | null;
+    agentSlug: string | null;
+    chainId: number;
+    trustScore: number | null;
+    imageUrl: string | null;
+    matchType: string;
+  }>>({
+    queryKey: ["/api/bazaar/crossref"],
   });
 
   const categoryChartConfig: ChartConfig = Object.fromEntries(
@@ -270,7 +355,7 @@ export default function Bazaar() {
               label="Categories"
               value={stats.categoryBreakdown.length}
               icon={TrendingUp}
-              subtitle={`Top: ${stats.categoryBreakdown[0]?.category || "N/A"}`}
+              subtitle={`Top: ${CATEGORY_LABELS[stats.categoryBreakdown[0]?.category] || stats.categoryBreakdown[0]?.category || "N/A"}`}
               iconColor="text-orange-500"
             />
           </div>
@@ -313,55 +398,84 @@ export default function Bazaar() {
             </CardContent>
           </Card>
 
-          {/* Price Stats */}
+          {/* Price Distribution */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Pricing Overview</CardTitle>
+              <CardTitle className="text-base">Price Distribution</CardTitle>
             </CardHeader>
             <CardContent>
-              {statsLoading ? <ChartSkeleton /> : statsError ? <ChartError /> : stats ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 rounded-lg bg-muted/50">
-                      <p className="text-xs text-muted-foreground">Minimum</p>
-                      <p className="text-lg font-bold">{formatPrice(stats.priceStats.min)}</p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-muted/50">
-                      <p className="text-xs text-muted-foreground">Maximum</p>
-                      <p className="text-lg font-bold">{formatPrice(stats.priceStats.max)}</p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-muted/50">
-                      <p className="text-xs text-muted-foreground">Median</p>
-                      <p className="text-lg font-bold">{formatPrice(stats.priceStats.median)}</p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-muted/50">
-                      <p className="text-xs text-muted-foreground">Mean</p>
-                      <p className="text-lg font-bold">{formatPrice(stats.priceStats.mean)}</p>
-                    </div>
-                  </div>
+              {!priceDist ? <ChartSkeleton /> : priceDist.length > 0 ? (
+                <ChartContainer config={{ count: { label: "Services", color: "#3b82f6" } }} className="h-[280px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={priceDist} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 11 }} />
+                      <YAxis type="category" dataKey="bucket" width={110} tick={{ fontSize: 11 }} />
+                      <Tooltip formatter={(v: number) => [v.toLocaleString(), "Services"]} />
+                      <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              ) : (
+                <p className="text-sm text-muted-foreground py-8 text-center">No pricing data available.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
-                  {/* Network breakdown */}
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-2 font-medium">Network Distribution</p>
-                    <div className="space-y-1.5">
-                      {stats.networkBreakdown.map(n => (
-                        <div key={n.network} className="flex items-center justify-between text-sm">
-                          <span className="font-medium">{n.network}</span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-blue-500 rounded-full"
-                                style={{ width: `${(n.count / stats.activeServices) * 100}%` }}
-                              />
-                            </div>
-                            <span className="text-muted-foreground w-12 text-right">{n.count.toLocaleString()}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+        {/* Pricing Stats + Network */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Pricing Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {stats ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground">Minimum</p>
+                    <p className="text-lg font-bold">{formatPrice(stats.priceStats.min)}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground">Maximum</p>
+                    <p className="text-lg font-bold">{formatPrice(stats.priceStats.max)}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground">Median</p>
+                    <p className="text-lg font-bold">{formatPrice(stats.priceStats.median)}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground">Mean</p>
+                    <p className="text-lg font-bold">{formatPrice(stats.priceStats.mean)}</p>
                   </div>
                 </div>
-              ) : null}
+              ) : <Skeleton className="h-32" />}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Network Distribution</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {stats ? (
+                <div className="space-y-2">
+                  {stats.networkBreakdown.map(n => (
+                    <div key={n.network} className="flex items-center justify-between text-sm">
+                      <span className="font-medium">{n.network}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-32 h-2.5 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-500 rounded-full"
+                            style={{ width: `${Math.max((n.count / stats.activeServices) * 100, 2)}%` }}
+                          />
+                        </div>
+                        <span className="text-muted-foreground w-16 text-right">{n.count.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : <Skeleton className="h-32" />}
             </CardContent>
           </Card>
         </div>
@@ -397,6 +511,47 @@ export default function Bazaar() {
               </p>
             </CardContent>
           </Card>
+        )}
+
+        {/* ERC-8004 Cross-Reference */}
+        {crossref && crossref.length > 0 && (
+          <div>
+            <SectionTitle subtitle="Bazaar services linked to verified ERC-8004 agent identities via payment addresses">
+              <Fingerprint className="w-5 h-5 inline mr-2 -mt-0.5" />Identity Cross-Reference
+            </SectionTitle>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {crossref.slice(0, 9).map(cr => (
+                <Card key={cr.payTo} className="hover:border-primary/30 transition-colors">
+                  <CardContent className="pt-4 pb-3 px-4">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Avatar className="w-8 h-8">
+                        <AvatarImage src={cr.imageUrl || undefined} />
+                        <AvatarFallback className="text-xs">{(cr.agentName || "?").slice(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <Link href={cr.agentSlug ? `/agent/${cr.agentSlug}` : `/agent/${cr.agentId}`}>
+                          <p className="text-sm font-medium truncate hover:text-primary cursor-pointer">{cr.agentName || "Unknown Agent"}</p>
+                        </Link>
+                        <p className="text-xs text-muted-foreground">{CHAIN_NAMES[cr.chainId] || `Chain ${cr.chainId}`}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <CategoryBadge category={cr.category} />
+                      {cr.priceUsd != null && (
+                        <Badge variant="secondary" className="text-xs">{formatPrice(cr.priceUsd)}</Badge>
+                      )}
+                      {cr.trustScore != null && (
+                        <Badge variant="outline" className="text-xs">Score: {cr.trustScore}</Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2 truncate">
+                      <Link2 className="w-3 h-3 inline mr-1" />{cr.serviceName || truncateAddress(cr.payTo)}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Top Services by Trust Score */}
@@ -490,31 +645,43 @@ export default function Bazaar() {
                     </thead>
                     <tbody>
                       {servicesData.services.map((s) => (
-                        <tr key={s.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                          <td className="px-4 py-2.5">
-                            <p className="font-medium line-clamp-1">{s.name || "Unnamed"}</p>
-                            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-                              {truncateUrl(s.resourceUrl)}
-                            </p>
-                          </td>
-                          <td className="px-4 py-2.5">
-                            <CategoryBadge category={s.category} />
-                          </td>
-                          <td className="px-4 py-2.5 text-right font-mono text-xs">
-                            {formatPrice(s.priceUsd)}
-                          </td>
-                          <td className="px-4 py-2.5 text-center hidden md:table-cell">
-                            <HealthBadge status={s.healthStatus} />
-                          </td>
-                          <td className="px-4 py-2.5 text-right hidden lg:table-cell text-muted-foreground">
-                            {s.avgLatencyMs != null ? `${Math.round(s.avgLatencyMs)}ms` : "-"}
-                          </td>
-                          <td className="px-4 py-2.5 text-center">
-                            <a href={s.resourceUrl} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
-                              <ExternalLink className="w-4 h-4" />
-                            </a>
-                          </td>
-                        </tr>
+                        <>
+                          <tr
+                            key={s.id}
+                            className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
+                            onClick={() => setExpandedId(expandedId === s.id ? null : s.id)}
+                          >
+                            <td className="px-4 py-2.5">
+                              <div className="flex items-center gap-2">
+                                {expandedId === s.id ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
+                                <div>
+                                  <p className="font-medium line-clamp-1">{s.name || "Unnamed"}</p>
+                                  <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                                    {truncateUrl(s.resourceUrl)}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <CategoryBadge category={s.category} />
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-mono text-xs">
+                              {formatPrice(s.priceUsd)}
+                            </td>
+                            <td className="px-4 py-2.5 text-center hidden md:table-cell">
+                              <HealthBadge status={s.healthStatus} />
+                            </td>
+                            <td className="px-4 py-2.5 text-right hidden lg:table-cell text-muted-foreground">
+                              {s.avgLatencyMs != null ? `${Math.round(s.avgLatencyMs)}ms` : "-"}
+                            </td>
+                            <td className="px-4 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                              <a href={s.resourceUrl} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
+                                <ExternalLink className="w-4 h-4" />
+                              </a>
+                            </td>
+                          </tr>
+                          {expandedId === s.id && <ServiceDetailRow key={`detail-${s.id}`} service={s} />}
+                        </>
                       ))}
                     </tbody>
                   </table>
