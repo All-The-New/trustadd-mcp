@@ -15,66 +15,66 @@ import {
 
 export const HOME = {
   hero: {
-    tag: "AI Agent Trust Ratings",
-    title: "Trust Ratings for",
-    titleAccent: "AI Agents",
+    tag: "The Trust Oracle for the Agent Economy",
+    title: "The Trust Oracle for the",
+    titleAccent: "Agent Economy",
     subtitle:
-      "Indexing identity, reputation, and on-chain signals across protocols and chains into transparent, verifiable trust scores.",
+      "Before your agent transacts, it checks TrustAdd. We index identity, payments, and reputation across 9 chains into a single trust verdict — queryable by any agent via x402 micropayment.",
     ctaPrimary: "Explore Agents",
-    ctaSecondary: "View API",
+    ctaSecondary: "Trust API",
   },
   features: [
     {
-      icon: "Layers" as const,
-      title: "Multi-Protocol Discovery",
-      desc: "Indexes agents from ERC-8004, x402, OASF, and emerging standards. No sign-ups — if it's on-chain, TrustAdd finds it.",
+      icon: "Shield" as const,
+      title: "Trust Intelligence On Demand",
+      desc: "Agents query TrustAdd before transacting — like a credit check for the agent economy. Quick verdicts from $0.01 USDC, full evidence reports from $0.05.",
     },
     {
-      icon: "Shield" as const,
-      title: "Transparent Trust Scores",
-      desc: "Every agent receives a 0–100 TrustAdd Score computed from five signal categories: identity, history, capability, community, and transparency.",
+      icon: "Layers" as const,
+      title: "Cross-Layer Intelligence",
+      desc: "The only oracle combining ERC-8004 identity, x402 payment data, marketplace analytics, and community signals into one composite trust score.",
     },
     {
       icon: "Bot" as const,
-      title: "Human & Machine Readable",
-      desc: "Clear profiles anyone can understand, plus a public REST API for ecosystem analytics. Agent Trust Reports available via x402 micropayment.",
+      title: "Built for Agents, Readable by Humans",
+      desc: "Machine-queryable Trust API via x402 and MCP. Free ecosystem analytics for developers and researchers exploring the agent economy.",
     },
   ],
   pillars: {
-    heading: "The Three Pillars of Agent Trust",
+    heading: "Five Dimensions of Agent Trust",
     subtitle:
-      "Indexing signals from multiple protocols and chains into three core trust dimensions.",
+      "Every trust verdict is computed from five signal categories, weighted to reflect what matters most for autonomous decision-making.",
     items: [
       {
         icon: "Shield" as const,
-        title: "Identity & Capability Signals",
-        desc: "Completeness of metadata, declared skills, endpoints, and x402 payment support. Agents with rich identity data and clear capabilities score higher.",
+        title: "Identity & Capability",
+        desc: "On-chain identity completeness, declared skills, endpoints, x402 payment support. Agents with verifiable identity and clear capabilities score higher.",
         badge: "Identity + Capability",
         badgeVariant: "live" as const,
       },
       {
         icon: "Star" as const,
         title: "Community & Reputation",
-        desc: "GitHub health scores, Farcaster engagement, on-chain feedback, and community endorsements. Real-world signals from the people and systems that interact with agents.",
+        desc: "GitHub health, Farcaster engagement, on-chain feedback. Real-world signals from people and systems that interact with agents.",
         badge: "Community",
         badgeVariant: "monitoring" as const,
       },
       {
         icon: "Eye" as const,
-        title: "On-Chain Transparency",
-        desc: "Decentralized storage, multi-chain presence, registration longevity, and trust mechanism declarations. Transparency signals accountability and staying power.",
+        title: "History & Transparency",
+        desc: "Registration longevity, multi-chain presence, decentralized storage, trust mechanism declarations. Transparency signals accountability.",
         badge: "History + Transparency",
         badgeVariant: "live" as const,
       },
     ],
   },
   api: {
-    title: "API & Trust Reports",
-    desc: "Ecosystem analytics are free via REST API — no auth required. Agent-specific trust intelligence is available through our x402-gated Trust Report API, from $0.01 per query.",
-    cta: "View Documentation",
+    title: "Trust Oracle API",
+    desc: "Agents query TrustAdd before transacting. Ecosystem analytics are free and open. Trust intelligence starts at $0.01 per query via x402 micropayment on Base.",
+    cta: "View Trust API",
   },
   topTrusted: {
-    heading: "Top Agents",
+    heading: "Top Trusted Agents",
     viewAll: "View leaderboard",
     emptyState: "Trust scores are being calculated. Check back soon.",
   },
@@ -86,13 +86,13 @@ export const HOME = {
     heading: "Live Indexing",
   },
   emptyState:
-    "The indexer is scanning supported blockchains for AI agent identities. Agents will appear here automatically as they are discovered.",
+    "The oracle is scanning blockchains for AI agent identities. Agents will appear here automatically as they are discovered.",
 };
 
 export const STATS = {
   agentsLabel: "Agents Indexed",
-  metadataLabel: "TrustAdd Verified",
-  x402Label: "x402 Enabled",
+  metadataLabel: "Oracle Verified",
+  x402Label: "x402 Active",
   blockLabel: "Last Block",
 };
 
@@ -100,48 +100,48 @@ export const ABOUT = {
   header: {
     title: "About TrustAdd",
     subtitle:
-      "Trust ratings for AI agents across protocols and chains. We believe trust should be measurable, transparent, and open to everyone.",
+      "The trust oracle for the agent economy. We believe trust should be measurable, transparent, and queryable by any agent.",
   },
   mission: {
     title: "Our Mission",
     paragraphs: [
-      "As AI agents become more autonomous, knowing which ones to trust matters more than ever. TrustAdd indexes identity, reputation, and on-chain signals from multiple protocols — including ERC-8004, x402, and emerging standards — across 9 EVM chains including Ethereum, Base, Polygon, Arbitrum, BNB Chain, Celo, Gnosis, Optimism, and Avalanche.",
-      "We're building a universal trust layer for AI agents. By combining on-chain identity, community signals, and capability data into a single, transparent score, TrustAdd gives both humans and machines a reliable way to evaluate agent trustworthiness.",
+      "As AI agents transact autonomously, knowing which ones to trust is critical infrastructure. TrustAdd is the trust oracle — agents query us before transacting, the way financial systems query credit bureaus before lending.",
+      "We index identity, payments, and reputation signals from ERC-8004, x402, and emerging standards across 9 EVM chains. We combine them into a single, transparent trust verdict — available to any agent via x402 micropayment, and to any human through our free analytics dashboard.",
     ],
   },
   score: {
     title: "How the TrustAdd Score Works",
     intro:
-      "Every indexed agent receives a TrustAdd Score from 0 to 100. The score is computed from five categories of on-chain and off-chain signals, weighted to reflect what matters most for trust.",
+      "Every indexed agent receives a TrustAdd Score from 0 to 100, computed from five categories of on-chain and off-chain signals. The score powers trust verdicts: TRUSTED, CAUTION, UNTRUSTED, or UNKNOWN.",
   },
   principles: {
     title: "Principles",
     items: [
       {
-        title: "Neutral & Factual",
-        desc: "We present data as-is. No endorsements, no rankings manipulation. The score is a formula applied equally to every agent.",
+        title: "Neutral & Verifiable",
+        desc: "We present data as-is. No endorsements, no manipulation. The scoring formula is applied equally to every agent, and the methodology is published openly.",
       },
       {
-        title: "Open Ecosystem",
-        desc: "Ecosystem analytics are free and open — no auth required. Agent trust intelligence is available via x402 micropayment, from $0.01 per query.",
+        title: "Open Ecosystem, Paid Intelligence",
+        desc: "Ecosystem analytics are free — no auth required. Per-agent trust intelligence is available via x402 micropayment, from $0.01 per query. We charge for intelligence, not access.",
       },
       {
         title: "Discovery-First",
-        desc: "We find agents automatically by scanning blockchains and indexing protocol events. No manual submissions, no gatekeeping.",
+        desc: "We find agents automatically by scanning blockchains and indexing protocol events. No manual submissions, no gatekeeping. If it's on-chain, TrustAdd finds it.",
       },
     ],
   },
   protocols: {
     title: "Supported Protocols",
     intro:
-      "TrustAdd indexes agent data from multiple protocols. Each feeds different trust signals into the TrustAdd Score.",
+      "TrustAdd indexes agent data from multiple protocols. Each feeds different trust signals into the oracle.",
   },
 };
 
 export const PROTOCOLS = {
-  pageTitle: "Protocols Supported",
+  pageTitle: "Protocols",
   pageSubtitle:
-    "TrustAdd indexes agent identity, reputation, and capability data from multiple protocols across EVM chains.",
+    "TrustAdd indexes agent identity, payments, and capability data from multiple protocols — feeding trust signals into the oracle.",
   items: [
     {
       id: "erc-8004",
@@ -251,58 +251,58 @@ export const API_DOCS = {
   seo: {
     title: "API Documentation",
     description:
-      "Public REST API for AI agent ecosystem analytics across 9 EVM chains. Free agent discovery, ecosystem stats, and marketplace data. Agent Trust Reports available via x402.",
+      "REST API for the agent economy. Free ecosystem analytics, plus x402-gated trust intelligence from $0.01 per query.",
   },
   intro:
-    "Ecosystem analytics are free and open — no authentication required. Agent-specific trust intelligence (scores, breakdowns, community signals, transaction history) is available via our x402-gated Trust Report API.",
+    "TrustAdd provides two API tiers. Ecosystem analytics are free and open — no authentication required. Per-agent trust intelligence (scores, verdicts, breakdowns, evidence) is available via x402 micropayment.",
   usageNotes: {
     dataSource:
-      "Agent data is sourced from 9 active EVM chains (Ethereum, Base, Polygon, Arbitrum, BNB Chain, Celo, Gnosis, Optimism, Avalanche) via multiple protocols including ERC-8004 and x402. Data freshness depends on indexer status. Use the chainId parameter to filter by chain.",
+      "Data is sourced from 9 EVM chains via ERC-8004, x402, OASF, and community signals. Data freshness depends on indexer status. Use the chainId parameter to filter by chain.",
   },
 };
 
 export const ANALYTICS = {
   seo: {
-    title: "Network Analytics",
+    title: "Ecosystem Analytics",
     description:
-      "Live analytics and insights across all indexed AI agent identities, including TrustAdd Score distribution, chain metrics, and protocol adoption trends.",
+      "Free, live analytics across the AI agent economy — trust score distributions, chain metrics, protocol adoption, and ecosystem growth trends.",
   },
-  subtitle: "Live insights across all indexed AI agent identities",
+  subtitle: "Free, live insights across the AI agent economy",
 };
 
 export const ECONOMY = {
   seo: {
-    title: "Agent Economy — x402 Payment Ecosystem | TrustAdd",
+    title: "Agent Economy",
     description:
-      "Explore the x402 agent payment ecosystem. See which AI agents support payments, endpoint types, and adoption across EVM chains.",
+      "Explore the x402 agent payment ecosystem. Transaction volumes, payment adoption, top-earning agents, and economic trends across 9 EVM chains.",
   },
 };
 
 export const SKILLS = {
   seo: {
-    title: "Skills & Capabilities — AI Agent Ecosystem | TrustAdd",
+    title: "Agent Skills & Capabilities",
     description:
-      "Explore what AI agents can do. Browse capabilities, skill categories, trust correlations, and the most capable agents across EVM chains.",
+      "What AI agents can do. Browse capabilities, skill categories, trust correlations, and the most capable agents in the ecosystem.",
   },
-  subtitle: "What AI agents can do across protocols and chains",
+  subtitle: "What agents can do across protocols and chains",
 };
 
 export const STATUS = {
   seo: {
-    title: "Indexer Status",
+    title: "Oracle Status",
     description:
-      "Live monitoring of TrustAdd's multi-chain, multi-protocol indexer. View health status, alerts, and per-chain indexing progress.",
+      "Live monitoring of TrustAdd's multi-chain oracle. Indexer health, per-chain progress, and system alerts.",
   },
 };
 
 export const DIRECTORY = {
   seo: {
-    title: "Agents",
+    title: "Agent Directory",
     description:
-      "Browse and search all AI agent identities discovered across 9 EVM chains. Filter by trust score, chain, protocol support, and more.",
+      "Browse all AI agent identities discovered by the TrustAdd oracle across 9 EVM chains. Filter by chain, protocol support, and trust verdict.",
   },
   emptyState:
-    "The indexer is scanning for AI agent identities across supported chains. Check back soon.",
+    "The oracle is scanning for AI agent identities. Agents will appear here as they are discovered.",
   subtitle: (total: number, chainCount: number) =>
     total > 0
       ? `${total.toLocaleString()} agents indexed across ${chainCount} chains`
@@ -311,35 +311,40 @@ export const DIRECTORY = {
 
 export const PROFILE = {
   defaultDescription: (chainName: string) =>
-    `This agent was automatically discovered on the ${chainName} blockchain. No additional description has been provided.`,
+    `This agent was discovered by the TrustAdd oracle on ${chainName}. No additional description has been provided.`,
   defaultSeoDescription: (erc8004Id: string | number, chainName: string) =>
-    `AI agent #${erc8004Id} on ${chainName}. View trust score, metadata, and on-chain history.`,
+    `AI agent #${erc8004Id} on ${chainName}. Trust verdict, score breakdown, and on-chain history from TrustAdd.`,
   reputationEmpty:
-    "This agent hasn't received any on-chain reputation feedback yet. As the protocol ecosystem matures, endorsements and reputation signals from other agents and users will appear here.",
+    "This agent hasn't received on-chain reputation feedback yet. As the protocol ecosystem matures, endorsements from other agents and users will appear here.",
   statusDiscovery: "Discovered automatically via on-chain indexing",
 };
 
 export const NAV = {
   footer: {
     tagline:
-      "Neutral public infrastructure for AI agent trust ratings.",
+      "The trust oracle for the agent economy.",
   },
 };
 
 export const SEO = {
   landing: {
-    title: "AI Agent Trust Ratings",
+    title: "The Trust Oracle for the Agent Economy",
     description:
-      "TrustAdd is a public, neutral trust rating platform for AI agents across protocols and EVM chains. Discover, verify, and compare agents with the TrustAdd Score.",
+      "TrustAdd is the trust oracle for AI agents. We index identity, payments, and reputation across 9 EVM chains into queryable trust verdicts — from $0.01 per query via x402.",
   },
   about: {
     title: "About",
     description:
-      "Learn about TrustAdd's mission, the TrustAdd Score methodology, and our vision for a universal AI agent trust layer.",
+      "Learn about TrustAdd's mission as the trust oracle for the agent economy, the TrustAdd Score methodology, and our open, verifiable approach to agent trust.",
   },
   protocols: {
     title: "Protocols",
     description:
-      "Explore the protocols TrustAdd indexes — ERC-8004, x402, OASF, MCP, A2A, and more. See how each feeds into the TrustAdd Score.",
+      "Protocols powering the TrustAdd oracle — ERC-8004 identity, x402 payments, OASF skills, MCP tools, A2A communication.",
+  },
+  trustApi: {
+    title: "Trust API",
+    description:
+      "Query the TrustAdd oracle. Quick trust checks from $0.01 USDC, full evidence reports from $0.05. Paid via x402 micropayment on Base. Free ecosystem analytics included.",
   },
 };
