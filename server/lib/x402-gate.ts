@@ -1,7 +1,7 @@
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import type { RoutesConfig } from "@x402/core/server";
-import { ExactEvmScheme } from "@x402/evm";
+import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { createFacilitatorConfig } from "@coinbase/x402";
 import type { RequestHandler } from "express";
 import { log } from "./log.js";
