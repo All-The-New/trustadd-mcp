@@ -20,6 +20,10 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+// Trust Data Product API: open CORS for agent-to-agent access
+app.use("/api/v1/trust", cors({ origin: "*", methods: ["GET"], credentials: false }));
+
+// All other API routes: restricted CORS
 app.use(cors({
   origin: process.env.CORS_ORIGIN?.split(",") || ["https://trustadd.com"],
   methods: ["GET", "POST"],

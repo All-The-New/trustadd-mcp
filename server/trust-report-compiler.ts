@@ -1,0 +1,566 @@
+import {
+  type Agent,
+  type CommunityFeedbackSummary,
+  type X402Probe,
+  type AgentTransaction,
+  type TrustReport,
+  agents,
+  trustReports,
+  x402Probes,
+  agentTransactions,
+  communityFeedbackSummaries,
+} from "../shared/schema.js";
+import { CHAIN_CONFIGS } from "../shared/chains.js";
+import { type TrustScoreBreakdown, calculateTrustScore } from "./trust-score.js";
+import { storage } from "./storage.js";
+import { db } from "./db.js";
+import { eq, sql, lt, and, isNotNull } from "drizzle-orm";
+import { log } from "./lib/log.js";
+
+// --- Types ---
+
+export type Verdict = "TRUSTED" | "CAUTION" | "UNTRUSTED" | "UNKNOWN";
+
+export interface QuickCheckData {
+  address: string;
+  chainId: number | null;
+  name: string | null;
+  verdict: Verdict;
+  score: number;
+  scoreBreakdown: TrustScoreBreakdown;
+  tier: string;
+  flags: string[];
+  x402Active: boolean;
+  ageInDays: number;
+  crossChainPresence: number;
+  transactionCount: number;
+  reportAvailable: boolean;
+  generatedAt: string;
+  reportVersion: number;
+}
+
+export interface FullReportData {
+  agent: {
+    id: string;
+    erc8004Id: string;
+    name: string | null;
+    description: string | null;
+    chains: number[];
+    imageUrl: string | null;
+    slug: string | null;
+    endpoints: any[];
+    capabilities: string[];
+    skills: string[];
+  };
+  trust: {
+    verdict: Verdict;
+    score: number;
+    breakdown: TrustScoreBreakdown;
+    tier: string;
+    flags: string[];
+    lifecycleStatus: string;
+    updatedAt: string | null;
+  };
+  onChain: {
+    firstSeenAt: string | null;
+    ageInDays: number;
+    metadataEvents: number;
+    crossChainCount: number;
+    chains: Array<{ chainId: number; name: string; firstSeenBlock: number }>;
+  };
+  economy: {
+    x402Support: boolean;
+    paymentAddresses: Array<{ address: string; network: string; token: string }>;
+    transactionCount: number;
+    totalVolumeUsd: number;
+    topTokens: Array<{ symbol: string; count: number; volumeUsd: number }>;
+  };
+  community: {
+    githubHealthScore: number | null;
+    githubStars: number | null;
+    githubForks: number | null;
+    githubLastCommitAt: string | null;
+    githubContributors: number | null;
+    farcasterScore: number | null;
+    farcasterFollowers: number | null;
+    totalSources: number;
+  };
+  meta: {
+    generatedAt: string;
+    reportVersion: number;
+    dataFreshness: {
+      trustScore: string | null;
+      probes: string | null;
+      transactions: string | null;
+      community: string | null;
+    };
+  };
+}
+
+const REPORT_VERSION = 1;
+const REPORT_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+// --- Verdict Logic ---
+
+export function computeVerdict(
+  score: number,
+  tier: string | null,
+  spamFlags: string[] | null,
+  lifecycleStatus: string | null,
+): Verdict {
+  const flags = spamFlags ?? [];
+  const status = lifecycleStatus ?? "active";
+
+  // Hard untrusted conditions
+  if (tier === "spam" || tier === "archived") return "UNTRUSTED";
+  if (status === "archived") return "UNTRUSTED";
+  if (score < 30) return "UNTRUSTED";
+
+  // Trusted: high/medium tier, good score, no flags
+  if (score >= 60 && (tier === "high" || tier === "medium") && flags.length === 0) {
+    return "TRUSTED";
+  }
+
+  // Everything else is caution
+  return "CAUTION";
+}
+
+// --- Data Fetching Helpers ---
+
+async function getAgentCrossChainData(controllerAddress: string): Promise<{
+  count: number;
+  chains: Array<{ chainId: number; name: string; firstSeenBlock: number }>;
+}> {
+  try {
+    const result = await db.execute(sql`
+      SELECT chain_id, first_seen_block FROM agents
+      WHERE controller_address = ${controllerAddress}
+      ORDER BY chain_id
+    `);
+    const rows = (result as any).rows ?? [];
+    const chains = rows.map((r: any) => ({
+      chainId: Number(r.chain_id),
+      name: CHAIN_CONFIGS[Number(r.chain_id)]?.name ?? `Chain ${r.chain_id}`,
+      firstSeenBlock: Number(r.first_seen_block),
+    }));
+    return { count: chains.length, chains };
+  } catch {
+    return { count: 0, chains: [] };
+  }
+}
+
+async function getAgentEventCount(agentId: string): Promise<number> {
+  try {
+    const result = await db.execute(sql`
+      SELECT COUNT(*)::int as cnt FROM agent_metadata_events
+      WHERE agent_id = ${agentId}
+      AND event_type IN ('MetadataUpdated', 'AgentURISet')
+    `);
+    return Number((result as any).rows?.[0]?.cnt ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+async function getAgentProbes(agentId: string): Promise<X402Probe[]> {
+  try {
+    return await db.select().from(x402Probes)
+      .where(eq(x402Probes.agentId, agentId))
+      .orderBy(sql`probed_at DESC`)
+      .limit(20);
+  } catch {
+    return [];
+  }
+}
+
+async function getAgentTransactionStats(agentId: string): Promise<{
+  count: number;
+  totalVolumeUsd: number;
+  topTokens: Array<{ symbol: string; count: number; volumeUsd: number }>;
+  lastTxAt: string | null;
+}> {
+  try {
+    const result = await db.execute(sql`
+      SELECT
+        COUNT(*)::int as count,
+        COALESCE(SUM(amount_usd), 0)::float as total_volume_usd
+      FROM agent_transactions
+      WHERE agent_id = ${agentId}
+    `);
+    const row = (result as any).rows?.[0] ?? {};
+
+    const tokenResult = await db.execute(sql`
+      SELECT
+        token_symbol,
+        COUNT(*)::int as count,
+        COALESCE(SUM(amount_usd), 0)::float as volume_usd
+      FROM agent_transactions
+      WHERE agent_id = ${agentId}
+      GROUP BY token_symbol
+      ORDER BY volume_usd DESC
+      LIMIT 5
+    `);
+    const topTokens = ((tokenResult as any).rows ?? []).map((r: any) => ({
+      symbol: r.token_symbol,
+      count: Number(r.count),
+      volumeUsd: Number(r.volume_usd),
+    }));
+
+    const lastResult = await db.execute(sql`
+      SELECT block_timestamp FROM agent_transactions
+      WHERE agent_id = ${agentId}
+      ORDER BY block_timestamp DESC LIMIT 1
+    `);
+    const lastTxAt = (lastResult as any).rows?.[0]?.block_timestamp?.toISOString() ?? null;
+
+    return {
+      count: Number(row.count ?? 0),
+      totalVolumeUsd: Number(row.total_volume_usd ?? 0),
+      topTokens,
+      lastTxAt,
+    };
+  } catch {
+    return { count: 0, totalVolumeUsd: 0, topTokens: [], lastTxAt: null };
+  }
+}
+
+// --- Compilers ---
+
+export function compileQuickCheck(
+  agent: Agent,
+  breakdown: TrustScoreBreakdown,
+  crossChainData: { count: number },
+  txStats: { count: number },
+  verdict: Verdict,
+): QuickCheckData {
+  const ageDays = Math.floor((Date.now() - new Date(agent.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+
+  return {
+    address: agent.primaryContractAddress,
+    chainId: agent.chainId,
+    name: agent.name,
+    verdict,
+    score: breakdown.total,
+    scoreBreakdown: breakdown,
+    tier: agent.qualityTier ?? "unclassified",
+    flags: agent.spamFlags ?? [],
+    x402Active: agent.x402Support === true,
+    ageInDays: ageDays,
+    crossChainPresence: crossChainData.count,
+    transactionCount: txStats.count,
+    reportAvailable: true,
+    generatedAt: new Date().toISOString(),
+    reportVersion: REPORT_VERSION,
+  };
+}
+
+export function compileFullReport(
+  agent: Agent,
+  breakdown: TrustScoreBreakdown,
+  crossChainData: { count: number; chains: Array<{ chainId: number; name: string; firstSeenBlock: number }> },
+  eventCount: number,
+  probes: X402Probe[],
+  txStats: { count: number; totalVolumeUsd: number; topTokens: Array<{ symbol: string; count: number; volumeUsd: number }>; lastTxAt: string | null },
+  feedback: CommunityFeedbackSummary | null,
+  verdict: Verdict,
+): FullReportData {
+  const ageDays = Math.floor((Date.now() - new Date(agent.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+
+  // Extract payment addresses from successful probes
+  const paymentAddresses = probes
+    .filter(p => p.probeStatus === "success" && p.paymentAddress)
+    .reduce((acc, p) => {
+      const key = p.paymentAddress!;
+      if (!acc.some(a => a.address === key)) {
+        acc.push({
+          address: key,
+          network: p.paymentNetwork ?? "unknown",
+          token: p.paymentToken ?? "unknown",
+        });
+      }
+      return acc;
+    }, [] as Array<{ address: string; network: string; token: string }>);
+
+  // Extract endpoints as array
+  let endpointList: any[] = [];
+  if (agent.endpoints) {
+    if (Array.isArray(agent.endpoints)) endpointList = agent.endpoints;
+    else if (typeof agent.endpoints === "object") {
+      endpointList = Object.entries(agent.endpoints as Record<string, any>).map(([name, url]) => ({
+        name,
+        url: typeof url === "string" ? url : JSON.stringify(url),
+      }));
+    }
+  }
+
+  const latestProbeAt = probes.length > 0 ? probes[0].probedAt.toISOString() : null;
+
+  return {
+    agent: {
+      id: agent.id,
+      erc8004Id: agent.erc8004Id,
+      name: agent.name,
+      description: agent.description,
+      chains: crossChainData.chains.map(c => c.chainId),
+      imageUrl: agent.imageUrl,
+      slug: agent.slug,
+      endpoints: endpointList,
+      capabilities: agent.capabilities ?? [],
+      skills: agent.oasfSkills ?? [],
+    },
+    trust: {
+      verdict,
+      score: breakdown.total,
+      breakdown,
+      tier: agent.qualityTier ?? "unclassified",
+      flags: agent.spamFlags ?? [],
+      lifecycleStatus: agent.lifecycleStatus ?? "active",
+      updatedAt: agent.trustScoreUpdatedAt?.toISOString() ?? null,
+    },
+    onChain: {
+      firstSeenAt: agent.createdAt.toISOString(),
+      ageInDays: ageDays,
+      metadataEvents: eventCount,
+      crossChainCount: crossChainData.count,
+      chains: crossChainData.chains,
+    },
+    economy: {
+      x402Support: agent.x402Support === true,
+      paymentAddresses,
+      transactionCount: txStats.count,
+      totalVolumeUsd: txStats.totalVolumeUsd,
+      topTokens: txStats.topTokens,
+    },
+    community: {
+      githubHealthScore: feedback?.githubHealthScore ?? null,
+      githubStars: feedback?.githubStars ?? null,
+      githubForks: feedback?.githubForks ?? null,
+      githubLastCommitAt: feedback?.githubLastCommitAt?.toISOString() ?? null,
+      githubContributors: feedback?.githubContributors ?? null,
+      farcasterScore: feedback?.farcasterScore ?? null,
+      farcasterFollowers: feedback?.farcasterFollowers ?? null,
+      totalSources: feedback?.totalSources ?? 0,
+    },
+    meta: {
+      generatedAt: new Date().toISOString(),
+      reportVersion: REPORT_VERSION,
+      dataFreshness: {
+        trustScore: agent.trustScoreUpdatedAt?.toISOString() ?? null,
+        probes: latestProbeAt,
+        transactions: txStats.lastTxAt,
+        community: feedback?.lastUpdatedAt?.toISOString() ?? null,
+      },
+    },
+  };
+}
+
+// --- Core Operations ---
+
+/**
+ * Compile and cache a trust report for a given agent.
+ * Fetches all required data, compiles both tiers, and upserts into trust_reports.
+ */
+export async function compileAndCacheReport(agentId: string): Promise<TrustReport | null> {
+  const agent = await storage.getAgent(agentId);
+  if (!agent) return null;
+
+  // Fetch all data in parallel
+  const [crossChainData, eventCount, probes, txStats, feedback] = await Promise.all([
+    getAgentCrossChainData(agent.controllerAddress),
+    getAgentEventCount(agentId),
+    getAgentProbes(agentId),
+    getAgentTransactionStats(agentId),
+    storage.getCommunityFeedbackSummary(agentId).catch(() => null),
+  ]);
+
+  const breakdown = calculateTrustScore(agent, feedback, eventCount, crossChainData.count);
+  const verdict = computeVerdict(breakdown.total, agent.qualityTier, agent.spamFlags, agent.lifecycleStatus);
+
+  const quickCheckData = compileQuickCheck(agent, breakdown, crossChainData, txStats, verdict);
+  const fullReportData = compileFullReport(agent, breakdown, crossChainData, eventCount, probes, txStats, feedback, verdict);
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + REPORT_TTL_MS);
+
+  // Upsert: one report per agent
+  const [report] = await db.insert(trustReports).values({
+    agentId,
+    lookupAddress: agent.primaryContractAddress.toLowerCase(),
+    lookupChainId: agent.chainId,
+    verdict: verdict.toLowerCase(),
+    score: breakdown.total,
+    tier: agent.qualityTier ?? "unclassified",
+    quickCheckData,
+    fullReportData,
+    reportVersion: REPORT_VERSION,
+    compiledAt: now,
+    expiresAt,
+  }).onConflictDoUpdate({
+    target: trustReports.agentId,
+    set: {
+      lookupAddress: agent.primaryContractAddress.toLowerCase(),
+      lookupChainId: agent.chainId,
+      verdict: verdict.toLowerCase(),
+      score: breakdown.total,
+      tier: agent.qualityTier ?? "unclassified",
+      quickCheckData,
+      fullReportData,
+      reportVersion: REPORT_VERSION,
+      compiledAt: now,
+      expiresAt,
+    },
+  }).returning();
+
+  return report;
+}
+
+/**
+ * Resolve an agent by any address type: primary contract, controller, or payment address.
+ */
+export async function resolveAgentByAddress(address: string, chainId?: number): Promise<Agent | null> {
+  const addr = address.toLowerCase();
+
+  // 1. Primary contract address
+  try {
+    const result = await db.select().from(agents)
+      .where(chainId
+        ? and(sql`LOWER(primary_contract_address) = ${addr}`, eq(agents.chainId, chainId))
+        : sql`LOWER(primary_contract_address) = ${addr}`)
+      .limit(1);
+    if (result.length > 0) return result[0];
+  } catch {}
+
+  // 2. Controller address
+  try {
+    const result = await db.select().from(agents)
+      .where(chainId
+        ? and(sql`LOWER(controller_address) = ${addr}`, eq(agents.chainId, chainId))
+        : sql`LOWER(controller_address) = ${addr}`)
+      .orderBy(sql`trust_score DESC NULLS LAST`)
+      .limit(1);
+    if (result.length > 0) return result[0];
+  } catch {}
+
+  // 3. Payment address (from x402 probes)
+  try {
+    const probeResult = await db.select({ agentId: x402Probes.agentId }).from(x402Probes)
+      .where(sql`LOWER(payment_address) = ${addr}`)
+      .limit(1);
+    if (probeResult.length > 0) {
+      const agent = await storage.getAgent(probeResult[0].agentId);
+      if (agent) return agent;
+    }
+  } catch {}
+
+  return null;
+}
+
+/**
+ * Get a cached report or compile on-demand if stale/missing.
+ */
+export async function getOrCompileReport(address: string, chainId?: number): Promise<{
+  report: TrustReport;
+  compiled: boolean;
+} | null> {
+  const addr = address.toLowerCase();
+
+  // Check cache first
+  try {
+    const cached = await db.select().from(trustReports)
+      .where(eq(trustReports.lookupAddress, addr))
+      .limit(1);
+
+    if (cached.length > 0 && new Date(cached[0].expiresAt) > new Date()) {
+      return { report: cached[0], compiled: false };
+    }
+  } catch {}
+
+  // Resolve agent and compile
+  const agent = await resolveAgentByAddress(address, chainId);
+  if (!agent) return null;
+
+  const report = await compileAndCacheReport(agent.id);
+  if (!report) return null;
+
+  return { report, compiled: true };
+}
+
+/**
+ * Increment access counter (fire-and-forget, don't await in request path).
+ */
+export function incrementAccessCount(reportId: number, tier: "quick" | "full"): void {
+  const col = tier === "quick" ? "quick_check_access_count" : "full_report_access_count";
+  db.execute(sql`
+    UPDATE trust_reports SET ${sql.raw(col)} = ${sql.raw(col)} + 1 WHERE id = ${reportId}
+  `).catch(() => {});
+}
+
+/**
+ * Batch recompile reports for agents whose scores changed.
+ * Called from Trigger.dev recalculate task.
+ */
+export async function batchRecompileReports(options?: { limit?: number }): Promise<{ recompiled: number; elapsed: number }> {
+  const start = Date.now();
+  const limit = options?.limit ?? 500;
+
+  // Recompile reports that exist and are expired, or where score has changed
+  const staleReports = await db.select({ agentId: trustReports.agentId }).from(trustReports)
+    .where(lt(trustReports.expiresAt, new Date()))
+    .limit(limit);
+
+  let recompiled = 0;
+  for (const { agentId } of staleReports) {
+    try {
+      await compileAndCacheReport(agentId);
+      recompiled++;
+    } catch (err) {
+      log(`Failed to recompile report for ${agentId}: ${(err as Error).message}`, "trust-report");
+    }
+  }
+
+  const elapsed = Date.now() - start;
+  if (recompiled > 0) {
+    log(`Recompiled ${recompiled} trust reports in ${(elapsed / 1000).toFixed(1)}s`, "trust-report");
+  }
+  return { recompiled, elapsed };
+}
+
+/**
+ * Get usage stats for the trust data product.
+ */
+export async function getReportUsageStats(): Promise<{
+  totalReports: number;
+  quickCheckAccess: number;
+  fullReportAccess: number;
+  verdictDistribution: Record<string, number>;
+}> {
+  try {
+    const result = await db.execute(sql`
+      SELECT
+        COUNT(*)::int as total_reports,
+        COALESCE(SUM(quick_check_access_count), 0)::int as quick_access,
+        COALESCE(SUM(full_report_access_count), 0)::int as full_access
+      FROM trust_reports
+    `);
+    const row = (result as any).rows?.[0] ?? {};
+
+    const verdictResult = await db.execute(sql`
+      SELECT verdict, COUNT(*)::int as cnt
+      FROM trust_reports
+      GROUP BY verdict
+    `);
+    const verdictDistribution: Record<string, number> = {};
+    for (const r of (verdictResult as any).rows ?? []) {
+      verdictDistribution[r.verdict] = Number(r.cnt);
+    }
+
+    return {
+      totalReports: Number(row.total_reports ?? 0),
+      quickCheckAccess: Number(row.quick_access ?? 0),
+      fullReportAccess: Number(row.full_access ?? 0),
+      verdictDistribution,
+    };
+  } catch {
+    return { totalReports: 0, quickCheckAccess: 0, fullReportAccess: 0, verdictDistribution: {} };
+  }
+}

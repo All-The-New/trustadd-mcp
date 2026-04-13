@@ -1,0 +1,525 @@
+openapi: 3.1.0
+info:
+  title: TrustAdd Trust API
+  version: "1.0"
+  description: |
+    Agent trust oracle for the ERC-8004 ecosystem. Provides machine-readable trust
+    assessments for autonomous agents across 9 EVM chains.
+
+    ## Payment (x402)
+
+    The Quick Check and Full Report endpoints are gated by the x402 payment protocol.
+    On first request, the server returns HTTP 402 with payment requirements in the
+    `PAYMENT-REQUIRED` header. The client signs an EIP-3009 USDC authorization on Base,
+    then re-sends the request with a `PAYMENT-SIGNATURE` header. The Coinbase CDP
+    facilitator settles payment on-chain, and the server returns the trust data with
+    a `PAYMENT-RESPONSE` header containing the transaction hash.
+
+    The Exists endpoint is free and rate-limited.
+
+    ## Address Resolution
+
+    All endpoints accept any address associated with an ERC-8004 agent:
+    primary contract address, controller address, or payment address discovered
+    via x402 endpoint probing.
+  contact:
+    name: TrustAdd
+    url: https://trustadd.com
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://trustadd.com
+    description: Production
+
+paths:
+  /api/v1/trust/{address}:
+    get:
+      operationId: quickCheck
+      summary: Quick Check
+      description: |
+        Fast trust verdict for automated agent decision-making.
+        Returns score, verdict, flags, and key metrics.
+
+        **Price:** $0.01 USDC on Base (via x402)
+      tags: [Trust]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChainId"
+      responses:
+        "200":
+          description: Trust assessment
+          headers:
+            PAYMENT-RESPONSE:
+              description: Base64-encoded JSON with settlement transaction hash
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickCheckResponse"
+        "402":
+          description: Payment required
+          headers:
+            PAYMENT-REQUIRED:
+              description: Base64-encoded JSON with payment options
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentRequiredResponse"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnknownAgentResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/trust/{address}/report:
+    get:
+      operationId: fullReport
+      summary: Full Report
+      description: |
+        Comprehensive trust profile with full evidence including on-chain history,
+        economic activity, community signals, and data freshness metadata.
+
+        **Price:** $0.05 USDC on Base (via x402)
+      tags: [Trust]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChainId"
+      responses:
+        "200":
+          description: Full trust report
+          headers:
+            PAYMENT-RESPONSE:
+              description: Base64-encoded JSON with settlement transaction hash
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FullReportResponse"
+        "402":
+          description: Payment required
+          headers:
+            PAYMENT-REQUIRED:
+              description: Base64-encoded JSON with payment options
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentRequiredResponse"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnknownAgentResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/trust/{address}/exists:
+    get:
+      operationId: existsCheck
+      summary: Exists Check (Free)
+      description: |
+        Zero-cost discovery endpoint. Check whether TrustAdd has data on an address
+        before deciding to pay for a trust report.
+
+        **Price:** Free (rate-limited to 100 req/min per IP)
+      tags: [Trust]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+      responses:
+        "200":
+          description: Agent existence check
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExistsResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  parameters:
+    Address:
+      name: address
+      in: path
+      required: true
+      description: EVM address (0x-prefixed, 40 hex characters). Can be a contract address, controller address, or payment address.
+      schema:
+        type: string
+        pattern: "^0x[a-fA-F0-9]{40}$"
+        example: "0x1234567890abcdef1234567890abcdef12345678"
+
+    ChainId:
+      name: chainId
+      in: query
+      required: false
+      description: Optional chain ID to narrow lookup when an address appears on multiple chains.
+      schema:
+        type: integer
+        enum: [1, 56, 137, 42161, 8453, 42220, 100, 10, 43114]
+        example: 8453
+
+  schemas:
+    Verdict:
+      type: string
+      enum: [TRUSTED, CAUTION, UNTRUSTED, UNKNOWN]
+      description: |
+        - TRUSTED: Score >= 60, tier high/medium, no spam flags
+        - CAUTION: Score 30-59, or tier low, or non-critical flags
+        - UNTRUSTED: Score < 30, or tier spam, or critical flags
+        - UNKNOWN: Address not found
+
+    ScoreBreakdown:
+      type: object
+      properties:
+        identity:
+          type: integer
+          minimum: 0
+          maximum: 25
+          description: Name, description, image, endpoints, tags/skills
+        history:
+          type: integer
+          minimum: 0
+          maximum: 20
+          description: Agent age, metadata updates, cross-chain presence
+        capability:
+          type: integer
+          minimum: 0
+          maximum: 15
+          description: x402 support, OASF skills, endpoint count
+        community:
+          type: integer
+          minimum: 0
+          maximum: 20
+          description: GitHub health, Farcaster engagement, source count
+        transparency:
+          type: integer
+          minimum: 0
+          maximum: 20
+          description: Metadata URI scheme, trust protocols, active status
+      required: [identity, history, capability, community, transparency]
+
+    QuickCheckResponse:
+      type: object
+      properties:
+        address:
+          type: string
+          example: "0x1234...abcd"
+        chainId:
+          type: integer
+          example: 8453
+        name:
+          type: string
+          example: ExampleAgent
+        verdict:
+          $ref: "#/components/schemas/Verdict"
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 72
+        scoreBreakdown:
+          $ref: "#/components/schemas/ScoreBreakdown"
+        tier:
+          type: string
+          enum: [high, medium, low, spam, archived, unclassified]
+          example: high
+        flags:
+          type: array
+          items:
+            type: string
+          example: []
+        x402Active:
+          type: boolean
+          example: true
+        ageInDays:
+          type: integer
+          example: 145
+        crossChainPresence:
+          type: integer
+          example: 3
+        transactionCount:
+          type: integer
+          example: 23
+        reportAvailable:
+          type: boolean
+          description: Whether a full report can be purchased
+          example: true
+        generatedAt:
+          type: string
+          format: date-time
+        reportVersion:
+          type: integer
+          example: 1
+      required:
+        - address
+        - verdict
+        - score
+        - scoreBreakdown
+        - tier
+        - flags
+        - generatedAt
+        - reportVersion
+
+    FullReportResponse:
+      type: object
+      properties:
+        agent:
+          type: object
+          properties:
+            id:
+              type: string
+            erc8004Id:
+              type: integer
+            name:
+              type: string
+            description:
+              type: string
+            chains:
+              type: array
+              items:
+                type: integer
+            imageUrl:
+              type: string
+              nullable: true
+            slug:
+              type: string
+              nullable: true
+            endpoints:
+              type: array
+              items:
+                type: object
+                properties:
+                  url:
+                    type: string
+                  name:
+                    type: string
+            capabilities:
+              type: array
+              items:
+                type: string
+            skills:
+              type: array
+              items:
+                type: string
+          required: [id, name, chains]
+        trust:
+          type: object
+          properties:
+            verdict:
+              $ref: "#/components/schemas/Verdict"
+            score:
+              type: integer
+            breakdown:
+              $ref: "#/components/schemas/ScoreBreakdown"
+            tier:
+              type: string
+            flags:
+              type: array
+              items:
+                type: string
+            lifecycleStatus:
+              type: string
+            updatedAt:
+              type: string
+              format: date-time
+          required: [verdict, score, breakdown, tier, flags]
+        onChain:
+          type: object
+          properties:
+            firstSeenAt:
+              type: string
+              format: date-time
+              nullable: true
+            ageInDays:
+              type: integer
+            metadataEvents:
+              type: integer
+            crossChainCount:
+              type: integer
+            chains:
+              type: array
+              items:
+                type: object
+                properties:
+                  chainId:
+                    type: integer
+                  name:
+                    type: string
+                  firstSeenBlock:
+                    type: integer
+          required: [ageInDays, metadataEvents, crossChainCount, chains]
+        economy:
+          type: object
+          properties:
+            x402Support:
+              type: boolean
+            paymentAddresses:
+              type: array
+              items:
+                type: object
+                properties:
+                  address:
+                    type: string
+                  network:
+                    type: string
+                  token:
+                    type: string
+            transactionCount:
+              type: integer
+            totalVolumeUsd:
+              type: number
+            topTokens:
+              type: array
+              items:
+                type: object
+                properties:
+                  symbol:
+                    type: string
+                  count:
+                    type: integer
+                  volumeUsd:
+                    type: number
+          required: [x402Support, transactionCount, totalVolumeUsd]
+        community:
+          type: object
+          properties:
+            githubHealthScore:
+              type: integer
+              nullable: true
+            githubStars:
+              type: integer
+              nullable: true
+            githubForks:
+              type: integer
+              nullable: true
+            githubLastCommitAt:
+              type: string
+              format: date-time
+              nullable: true
+            githubContributors:
+              type: integer
+              nullable: true
+            farcasterScore:
+              type: number
+              nullable: true
+            farcasterFollowers:
+              type: integer
+              nullable: true
+            totalSources:
+              type: integer
+          required: [totalSources]
+        meta:
+          type: object
+          properties:
+            generatedAt:
+              type: string
+              format: date-time
+            reportVersion:
+              type: integer
+            dataFreshness:
+              type: object
+              properties:
+                trustScore:
+                  type: string
+                  format: date-time
+                probes:
+                  type: string
+                  format: date-time
+                  nullable: true
+                transactions:
+                  type: string
+                  format: date-time
+                  nullable: true
+                community:
+                  type: string
+                  format: date-time
+                  nullable: true
+          required: [generatedAt, reportVersion]
+      required: [agent, trust, onChain, economy, community, meta]
+
+    ExistsResponse:
+      type: object
+      properties:
+        found:
+          type: boolean
+        name:
+          type: string
+          nullable: true
+          description: Agent name (only if found)
+        verdict:
+          $ref: "#/components/schemas/Verdict"
+        x402Required:
+          type: boolean
+          description: Whether paid endpoints require x402 payment
+          example: true
+        quickCheckPrice:
+          type: string
+          example: "$0.01"
+        fullReportPrice:
+          type: string
+          example: "$0.05"
+        paymentNetwork:
+          type: string
+          example: "eip155:8453"
+        paymentToken:
+          type: string
+          example: USDC
+      required: [found, x402Required]
+
+    PaymentRequiredResponse:
+      type: object
+      description: Returned alongside the PAYMENT-REQUIRED header when x402 payment is needed
+      properties:
+        error:
+          type: string
+          example: Payment required
+        description:
+          type: string
+          example: Agent trust quick check
+        price:
+          type: string
+          example: "$0.01"
+        network:
+          type: string
+          example: "eip155:8453"
+        token:
+          type: string
+          example: USDC
+
+    UnknownAgentResponse:
+      type: object
+      properties:
+        verdict:
+          type: string
+          enum: [UNKNOWN]
+        message:
+          type: string
+          example: No agent found for this address
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Rate limit exceeded

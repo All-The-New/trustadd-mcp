@@ -343,6 +343,41 @@ export type InsertBazaarSnapshot = z.infer<typeof insertBazaarSnapshotSchema>;
 
 // --- End Bazaar ---
 
+// --- Trust Data Product (x402-gated trust reports) ---
+
+export const trustReports = pgTable("trust_reports", {
+  id: serial("id").primaryKey(),
+  agentId: varchar("agent_id").notNull().references(() => agents.id),
+  lookupAddress: text("lookup_address").notNull(),
+  lookupChainId: integer("lookup_chain_id"),
+  verdict: text("verdict").notNull(), // trusted, caution, untrusted, unknown
+  score: integer("score").notNull().default(0),
+  tier: text("tier").notNull().default("unclassified"),
+  quickCheckData: jsonb("quick_check_data").notNull(),
+  fullReportData: jsonb("full_report_data").notNull(),
+  reportVersion: integer("report_version").notNull().default(1),
+  compiledAt: timestamp("compiled_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  quickCheckAccessCount: integer("quick_check_access_count").notNull().default(0),
+  fullReportAccessCount: integer("full_report_access_count").notNull().default(0),
+}, (table) => [
+  index("idx_trust_reports_lookup_address").on(table.lookupAddress),
+  index("idx_trust_reports_agent_id").on(table.agentId),
+  index("idx_trust_reports_expires_at").on(table.expiresAt),
+  uniqueIndex("uq_trust_reports_agent").on(table.agentId),
+]);
+
+export const insertTrustReportSchema = createInsertSchema(trustReports).omit({
+  id: true,
+  quickCheckAccessCount: true,
+  fullReportAccessCount: true,
+});
+
+export type TrustReport = typeof trustReports.$inferSelect;
+export type InsertTrustReport = z.infer<typeof insertTrustReportSchema>;
+
+// --- End Trust Data Product ---
+
 export const insertAgentSchema = createInsertSchema(agents).omit({
   id: true,
   createdAt: true,

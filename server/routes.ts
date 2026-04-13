@@ -13,6 +13,15 @@ import { getCommunityFeedbackScheduler, discoverAllSources } from "./community-f
 import { recalculateScore } from "./trust-score.js";
 import { probeAllAgents } from "./x402-prober.js";
 import { syncAllAgentTransactions } from "./transaction-indexer.js";
+import { createTrustProductGate } from "./lib/x402-gate.js";
+import {
+  resolveAgentByAddress,
+  getOrCompileReport,
+  incrementAccessCount,
+  getReportUsageStats,
+  type QuickCheckData,
+  type FullReportData,
+} from "./trust-report-compiler.js";
 
 // Lightweight in-memory TTL cache for expensive query results.
 // Serverless functions are ephemeral, so memory is naturally bounded.
@@ -1136,6 +1145,133 @@ export async function registerRoutes(
     } catch (err) {
       logger.error("Error fetching bazaar top services", { error: (err as Error).message });
       res.status(500).json({ message: "Failed to fetch bazaar top services" });
+    }
+  });
+
+  // === Trust Data Product API v1 (x402-gated) ===
+
+  const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
+
+  // x402 payment gate — only on paid endpoints
+  if (process.env.TRUST_PRODUCT_ENABLED === "true") {
+    const gate = createTrustProductGate();
+    if (gate) {
+      app.use("/api/v1/trust", gate);
+      logger.info("Trust Data Product x402 gate active");
+    }
+  }
+
+  // Free: existence check (no payment required)
+  app.get("/api/v1/trust/:address/exists", async (req, res) => {
+    try {
+      const { address } = req.params;
+      if (!ADDRESS_REGEX.test(address)) {
+        return res.status(400).json({ message: "Invalid address format" });
+      }
+
+      const agent = await resolveAgentByAddress(address);
+      if (!agent) {
+        return res.json({
+          found: false,
+          name: null,
+          verdict: "UNKNOWN",
+          x402Required: true,
+          quickCheckPrice: "$0.01",
+          fullReportPrice: "$0.05",
+          paymentNetwork: "eip155:8453",
+          paymentToken: "USDC",
+        });
+      }
+
+      // Return minimal info — verdict from cached report or infer from score
+      let verdict = "CAUTION";
+      const score = agent.trustScore ?? 0;
+      const tier = agent.qualityTier ?? "unclassified";
+      if (score >= 60 && (tier === "high" || tier === "medium")) verdict = "TRUSTED";
+      else if (score < 30 || tier === "spam") verdict = "UNTRUSTED";
+
+      res.json({
+        found: true,
+        name: agent.name,
+        verdict,
+        x402Required: true,
+        quickCheckPrice: "$0.01",
+        fullReportPrice: "$0.05",
+        paymentNetwork: "eip155:8453",
+        paymentToken: "USDC",
+      });
+    } catch (err) {
+      logger.error("Trust exists check failed", { error: (err as Error).message });
+      res.status(500).json({ message: "Internal error" });
+    }
+  });
+
+  // Paid: Quick Check ($0.01 USDC via x402)
+  app.get("/api/v1/trust/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      if (!ADDRESS_REGEX.test(address)) {
+        return res.status(400).json({ message: "Invalid address format" });
+      }
+
+      const chainId = parseChainId(req.query.chainId);
+      const result = await getOrCompileReport(address, chainId);
+
+      if (!result) {
+        return res.status(404).json({
+          verdict: "UNKNOWN",
+          message: "No agent found for this address",
+        });
+      }
+
+      // Fire-and-forget access counter
+      incrementAccessCount(result.report.id, "quick");
+
+      res.set("Cache-Control", "private, max-age=60");
+      res.json(result.report.quickCheckData as QuickCheckData);
+    } catch (err) {
+      logger.error("Trust quick check failed", { error: (err as Error).message });
+      res.status(500).json({ message: "Internal error" });
+    }
+  });
+
+  // Paid: Full Report ($0.05 USDC via x402)
+  app.get("/api/v1/trust/:address/report", async (req, res) => {
+    try {
+      const { address } = req.params;
+      if (!ADDRESS_REGEX.test(address)) {
+        return res.status(400).json({ message: "Invalid address format" });
+      }
+
+      const chainId = parseChainId(req.query.chainId);
+      const result = await getOrCompileReport(address, chainId);
+
+      if (!result) {
+        return res.status(404).json({
+          verdict: "UNKNOWN",
+          message: "No agent found for this address",
+        });
+      }
+
+      // Fire-and-forget access counter
+      incrementAccessCount(result.report.id, "full");
+
+      res.set("Cache-Control", "private, max-age=60");
+      res.json(result.report.fullReportData as FullReportData);
+    } catch (err) {
+      logger.error("Trust full report failed", { error: (err as Error).message });
+      res.status(500).json({ message: "Internal error" });
+    }
+  });
+
+  // Admin: Trust product usage stats
+  app.get("/api/admin/trust-product/stats", requireAdmin(), async (_req, res) => {
+    try {
+      const stats = await getReportUsageStats();
+      res.json(stats);
+    } catch (err) {
+      logger.error("Error fetching trust product stats", { error: (err as Error).message });
+      res.status(500).json({ message: "Failed to fetch trust product stats" });
     }
   });
 
