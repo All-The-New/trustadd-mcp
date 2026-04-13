@@ -20,6 +20,7 @@ import {
   getOrCompileReport,
   incrementAccessCount,
   getReportUsageStats,
+  computeVerdict,
   type QuickCheckData,
   type FullReportData,
 } from "./trust-report-compiler.js";
@@ -1245,10 +1246,11 @@ export async function registerRoutes(
 
   const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 
-  // Free endpoint MUST be registered BEFORE the x402 gate so it's not payment-gated.
-  // Express matches routes in registration order; app.get takes priority over app.use
-  // for exact path matches, but /exists is a sub-path that the gate middleware would
-  // intercept. Register it first to ensure it's reachable without payment.
+  const trustProductEnabled = process.env.TRUST_PRODUCT_ENABLED?.toLowerCase() === "true";
+
+  // Free endpoint — registered before the x402 gate. The gate's route regex only
+  // matches /:address and /:address/report (not /:address/exists), so registration
+  // order is belt-and-suspenders here.
   app.get("/api/v1/trust/:address/exists", async (req, res) => {
     try {
       const { address } = req.params;
@@ -1270,12 +1272,13 @@ export async function registerRoutes(
         });
       }
 
-      // Return minimal info — verdict from cached report or infer from score
-      let verdict = "CAUTION";
-      const score = agent.trustScore ?? 0;
-      const tier = agent.qualityTier ?? "unclassified";
-      if (score >= 60 && (tier === "high" || tier === "medium")) verdict = "TRUSTED";
-      else if (score < 30 || tier === "spam") verdict = "UNTRUSTED";
+      // Use the same verdict logic as the paid endpoints
+      const verdict = computeVerdict(
+        agent.trustScore ?? 0,
+        agent.qualityTier ?? null,
+        agent.spamFlags ?? null,
+        agent.lifecycleStatus ?? null,
+      );
 
       res.json({
         found: true,
@@ -1293,10 +1296,9 @@ export async function registerRoutes(
     }
   });
 
-  // x402 payment gate — mounted globally (not on sub-path) because the x402 middleware
-  // uses req.path for route matching, and Express strips the mount prefix from req.path
-  // when using app.use(prefix, middleware). Full-path routes in the config need full req.path.
-  if (process.env.TRUST_PRODUCT_ENABLED === "true") {
+  // x402 payment gate — mounted globally because the x402 middleware uses req.path
+  // for route matching, and Express strips the mount prefix when using app.use(prefix, fn).
+  if (trustProductEnabled) {
     const gate = createTrustProductGate();
     if (gate) {
       app.use(gate);
@@ -1307,6 +1309,11 @@ export async function registerRoutes(
   // Paid: Quick Check ($0.01 USDC via x402)
   app.get("/api/v1/trust/:address", async (req, res) => {
     try {
+      // Guard: if gate is not active, don't serve paid data for free
+      if (!trustProductEnabled) {
+        return res.status(503).json({ message: "Trust Data Product is not enabled" });
+      }
+
       const { address } = req.params;
       if (!ADDRESS_REGEX.test(address)) {
         return res.status(400).json({ message: "Invalid address format" });
@@ -1322,10 +1329,9 @@ export async function registerRoutes(
         });
       }
 
-      // Fire-and-forget access counter
       incrementAccessCount(result.report.id, "quick");
 
-      res.set("Cache-Control", "private, max-age=60");
+      res.set("Cache-Control", "no-store");
       res.json(result.report.quickCheckData as QuickCheckData);
     } catch (err) {
       logger.error("Trust quick check failed", { error: (err as Error).message });
@@ -1336,6 +1342,10 @@ export async function registerRoutes(
   // Paid: Full Report ($0.05 USDC via x402)
   app.get("/api/v1/trust/:address/report", async (req, res) => {
     try {
+      if (!trustProductEnabled) {
+        return res.status(503).json({ message: "Trust Data Product is not enabled" });
+      }
+
       const { address } = req.params;
       if (!ADDRESS_REGEX.test(address)) {
         return res.status(400).json({ message: "Invalid address format" });
@@ -1351,10 +1361,9 @@ export async function registerRoutes(
         });
       }
 
-      // Fire-and-forget access counter
       incrementAccessCount(result.report.id, "full");
 
-      res.set("Cache-Control", "private, max-age=60");
+      res.set("Cache-Control", "no-store");
       res.json(result.report.fullReportData as FullReportData);
     } catch (err) {
       logger.error("Trust full report failed", { error: (err as Error).message });

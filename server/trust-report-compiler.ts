@@ -478,10 +478,10 @@ export async function getOrCompileReport(address: string, chainId?: number): Pro
  * Increment access counter (fire-and-forget, don't await in request path).
  */
 export function incrementAccessCount(reportId: number, tier: "quick" | "full"): void {
-  const col = tier === "quick" ? "quick_check_access_count" : "full_report_access_count";
-  db.execute(sql`
-    UPDATE trust_reports SET ${sql.raw(col)} = ${sql.raw(col)} + 1 WHERE id = ${reportId}
-  `).catch(() => {});
+  const update = tier === "quick"
+    ? { quickCheckAccessCount: sql`${trustReports.quickCheckAccessCount} + 1` }
+    : { fullReportAccessCount: sql`${trustReports.fullReportAccessCount} + 1` };
+  db.update(trustReports).set(update).where(eq(trustReports.id, reportId)).catch(() => {});
 }
 
 /**

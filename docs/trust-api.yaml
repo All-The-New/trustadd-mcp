@@ -192,6 +192,11 @@ components:
     ScoreBreakdown:
       type: object
       properties:
+        total:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Sum of all category scores
         identity:
           type: integer
           minimum: 0
@@ -217,7 +222,7 @@ components:
           minimum: 0
           maximum: 20
           description: Metadata URI scheme, trust protocols, active status
-      required: [identity, history, capability, community, transparency]
+      required: [total, identity, history, capability, community, transparency]
 
     QuickCheckResponse:
       type: object
@@ -290,7 +295,7 @@ components:
             id:
               type: string
             erc8004Id:
-              type: integer
+              type: string
             name:
               type: string
             description:

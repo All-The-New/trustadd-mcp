@@ -23,24 +23,22 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
-// Trust Data Product API: open CORS for agent-to-agent access
-app.use("/api/v1/trust", cors({ origin: "*", methods: ["GET"], credentials: false }));
-
 const allowedOrigins = process.env.CORS_ORIGIN?.split(",") || ["https://trustadd.com"];
 
-// Admin routes: credentials required for cookie auth
-app.use("/api/admin", cors({
-  origin: allowedOrigins,
-  methods: ["GET", "POST"],
-  credentials: true,
-}));
-
-// All other API routes: restricted CORS (credentials needed for cookie-based auth)
-app.use(cors({
-  origin: allowedOrigins,
-  methods: ["GET", "POST"],
-  credentials: true,
-}));
+// CORS: route-specific policies. Only one cors() should fire per request to avoid header conflicts.
+app.use((req: any, res: any, next: any) => {
+  const path = req.path || req.url;
+  if (path.startsWith("/api/v1/trust")) {
+    // Trust Data Product: open CORS for agent-to-agent access, no credentials
+    return cors({ origin: "*", methods: ["GET"], credentials: false })(req, res, next);
+  }
+  if (path.startsWith("/api/admin")) {
+    // Admin: restricted origins with credentials for cookie auth
+    return cors({ origin: allowedOrigins, methods: ["GET", "POST"], credentials: true })(req, res, next);
+  }
+  // All other routes: restricted origins with credentials
+  return cors({ origin: allowedOrigins, methods: ["GET", "POST"], credentials: true })(req, res, next);
+});
 
 app.use((_req: any, res: any, next: any) => {
   res.set("X-Frame-Options", "DENY");

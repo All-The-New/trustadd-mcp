@@ -164,8 +164,8 @@ Zero-cost discovery. Agents can check whether TrustAdd has data on an address be
 | Verdict | Criteria | Agent Action |
 |---------|----------|-------------|
 | **TRUSTED** | Score >= 60 AND tier in (high, medium) AND no spam flags | Proceed with transaction |
-| **CAUTION** | Score 30-59 OR tier = low OR has non-critical flags | Apply extra validation, consider full report |
-| **UNTRUSTED** | Score < 30 OR tier = spam OR critical flags | Abort transaction, notify user |
+| **CAUTION** | Score 30-59 OR tier = low/unclassified OR has non-critical flags | Apply extra validation, consider full report |
+| **UNTRUSTED** | Score < 30 OR tier = spam/archived OR lifecycleStatus = archived | Abort transaction, notify user |
 | **UNKNOWN** | Address not found in TrustAdd database | Use own judgment, request manual approval |
 
 ### Spam Flags
