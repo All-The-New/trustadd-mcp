@@ -63,6 +63,11 @@ export const communityFeedbackTask = schedules.task({
       metadata.set("computeCostCents", cost.totalCostInCents);
       metadata.set("durationMs", cost.compute.total.durationMs);
 
+      try {
+        const { recordSuccess } = await import("../server/pipeline-health");
+        await recordSuccess("community-feedback", "Community Feedback Collector");
+      } catch {}
+
       return { discovered, totalScraped, totalErrors, totalSkipped };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -73,6 +78,10 @@ export const communityFeedbackTask = schedules.task({
       try {
         const { notifyJobFailure } = await import("./alert");
         await notifyJobFailure("community-feedback", error);
+      } catch {}
+      try {
+        const { recordFailure } = await import("../server/pipeline-health");
+        await recordFailure("community-feedback", "Community Feedback Collector", error.message);
       } catch {}
       return { error: error.message };
     }

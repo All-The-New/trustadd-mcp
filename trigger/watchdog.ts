@@ -33,6 +33,11 @@ export const watchdogTask = schedules.task({
       metadata.set("computeCostCents", cost.totalCostInCents);
       metadata.set("durationMs", cost.compute.total.durationMs);
 
+      try {
+        const { recordSuccess } = await import("../server/pipeline-health");
+        await recordSuccess("watchdog", "System Watchdog");
+      } catch {}
+
       return { alertsFound: alerts.length, critical, warnings };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -40,6 +45,10 @@ export const watchdogTask = schedules.task({
       metadata.set("status", "failed");
       metadata.set("lastError", error.message);
       metadata.set("lastErrorAt", new Date().toISOString());
+      try {
+        const { recordFailure } = await import("../server/pipeline-health");
+        await recordFailure("watchdog", "System Watchdog", error.message);
+      } catch {}
       return { error: error.message };
     }
   },

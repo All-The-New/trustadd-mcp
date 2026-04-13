@@ -28,6 +28,11 @@ export const x402ProberTask = schedules.task({
       metadata.set("computeCostCents", cost.totalCostInCents);
       metadata.set("durationMs", cost.compute.total.durationMs);
 
+      try {
+        const { recordSuccess } = await import("../server/pipeline-health");
+        await recordSuccess("x402-prober", "x402 Endpoint Prober");
+      } catch {}
+
       return result;
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -38,6 +43,10 @@ export const x402ProberTask = schedules.task({
       try {
         const { notifyJobFailure } = await import("./alert");
         await notifyJobFailure("x402-prober", error);
+      } catch {}
+      try {
+        const { recordFailure } = await import("../server/pipeline-health");
+        await recordFailure("x402-prober", "x402 Endpoint Prober", error.message);
       } catch {}
       return { error: error.message };
     }

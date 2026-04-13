@@ -136,6 +136,11 @@ export const recalculateTask = schedules.task({
       metadata.set("computeCostCents", cost.totalCostInCents);
       metadata.set("durationMs", cost.compute.total.durationMs);
 
+      try {
+        const { recordSuccess } = await import("../server/pipeline-health");
+        await recordSuccess("recalculate-scores", "Trust Score Recalculation");
+      } catch {}
+
       return { success: true, classified, recompiled };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -146,6 +151,10 @@ export const recalculateTask = schedules.task({
       try {
         const { notifyJobFailure } = await import("./alert");
         await notifyJobFailure("recalculate-scores", error);
+      } catch {}
+      try {
+        const { recordFailure } = await import("../server/pipeline-health");
+        await recordFailure("recalculate-scores", "Trust Score Recalculation", error.message);
       } catch {}
       return { error: error.message };
     }

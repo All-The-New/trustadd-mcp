@@ -71,6 +71,11 @@ export const blockchainIndexerTask = schedules.task({
         failures,
       });
 
+      try {
+        const { recordSuccess } = await import("../server/pipeline-health");
+        await recordSuccess("blockchain-indexer", "Blockchain Indexer");
+      } catch {}
+
       return { succeeded, failed, failures, totalBlocks, totalAgents };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -78,6 +83,10 @@ export const blockchainIndexerTask = schedules.task({
       metadata.set("status", "failed");
       metadata.set("lastError", error.message);
       metadata.set("lastErrorAt", new Date().toISOString());
+      try {
+        const { recordFailure } = await import("../server/pipeline-health");
+        await recordFailure("blockchain-indexer", "Blockchain Indexer", error.message);
+      } catch {}
       return { error: error.message };
     }
   },
