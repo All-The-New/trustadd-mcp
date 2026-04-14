@@ -1,13 +1,25 @@
 import { computeVerdict, type Verdict } from "../trust-report-compiler.js";
 
+/**
+ * Public-facing verdict union. The 6-tier v2 `Verdict` plus `"UNKNOWN"` for
+ * the unscored-agent case (where we have no trust_score at all yet).
+ */
+export type PublicVerdict = Verdict | "UNKNOWN";
+
 /** Null-safe wrapper around computeVerdict — returns UNKNOWN for unscored agents. */
 export function verdictFor(
   score: number | null,
   tier: string | null,
   flags: string[] | null,
   status: string | null,
-): Verdict {
-  return score == null ? "UNKNOWN" : computeVerdict(score, tier, flags, status);
+): PublicVerdict {
+  if (score == null) return "UNKNOWN";
+  return computeVerdict({
+    score,
+    qualityTier: tier,
+    spamFlags: flags,
+    lifecycleStatus: status,
+  });
 }
 
 /** Strip trust-intelligence fields from an agent object for public (free) responses. */

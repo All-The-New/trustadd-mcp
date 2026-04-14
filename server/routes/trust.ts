@@ -8,11 +8,10 @@ import {
   computeVerdict,
   type QuickCheckData,
   type FullReportData,
-  type Verdict,
 } from "../trust-report-compiler.js";
 import { getMethodology } from "../trust-methodology.js";
 import { getAllPipelineHealth } from "../pipeline-health.js";
-import { parseChainId } from "./helpers.js";
+import { parseChainId, type PublicVerdict } from "./helpers.js";
 
 const logger = createLogger("routes:trust");
 
@@ -71,14 +70,14 @@ export function registerTrustRoutes(app: Express): void {
       }
 
       // Use the same verdict logic as the paid endpoints (null score → UNKNOWN)
-      const verdict: Verdict = agent.trustScore == null
+      const verdict: PublicVerdict = agent.trustScore == null
         ? "UNKNOWN"
-        : computeVerdict(
-            agent.trustScore,
-            agent.qualityTier ?? null,
-            agent.spamFlags ?? null,
-            agent.lifecycleStatus ?? null,
-          );
+        : computeVerdict({
+            score: agent.trustScore,
+            qualityTier: agent.qualityTier ?? null,
+            spamFlags: agent.spamFlags ?? null,
+            lifecycleStatus: agent.lifecycleStatus ?? null,
+          });
 
       res.json({
         found: true,
