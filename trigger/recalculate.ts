@@ -80,21 +80,23 @@ export const recalculateTask = schedules.task({
               metadata.set("classifiedSoFar", classified);
             }
 
-            // Batch update per-agent fields (fingerprint, nextEnrichmentAt) via unnest
+            // Batch update per-agent fields (fingerprint, nextEnrichmentAt)
+            // Use json_to_recordset — same reason as batchUpdateScoresWithSybil:
+            // unnest(${nullable_array}::text[]) fails when all elements are null.
             if (results.length > 0) {
-              const ids = results.map(r => r.id);
-              const fingerprints = results.map(r => r.metadataFingerprint ?? null);
-              const enrichments = results.map(r => r.nextEnrichmentAt?.toISOString() ?? null);
+              const rowData = JSON.stringify(results.map(r => ({
+                id: r.id,
+                fp: r.metadataFingerprint ?? null,
+                enrich: r.nextEnrichmentAt?.toISOString() ?? null,
+              })));
 
               await db.execute(sql`
                 UPDATE agents SET
                   metadata_fingerprint = batch.fp,
                   next_enrichment_at = batch.enrich::timestamptz
-                FROM (
-                  SELECT unnest(${ids}::text[]) AS id,
-                         unnest(${fingerprints}::text[]) AS fp,
-                         unnest(${enrichments}::text[]) AS enrich
-                ) AS batch
+                FROM json_to_recordset(${rowData}::json) AS batch(
+                  id text, fp text, enrich text
+                )
                 WHERE agents.id = batch.id
               `);
             }
