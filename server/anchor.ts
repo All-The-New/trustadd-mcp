@@ -65,7 +65,7 @@ export function extractProofs(
   const root = tree.root;
   const proofs: AnchorProof[] = [];
 
-  for (const [index, leaf] of tree.entries()) {
+  for (const [index, leaf] of Array.from(tree.entries())) {
     const [address, chainId, score, methodologyVersion, timestamp] = leaf;
     proofs.push({
       address,
