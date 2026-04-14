@@ -2,22 +2,25 @@
 
 ## Phase 2: Anti-Gaming & Sybil Resistance (Principle 5)
 
-**Status:** Planned
-**Estimated effort:** 3-5 days
-**Dependencies:** Phase 1 complete
+**Status:** Complete
+**Completed:** 2026-04-13
+**Dependencies:** Phase 1 complete ✓
 
-### What to build:
-1. **Controller clustering detection** — SQL query grouping agents by `controller_address`, flag controllers with >10 agents as potential Sybil operators. Apply score dampening multiplier (0-50% reduction).
-2. **Self-referential payment detection** — Join on `agent_transactions` where from/to addresses form cycles between controlled wallets.
-3. **Temporal burst detection** — Flag agents where >50% of total transaction volume arrived in last 24 hours (pump-before-recalculation pattern).
-4. **Metadata fingerprint clustering** — Detect agents sharing identical `metadata_fingerprint` values across different controllers.
+### What was built:
+1. **Controller clustering detection** — Controllers with >10 agents flagged. Severity: low (11-50), medium (51-500), high (>500). In production: 463 controllers flagged.
+2. **Metadata fingerprint clustering** — Agents sharing identical fingerprints across different controllers. 4,119 clusters detected.
+3. **Self-referential payment detection** — Cycles between controlled wallets in `agent_transactions`. Limited data (26 agents with txs) but detection ready.
+4. **Temporal burst detection** — >50% of tx volume in last 24h flagged. Minimum 5 transactions required.
+5. **Score dampening** — Risk score (0-1) converts to multiplier (0.5-1.0) applied to raw trust score during `recalculateAllScores()`.
 
-### Schema additions needed:
+### Schema additions:
 - `sybil_signals jsonb` column on agents table
 - `sybil_risk_score real` column on agents table
 
-### Integration point:
-Add a `detectSybilSignals()` function called during `recalculateAllScores()`.
+### Integration:
+- `server/sybil-detection.ts` — Pure detection functions + SQL prefetcher
+- Called during `recalculateAllScores()` in `server/trust-score.ts`
+- Sybil block included in full trust reports via `server/trust-report-compiler.ts`
 
 ---
 
