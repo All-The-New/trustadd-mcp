@@ -87,13 +87,13 @@ describe("extractProofs", () => {
 
   it("returns one proof per agent", () => {
     const tree = buildMerkleTree(agents);
-    const proofs = extractProofs(tree, agents);
+    const proofs = extractProofs(tree);
     expect(proofs).toHaveLength(2);
   });
 
   it("each proof has the expected structure", () => {
     const tree = buildMerkleTree(agents);
-    const proofs = extractProofs(tree, agents);
+    const proofs = extractProofs(tree);
     for (const p of proofs) {
       expect(p.address).toBeDefined();
       expect(p.chainId).toBeTypeOf("number");
@@ -108,7 +108,7 @@ describe("extractProofs", () => {
   it("proofs verify against the tree root", () => {
     const { StandardMerkleTree } = require("@openzeppelin/merkle-tree");
     const tree = buildMerkleTree(agents);
-    const proofs = extractProofs(tree, agents);
+    const proofs = extractProofs(tree);
     for (const p of proofs) {
       const leaf = [p.address, p.chainId, p.score, p.methodologyVersion, p.timestamp];
       const verified = StandardMerkleTree.verify(

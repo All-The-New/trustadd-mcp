@@ -60,7 +60,6 @@ export function buildMerkleTree(agents: AnchorLeaf[]): StandardMerkleTree<[strin
  */
 export function extractProofs(
   tree: StandardMerkleTree<[string, number, number, number, number]>,
-  agents: AnchorLeaf[],
 ): AnchorProof[] {
   const root = tree.root;
   const proofs: AnchorProof[] = [];

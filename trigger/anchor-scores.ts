@@ -40,7 +40,7 @@ export const anchorScoresTask = task({
     const leafData = scoredAgents.map((a) => ({
       address: a.address,
       chainId: a.chainId,
-      score: a.score!,
+      score: a.score ?? 0,
       methodologyVersion: METHODOLOGY_VERSION,
       timestamp,
     }));
@@ -109,7 +109,7 @@ export const anchorScoresTask = task({
 
     // 4. Extract proofs and bulk-upsert
     metadata.set("phase", "storing-proofs");
-    const proofs = extractProofs(tree, leafData);
+    const proofs = extractProofs(tree);
 
     // Build agent address → id lookup
     const addressToId = new Map<string, string>();
