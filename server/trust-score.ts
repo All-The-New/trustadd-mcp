@@ -6,7 +6,7 @@ import { log } from "./lib/log.js";
 import { computeSignalHash, METHODOLOGY_VERSION } from "./trust-provenance.js";
 import { computeConfidence } from "./trust-confidence.js";
 
-function looksLikeImageUrl(url: string): boolean {
+export function looksLikeImageUrl(url: string): boolean {
   if (!url || url.length < 5) return false;
   const lower = url.toLowerCase();
   if (lower.startsWith("data:image/")) return true;

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Agent, CommunityFeedbackSummary } from "../shared/schema.js";
+import { looksLikeImageUrl } from "./trust-score.js";
 
 /** Bump this when the scoring methodology changes to invalidate cached hashes. */
 export const METHODOLOGY_VERSION = 1;
@@ -149,7 +150,7 @@ export function computeSignalHash(
     // Identity
     hasName: Boolean(agent.name && agent.name.trim().length > 0),
     descriptionLength: agent.description?.trim().length ?? 0,
-    hasImage: Boolean(agent.imageUrl && agent.imageUrl.length >= 5),
+    hasImage: Boolean(agent.imageUrl && looksLikeImageUrl(agent.imageUrl)),
     hasEndpoints,
     hasTags: sortedTags.length > 0 || (agent.oasfSkills?.length ?? 0) > 0,
     // Raw values for full auditability

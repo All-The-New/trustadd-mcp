@@ -26,6 +26,11 @@ export const transactionIndexerTask = schedules.task({
       metadata.set("computeCostCents", cost.totalCostInCents);
       metadata.set("durationMs", cost.compute.total.durationMs);
 
+      try {
+        const { recordSuccess } = await import("../server/pipeline-health");
+        await recordSuccess("transaction-indexer", "Transaction Indexer");
+      } catch {}
+
       return result;
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -33,6 +38,12 @@ export const transactionIndexerTask = schedules.task({
       metadata.set("status", "failed");
       metadata.set("lastError", error.message);
       metadata.set("lastErrorAt", new Date().toISOString());
+
+      try {
+        const { recordFailure } = await import("../server/pipeline-health");
+        await recordFailure("transaction-indexer", "Transaction Indexer", error.message);
+      } catch {}
+
       return { error: error.message };
     }
   },

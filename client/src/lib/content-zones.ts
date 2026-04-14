@@ -421,6 +421,123 @@ export const METHODOLOGY = {
   ],
 };
 
+export const PRINCIPLES = {
+  header: {
+    title: "Our Principles",
+    subtitle:
+      "Trust oracles earn trust the same way they measure it — through transparency, honesty about limitations, and a refusal to cut corners. These are the commitments that govern how TrustAdd operates.",
+  },
+  sections: [
+    {
+      icon: "Eye" as const,
+      title: "We Tell You Exactly What We Know — and What We Don't",
+      paragraphs: [
+        "When TrustAdd produces a trust verdict, we show you every signal that went into it. If a data source was unavailable, we say so — we never silently drop it and pretend everything is fine.",
+        "Every assessment includes what was checked, what wasn't, and how fresh the data is. We use language like \"based on available signals\" rather than \"this agent is safe.\" Because absence of negative evidence isn't the same as positive evidence — and we won't pretend it is.",
+      ],
+      commitment:
+        "You'll never have to guess what a TrustAdd score is based on. The evidence is always inspectable.",
+    },
+    {
+      icon: "Layers" as const,
+      title: "We Separate Facts from Opinions",
+      paragraphs: [
+        "TrustAdd produces two kinds of output: observable facts and computed judgments. We treat them as fundamentally different.",
+        "Facts are things anyone can verify independently — whether an agent has an on-chain identity, when it was registered, how many transactions it's processed. Judgments are what our algorithm computes from those facts — the trust score, the verdict, the risk level.",
+        "Trust reports include both the raw evidence and our interpretation. You can always look past our judgment and examine the underlying signals yourself.",
+      ],
+      commitment:
+        "Our scores are one interpretation of the data. We'll never hide the data behind the score.",
+    },
+    {
+      icon: "FileText" as const,
+      title: "Every Score Has a Receipt",
+      paragraphs: [
+        "Every trust assessment includes a hash of the input signals that produced it, so we can prove what data we had at the time. Trust reports record the timestamp, the scoring version, and the provenance of every data point.",
+        "We're building toward a full append-only scoring history — where every score change is preserved alongside its predecessor. The goal is that anyone can audit what TrustAdd reported about any agent at any point in time.",
+      ],
+      commitment:
+        "Provenance and traceability. You should always be able to understand what produced a score and when.",
+    },
+    {
+      icon: "AlertTriangle" as const,
+      title: "When Something Breaks, We Tell You",
+      paragraphs: [
+        "TrustAdd depends on external data sources — blockchain RPCs, on-chain registries, community platforms. Any of them can go down at any time.",
+        "When a data source fails, we don't keep showing the last good result as if nothing happened. We mark that signal as stale or unavailable, adjust confidence accordingly, and show you a clear freshness indicator. Green means current, yellow means stale, red means failed.",
+        "If our own systems detect something seriously wrong — a data pipeline failure, anomalous scoring across many agents at once — we stop serving fresh scores entirely rather than serve potentially wrong ones.",
+      ],
+      commitment:
+        "We'd rather tell you we don't know than tell you something wrong.",
+    },
+    {
+      icon: "Shield" as const,
+      title: "We Assume Someone Is Trying to Game the System",
+      paragraphs: [
+        "If trust scores influence real economic decisions, they become an attack surface. We design for that from day one.",
+        "We think about actors who might create fake identities, generate artificial payment volume, coordinate sybil attacks across wallet clusters, or stand up healthy-looking services just long enough to get a good score. Not every threat is mitigated today, but every threat is documented, and our data model is designed to support the detection work ahead.",
+      ],
+      commitment:
+        "We take adversarial resilience seriously and we're transparent about what we've built defenses for and what's still on the roadmap.",
+    },
+    {
+      icon: "Scale" as const,
+      title: "New Agents Start at Zero, Not Neutral",
+      paragraphs: [
+        "Our scoring is intentionally conservative. A brand-new agent with no history doesn't get the benefit of the doubt — it starts at \"Unknown\" or \"Insufficient Data.\" Trust is earned through consistent positive signals over time.",
+        "The score is purely additive — agents start at zero and earn points for each verifiable signal. There are no shortcuts. An agent needs strong evidence across multiple dimensions to reach a high score, because the cost of over-trusting a bad actor is higher than the cost of being slow to recognize a good one.",
+      ],
+      commitment:
+        "We'd rather under-rate a legitimate agent temporarily than over-rate a risky one. Conservative by default.",
+    },
+    {
+      icon: "BookOpen" as const,
+      title: "We Publish How It Works",
+      paragraphs: [
+        "Our scoring methodology is public. The signals we check, the categories we weight, how verdicts are computed — all published, all versioned. When we change the algorithm, we publish the changelog with our rationale.",
+        "What we protect is the aggregated dataset — the historical snapshots, cross-referenced signals, and trend data we've collected over time. The method is open; the data we've assembled is the product.",
+      ],
+      commitment:
+        "You can always understand how a score was computed. No black boxes.",
+    },
+    {
+      icon: "GitBranch" as const,
+      title: "We Don't Trust a Single Source",
+      paragraphs: [
+        "A trust oracle that relies on a single data source is just a proxy, not an oracle. The value comes from cross-referencing.",
+        "Where possible, we verify trust signals through multiple independent paths. When sources agree, our confidence is higher. When they disagree, we flag the conflict and lower confidence rather than silently choosing one. If a dimension only has a single source, we label it accordingly.",
+      ],
+      commitment:
+        "We triangulate wherever we can, and we're honest about where we can't.",
+    },
+    {
+      icon: "Info" as const,
+      title: "We Know What We're Not",
+      paragraphs: [
+        "TrustAdd is a data aggregation and signal processing service. We save agents time by pre-computing trust signals from across the ecosystem.",
+        "We are not a guarantee of safety. We are not a substitute for due diligence on high-value transactions. We don't perform audits — we aggregate audit signals from others. We don't provide insurance, and we don't have authority to block or delist services.",
+        "Trust reports include explicit disclaimers and provenance metadata. Not hidden in fine print — visible alongside the data that matters.",
+      ],
+      commitment:
+        "We'll never overstate what a TrustAdd score means. Honest boundaries build more trust than inflated promises.",
+    },
+    {
+      icon: "Network" as const,
+      title: "We Build for the Ecosystem",
+      paragraphs: [
+        "TrustAdd exists within a broader trust ecosystem — ERC-8004 registries, validation networks, community tools. We're designed to complement these systems, not replace them.",
+        "We use standard identifiers, expose data in interoperable formats, and follow emerging agent framework standards. An agent should always be able to cross-reference our assessment against the underlying public data. No lock-in, no proprietary walls around the evidence.",
+      ],
+      commitment:
+        "We're one voice in the trust ecosystem, not the only one. And that makes the whole system stronger.",
+    },
+  ],
+  closing: {
+    tagline: "Trust is built the same way it's measured.",
+    body: "These principles aren't aspirational — they're engineering constraints. Every API response, every scoring algorithm, and every data pipeline decision at TrustAdd is held to these standards.",
+  },
+};
+
 export const NAV = {
   footer: {
     tagline:
@@ -453,5 +570,10 @@ export const SEO = {
     title: "Scoring Methodology",
     description:
       "How TrustAdd computes agent trust scores. Five scoring categories, signal weights, verdict thresholds, and data sources — fully transparent and equally applied.",
+  },
+  principles: {
+    title: "Our Principles",
+    description:
+      "The design principles that govern how TrustAdd builds trust infrastructure for the AI agent economy. Transparency, epistemic honesty, and conservative scoring.",
   },
 };

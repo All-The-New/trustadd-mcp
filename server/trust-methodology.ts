@@ -259,7 +259,7 @@ export function getMethodology(): Methodology {
         version: 1,
         date: "2026-04-13",
         summary:
-          "Initial methodology. Five dimensions (Identity, History, Capability, Community, Transparency) with 18 signals covering agent metadata, on-chain history, capabilities, community reputation, and metadata transparency. Maximum score 100, with verdict thresholds for trusted, caution, untrusted, and unknown states.",
+          "Initial methodology. Five dimensions (Identity, History, Capability, Community, Transparency) with 17 signals covering agent metadata, on-chain history, capabilities, community reputation, and metadata transparency. Maximum score 100, with verdict thresholds for trusted, caution, untrusted, and unknown states.",
       },
     ],
     disclaimer:

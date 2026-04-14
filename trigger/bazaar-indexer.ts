@@ -125,6 +125,10 @@ export const bazaarIndexerTask = schedules.task({
     } catch (err) {
       logger.error("CDP Bazaar fetch failed", { error: (err as Error).message });
       metadata.set("cdpError", (err as Error).message);
+      try {
+        const { recordFailure } = await import("../server/pipeline-health");
+        await recordFailure("bazaar-indexer", "Bazaar Indexer", (err as Error).message);
+      } catch {}
     }
 
     metadata.set("cdpTotalBaseItems", allResources.length);
@@ -306,6 +310,11 @@ export const bazaarIndexerTask = schedules.task({
 
     metadata.set("status", "completed");
     metadata.set("completedAt", new Date().toISOString());
+
+    try {
+      const { recordSuccess } = await import("../server/pipeline-health");
+      await recordSuccess("bazaar-indexer", "Bazaar Indexer");
+    } catch {}
 
     return {
       totalFetched: allResources.length,

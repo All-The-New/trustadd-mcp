@@ -44,6 +44,7 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - **Multi-chain**: 9 EVM chains share the same contract addresses; chain config in `shared/chains.ts`
 - **API tiering**: Free tier = ecosystem analytics + redacted agent directory (verdict badges, no scores). Paid tier (x402) = per-agent trust intelligence (scores, breakdowns, community signals, transactions). See `docs/api-tiering.md`
 - **ESM imports**: All relative imports use `.js` extensions for Vercel serverless compatibility
+- **Testing**: Vitest with 149 tests in `__tests__/` — trust scoring, verdict logic, free tier redaction, confidence. Run `npm test`. Architecture assessment in `docs/superpowers/specs/2026-04-13-architecture-adr1-fortify.md`
 
 ## Important Files
 
