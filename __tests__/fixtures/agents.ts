@@ -42,6 +42,8 @@ function baseAgent(overrides: Partial<Agent> = {}): Agent {
     trustMethodologyVersion: null,
     confidenceScore: null,
     confidenceLevel: null,
+    sybilSignals: null,
+    sybilRiskScore: null,
     ...overrides,
   } as Agent;
 }
@@ -173,6 +175,45 @@ export const HIGH_SCORE_WITH_FLAGS = baseAgent({
   trustScore: 80,
   qualityTier: "high",
   spamFlags: ["duplicate_template"],
+  lifecycleStatus: "active",
+});
+
+/** Agent from a large Sybil farm (controller has 500+ agents). */
+export const SYBIL_FARM_AGENT = baseAgent({
+  id: "sybil-farm-1",
+  controllerAddress: "0xsybilcontroller000000000000000000000000001",
+  name: "FarmAgent #347",
+  description: "Automated agent from a large farm",
+  metadataFingerprint: "fp_duplicate_cluster_1",
+  trustScore: 45,
+  qualityTier: "low",
+  spamFlags: [],
+  lifecycleStatus: "active",
+});
+
+/** Agent from a small multi-agent controller (15 agents — borderline). */
+export const SMALL_CLUSTER_AGENT = baseAgent({
+  id: "small-cluster-1",
+  controllerAddress: "0xsmallcluster0000000000000000000000000001",
+  name: "ClusterBot",
+  description: "Agent from a small but legitimate multi-agent operator with decent metadata quality.",
+  metadataFingerprint: "fp_unique_1",
+  trustScore: 52,
+  qualityTier: "medium",
+  spamFlags: [],
+  lifecycleStatus: "active",
+});
+
+/** Legitimate single-agent controller — should not be flagged. */
+export const SOLO_CONTROLLER_AGENT = baseAgent({
+  id: "solo-controller-1",
+  controllerAddress: "0xsolocontroller00000000000000000000000001",
+  name: "IndependentBot",
+  description: "A well-maintained agent by an independent operator with unique metadata and strong community presence.",
+  metadataFingerprint: "fp_unique_solo",
+  trustScore: 70,
+  qualityTier: "high",
+  spamFlags: [],
   lifecycleStatus: "active",
 });
 
