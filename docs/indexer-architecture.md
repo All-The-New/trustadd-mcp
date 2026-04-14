@@ -4,21 +4,33 @@ This document serves as the canonical technical reference for the TrustAdd index
 
 ## 1. System Overview
 
-TrustAdd's indexing engine is a suite of four independent but coordinated services that synchronize data from multiple blockchains and external APIs into a shared PostgreSQL (Neon) database.
+TrustAdd's indexing engine is a suite of four independent but coordinated services that synchronize data from multiple blockchains and external APIs into a shared PostgreSQL (Supabase) database.
 
 ### 1.1 Deployment Target
 
-TrustAdd runs on a **Replit Reserved VM** (dedicated small — 1 vCPU / 4 GB RAM). This eliminates the two most destructive properties of the previous Autoscale deployment:
+TrustAdd runs on two separate runtimes:
 
-- **No SIGTERM recycling** — the process is never killed mid-session due to inactivity or load redistribution. All indexers, probers, and the community feedback scheduler persist indefinitely between deploys.
-- **No visitor cold-starts** — the VM is always warm; there is no latency spike on first request.
-- **Neon keepalive** — with a persistent process, the `keepAlive: true` DB pool setting keeps connections warm continuously. Neon cold-start windows (which still apply on the very first startup after a deploy) are limited to that one event rather than occurring every 45–90 minutes.
+**API + Frontend: Vercel Serverless**
+- React SPA served as static files from `dist/public/`
+- Express API wrapped in a single catch-all serverless function (`api/[...path].ts`)
+- Stateless — no in-process indexers, no background timers
+- Cold starts are handled by lazy DB initialization (Proxy pattern in `server/db.ts`)
 
-**Run command:** `bash -c "npx drizzle-kit push && node ./dist/index.cjs"`
+**Background Jobs: Trigger.dev**
+- 10 scheduled/on-demand tasks in `trigger/` directory
+- Blockchain indexer, transaction indexer, x402 prober, community feedback, score recalculation, watchdog, alerts, bazaar indexer
+- Tasks run in isolated containers with their own DB connections
+- Cron schedules managed via Trigger.dev dashboard
 
-### 1.2 Startup Timeline
+**Local Development: `server/index.ts`**
+- In-process indexers, probers, and community feedback scheduler run alongside the Express API
+- Vite HMR for frontend development
+- Uses `setTimeout` self-scheduling for background services
+- Startup staggering (below) applies only to local dev mode
 
-To avoid database connection "stampedes" and RPC rate limiting, services stagger their initial execution:
+### 1.2 Startup Timeline (Local Dev Only)
+
+In local development (`npm run dev`), services stagger their initial execution to avoid database connection stampedes:
 
 ```text
 T+0s:   Blockchain Indexer chains start (30s apart: ETH 0s, BNB 30s, Polygon 60s, Base 90s, Arb 120s)
@@ -28,7 +40,9 @@ T+10m:  Transaction Indexer (first run)
 T+15m+: Community Feedback (first run; retries every 5min if DB is not yet warm)
 ```
 
-> **Neon cold-start window:** On Reserved VM, cold-starts only occur once — immediately after a deploy. Neon DB takes 3–10 minutes to warm up after a cold start. All re-resolution and secondary services are deliberately delayed past this window. Services that fail to connect during startup self-schedule retries rather than staying dead.
+In production, each service runs as a separate Trigger.dev task with its own cron schedule. Staggering is not needed because tasks execute independently.
+
+> **Supabase connection pooling:** The production database uses Supabase's transaction-mode pooler (port 6543) with `max: 2` connections. The DB pool in `server/db.ts` uses lazy initialization (Proxy pattern) to avoid `DATABASE_URL` checks at import time — this is required for Trigger.dev's build container to index task files without a live database.
 
 ### 1.3 Environment Variables
 
@@ -177,8 +191,12 @@ Public RPCs (Ankr, official chain endpoints) require no API key and act as resil
 
 ### 7.2 DB Pool Configuration
 
-The `pg.Pool` (via `server/db.ts`) is tuned for the specific needs of long-running indexers:
+The `pg.Pool` (via `server/db.ts`) is configured for Supabase's transaction-mode connection pooler:
 
-*   **`max: 8`**: Sized for Replit's environment limits.
-*   **`keepAlive: true`**: **CRITICAL**. Prevents Neon from silently dropping connections during long-wait periods (like x402 HTTP probes).
-*   **`connectionTimeoutMillis: 10000`**: Fast fail during DB "stampedes" at startup.
+*   **`max: 2`**: Sized for Vercel serverless (each function instance gets its own pool; low max prevents pooler exhaustion).
+*   **`statement_timeout: 30s`**: Prevents long-running queries from blocking the pooler.
+*   **`idleTimeoutMillis: 3000`**: Returns connections quickly on serverless (short-lived instances).
+
+In local development (`npm run dev`), the same pool serves both the API and in-process indexers. The low `max` value means indexer queries and API queries share a small pool — this is acceptable for development but would need to be increased for a persistent VM deployment.
+
+> **Important:** Both `pool` and `db` in `server/db.ts` are lazy Proxies. This prevents `DATABASE_URL` validation at import time, which is required for Trigger.dev's build container to index task files without a live database connection.
