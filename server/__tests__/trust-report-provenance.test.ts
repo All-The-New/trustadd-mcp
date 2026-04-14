@@ -23,6 +23,7 @@ describe("FullReportData provenance.anchor", () => {
         merkleProof: ["0xaaa...", "0xbbb..."],
         leafHash: "0xccc...",
         anchoredScore: 72,
+        anchoredMethodologyVersion: 1,
         txHash: "0xddd...",
         blockNumber: 12345678,
         anchoredAt: "2026-04-13T05:01:00Z",
@@ -36,6 +37,7 @@ describe("FullReportData provenance.anchor", () => {
     expect(provenance.anchor.txHash).toBeDefined();
     expect(provenance.anchor.leafHash).toBeDefined();
     expect(provenance.anchor.anchoredScore).toBe(72);
+    expect(provenance.anchor.anchoredMethodologyVersion).toBe(1);
     expect(provenance.anchor.blockNumber).toBe(12345678);
     expect(provenance.anchor.anchoredAt).toBeDefined();
     expect(provenance.anchor.contractAddress).toBeDefined();

@@ -33,6 +33,12 @@ export const anchorScoresTask = task({
     }
 
     metadata.set("agentsToAnchor", scoredAgents.length);
+    metadata.set("payloadAgentCount", payload.agentCount);
+    if (payload.agentCount !== scoredAgents.length) {
+      logger.warn(
+        `Agent count divergence: payload reported ${payload.agentCount} updated, query found ${scoredAgents.length} scored`,
+      );
+    }
     logger.info(`Building Merkle tree for ${scoredAgents.length} agents`);
 
     // 2. Build Merkle tree

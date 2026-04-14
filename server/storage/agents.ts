@@ -5,6 +5,10 @@ import {
   communityFeedbackSummaries,
   communityFeedbackSources,
   indexerState,
+  trustAnchors,
+  trustReports,
+  x402Probes,
+  agentTransactions,
   type Agent,
   type InsertAgent,
   type AgentMetadataEvent,
@@ -220,11 +224,19 @@ export async function updateAgent(id: string, updates: Partial<InsertAgent>): Pr
 }
 
 export async function deleteAgent(id: string): Promise<void> {
-  await db.delete(communityFeedbackItems).where(eq(communityFeedbackItems.agentId, id));
-  await db.delete(communityFeedbackSummaries).where(eq(communityFeedbackSummaries.agentId, id));
-  await db.delete(communityFeedbackSources).where(eq(communityFeedbackSources.agentId, id));
-  await db.delete(agentMetadataEvents).where(eq(agentMetadataEvents.agentId, id));
-  await db.delete(agents).where(eq(agents.id, id));
+  // Cascade delete in a transaction so a partial failure doesn't leave
+  // orphan child rows or a half-deleted agent.
+  await db.transaction(async (tx) => {
+    await tx.delete(communityFeedbackItems).where(eq(communityFeedbackItems.agentId, id));
+    await tx.delete(communityFeedbackSummaries).where(eq(communityFeedbackSummaries.agentId, id));
+    await tx.delete(communityFeedbackSources).where(eq(communityFeedbackSources.agentId, id));
+    await tx.delete(agentMetadataEvents).where(eq(agentMetadataEvents.agentId, id));
+    await tx.delete(trustAnchors).where(eq(trustAnchors.agentId, id));
+    await tx.delete(trustReports).where(eq(trustReports.agentId, id));
+    await tx.delete(x402Probes).where(eq(x402Probes.agentId, id));
+    await tx.delete(agentTransactions).where(eq(agentTransactions.agentId, id));
+    await tx.delete(agents).where(eq(agents.id, id));
+  });
 }
 
 export async function getAgentEvents(agentId: string): Promise<AgentMetadataEvent[]> {

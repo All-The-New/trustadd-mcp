@@ -114,10 +114,11 @@ export interface FullReportData {
       merkleProof: string[];
       leafHash: string;
       anchoredScore: number;
+      anchoredMethodologyVersion: number;
       txHash: string | null;
       blockNumber: number | null;
       anchoredAt: string;
-      contractAddress: string;
+      contractAddress: string | null;
       chain: string;
       verificationUrl: string | null;
     } | null;
@@ -445,16 +446,17 @@ export async function compileAndCacheReport(agentId: string): Promise<TrustRepor
 
   // Patch on-chain anchor proof into report (fetched in parallel above)
   if (anchorRow) {
-    const trustRootAddress = process.env.TRUST_ROOT_ADDRESS ?? "";
+    const trustRootAddress = process.env.TRUST_ROOT_ADDRESS ?? null;
     fullReportData.provenance.anchor = {
       merkleRoot: anchorRow.merkleRoot,
       merkleProof: anchorRow.merkleProof as string[],
       leafHash: anchorRow.leafHash,
       anchoredScore: anchorRow.anchoredScore,
+      anchoredMethodologyVersion: anchorRow.anchoredMethodologyVersion,
       txHash: anchorRow.anchorTxHash,
       blockNumber: anchorRow.anchorBlockNumber,
       anchoredAt: anchorRow.anchoredAt.toISOString(),
-      contractAddress: trustRootAddress,
+      contractAddress: anchorRow.anchorTxHash ? trustRootAddress : null,
       chain: "base",
       verificationUrl: anchorRow.anchorTxHash
         ? `https://basescan.org/tx/${anchorRow.anchorTxHash}`
