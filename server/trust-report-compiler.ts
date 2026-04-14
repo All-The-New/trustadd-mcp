@@ -109,6 +109,12 @@ export interface FullReportData {
     scoredAt: string | null;
     disclaimer: string;
   };
+  sybil: {
+    signals: Array<{ type: string; severity: string; detail: string; value: number }>;
+    riskScore: number;
+    dampeningApplied: boolean;
+    rawScoreBeforeDampening: number | null;
+  } | null;
 }
 
 const REPORT_VERSION = 2;
@@ -377,6 +383,14 @@ export function compileFullReport(
       scoredAt: agent.trustScoreUpdatedAt?.toISOString() ?? null,
       disclaimer: "TrustAdd scores reflect available evidence as of the assessment timestamp. They are not guarantees of safety. Verify independently for high-value decisions.",
     },
+    sybil: agent.sybilSignals ? {
+      signals: agent.sybilSignals as any[],
+      riskScore: agent.sybilRiskScore ?? 0,
+      dampeningApplied: (agent.sybilRiskScore ?? 0) > 0,
+      rawScoreBeforeDampening: (agent.sybilRiskScore ?? 0) > 0
+        ? Math.round(breakdown.total / (1.0 - ((agent.sybilRiskScore ?? 0) * 0.5)))
+        : null,
+    } : null,
   };
 }
 
