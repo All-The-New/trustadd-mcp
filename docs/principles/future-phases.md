@@ -26,26 +26,28 @@
 
 ## Phase 3: On-Chain Score Anchoring (Principles 3, 14)
 
-**Status:** Planned
-**Estimated effort:** 3-5 days
+**Status:** Code complete — pending contract deployment
+**Completed:** 2026-04-13 (code), deployment TBD
 **Dependencies:** Phase 1 complete, funded oracle wallet on Base
 
-### What to build:
-1. **Merkle root publishing** — After each daily `recalculate` task, generate a `StandardMerkleTree` from all scored agents (leaves: `[address, chainId, score, methodologyVersion, timestamp]`). Publish root to a `TrustRoot.sol` contract on Base.
-2. **Proof storage** — Store each agent's Merkle proof in a `trust_proofs` table.
-3. **Proof in API response** — Include Merkle proof in Full Report `provenance` block.
+### What was built:
+1. **TrustRoot.sol** — Minimal Solidity contract (`contracts/TrustRoot.sol`) for owner-only Merkle root publishing on Base. Functions: `publishRoot`, `latestRoot`, `roots`, `rootCount`, `transferOwnership`.
+2. **Merkle tree module** — `server/anchor.ts` builds `StandardMerkleTree` from scored agents (leaves: `[address, chainId, score, methodologyVersion, timestamp]`), extracts per-agent proofs, and publishes roots via viem.
+3. **Trigger.dev anchor task** — `trigger/anchor-scores.ts` runs after daily recalculate (fire-and-forget). Queries scored agents, builds tree, publishes root on-chain (if wallet configured), bulk-upserts proofs to `trust_anchors` table.
+4. **Trust report integration** — `provenance.anchor` block in Full Report includes Merkle proof, root, leaf hash, tx hash, block number, and basescan verification URL.
+5. **Schema** — `trust_anchors` table with unique index on `agentId`, stores per-agent Merkle proofs and on-chain tx metadata.
 
 ### Libraries:
 - `@openzeppelin/merkle-tree` (JS tree generation)
-- `viem` (already in project — contract interaction)
-- OpenZeppelin `MerkleTree.sol` (on-chain verification, ~20 lines)
+- `viem` (contract interaction, dynamic import in Trigger.dev)
 
 ### Cost: ~$0.01/day on Base (22k gas per root publication).
 
-### Infrastructure:
+### Remaining infrastructure steps:
 - Deploy `TrustRoot.sol` on Base mainnet
 - Fund oracle wallet with ~0.01 ETH on Base (lasts months)
-- Store `ORACLE_PRIVATE_KEY` in Trigger.dev env vars
+- Apply `migrations/0001_strange_punisher.sql` to create `trust_anchors` table
+- Set Trigger.dev env vars: `ORACLE_PRIVATE_KEY`, `TRUST_ROOT_ADDRESS`, `BASE_RPC_URL` (optional, defaults to `https://mainnet.base.org`)
 
 ---
 
