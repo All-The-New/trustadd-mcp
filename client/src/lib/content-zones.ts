@@ -13,6 +13,19 @@ import {
   MessageSquare,
 } from "lucide-react";
 
+/** Shape enforced on every entry in METHODOLOGY.categories. */
+type MethodologyCategory = {
+  name: string;
+  /** Short label used in chart axes and compact views — required, must not be omitted. */
+  shortName: string;
+  icon: string;
+  maxPoints: number;
+  color: string;
+  type: "behavioral" | "supporting";
+  description: string;
+  signals: Array<{ name: string; condition: string; points: string }>;
+};
+
 export const HOME = {
   hero: {
     tag: "The Trust Oracle for the Agent Economy",
@@ -335,7 +348,7 @@ export const METHODOLOGY = {
   },
   ecosystemNotice:
     "The AI agent economy is in its earliest stages. Most agents have limited or no transaction history, which means most Trust Ratings reflect profile data rather than verified behavioral evidence. As x402 payments and ERC-8004 attestations grow, Trust Ratings will become increasingly meaningful. TrustAdd is building the measurement infrastructure now so it's ready when the data arrives.",
-  categories: [
+  categories: ([
     {
       name: "Transaction Activity",
       shortName: "Transactions",
@@ -417,7 +430,7 @@ export const METHODOLOGY = {
         { name: "Community sources", condition: "Any verified source", points: "+2" },
       ],
     },
-  ],
+  ] satisfies MethodologyCategory[]),
   principles: [
     {
       title: "Behavioral First",
