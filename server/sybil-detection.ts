@@ -8,6 +8,8 @@
  * 4. Temporal burst — >50% of tx volume in last 24h
  */
 
+import { sql } from "drizzle-orm";
+
 export interface SybilSignal {
   type: "controller_cluster" | "fingerprint_duplicate" | "self_referential_payment" | "temporal_burst";
   severity: "low" | "medium" | "high";
@@ -192,4 +194,98 @@ export function analyzeSybilSignals(
   const dampeningMultiplier = computeDampeningMultiplier(riskScore);
 
   return { signals, riskScore, dampeningMultiplier };
+}
+
+/**
+ * Prefetch all lookup maps needed for batch sybil detection.
+ * Runs 3 SQL queries — must be called with an active DB connection.
+ */
+export async function prefetchSybilLookups(db: any): Promise<SybilLookups> {
+  // 1. Controller agent counts (only controllers with >10 agents)
+  const controllerAgentCounts = new Map<string, number>();
+  try {
+    const result = await db.execute(sql`
+      SELECT controller_address, COUNT(*)::int AS cnt
+      FROM agents
+      WHERE controller_address IS NOT NULL AND controller_address != ''
+      GROUP BY controller_address
+      HAVING COUNT(*) > 10
+    `);
+    for (const row of (result as any).rows ?? []) {
+      controllerAgentCounts.set(row.controller_address, row.cnt);
+    }
+  } catch {}
+
+  // 2. Fingerprint → set of controllers sharing it
+  const fingerprintControllers = new Map<string, Set<string>>();
+  try {
+    const result = await db.execute(sql`
+      SELECT metadata_fingerprint, controller_address
+      FROM agents
+      WHERE metadata_fingerprint IS NOT NULL AND metadata_fingerprint != ''
+        AND controller_address IS NOT NULL AND controller_address != ''
+      GROUP BY metadata_fingerprint, controller_address
+    `);
+    for (const row of (result as any).rows ?? []) {
+      const fp = row.metadata_fingerprint;
+      if (!fingerprintControllers.has(fp)) {
+        fingerprintControllers.set(fp, new Set());
+      }
+      fingerprintControllers.get(fp)!.add(row.controller_address);
+    }
+    // Remove entries with only 1 controller (not duplicated)
+    for (const [fp, controllers] of fingerprintControllers) {
+      if (controllers.size <= 1) fingerprintControllers.delete(fp);
+    }
+  } catch {}
+
+  // 3. Transaction patterns per agent (self-referential + temporal burst)
+  const transactionPatterns = new Map<string, { selfRefCount: number; totalCount: number; recentRatio: number }>();
+  try {
+    const result = await db.execute(sql`
+      WITH agent_controllers AS (
+        SELECT id AS agent_id, controller_address FROM agents
+        WHERE controller_address IS NOT NULL
+      ),
+      tx_stats AS (
+        SELECT
+          t.agent_id,
+          COUNT(*)::int AS total_count,
+          COUNT(*) FILTER (
+            WHERE t.from_address IN (
+              SELECT a2.controller_address FROM agents a2
+              WHERE a2.controller_address = ac.controller_address
+                AND a2.id != t.agent_id
+            )
+            OR t.to_address IN (
+              SELECT a2.controller_address FROM agents a2
+              WHERE a2.controller_address = ac.controller_address
+                AND a2.id != t.agent_id
+            )
+          )::int AS self_ref_count,
+          COUNT(*) FILTER (
+            WHERE t.block_timestamp > NOW() - INTERVAL '24 hours'
+          )::int AS recent_count
+        FROM agent_transactions t
+        JOIN agent_controllers ac ON ac.agent_id = t.agent_id
+        GROUP BY t.agent_id, ac.controller_address
+      )
+      SELECT agent_id, total_count, self_ref_count,
+             CASE WHEN total_count > 0
+               THEN ROUND(recent_count::numeric / total_count, 2)
+               ELSE 0
+             END AS recent_ratio
+      FROM tx_stats
+      WHERE total_count > 0
+    `);
+    for (const row of (result as any).rows ?? []) {
+      transactionPatterns.set(row.agent_id, {
+        selfRefCount: Number(row.self_ref_count),
+        totalCount: Number(row.total_count),
+        recentRatio: Number(row.recent_ratio),
+      });
+    }
+  } catch {}
+
+  return { controllerAgentCounts, fingerprintControllers, transactionPatterns };
 }
