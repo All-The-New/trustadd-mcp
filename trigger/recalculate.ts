@@ -9,7 +9,7 @@ export const recalculateTask = schedules.task({
     metadata.set("startedAt", new Date().toISOString());
 
     try {
-      const { ensureScoresCalculated } = await import("../server/trust-score");
+      const { recalculateAllScores } = await import("../server/trust-score");
       const { ensureSlugsGenerated } = await import("../server/slugs");
       const { classifyAgent } = await import("../server/quality-classifier");
       const { db } = await import("../server/db");
@@ -21,9 +21,10 @@ export const recalculateTask = schedules.task({
 
       const phaseStart = Date.now();
       metadata.set("phase", "recalculating-scores");
-      await ensureScoresCalculated();
+      const recalcResult = await recalculateAllScores();
       metadata.set("phaseScoresMs", Date.now() - phaseStart);
-      logger.info("Trust scores recalculated");
+      metadata.set("agentsScored", recalcResult.updated);
+      logger.info(`Trust scores recalculated: ${recalcResult.updated} agents in ${(recalcResult.elapsed / 1000).toFixed(1)}s`);
 
       if (!budget.hasTime(120_000)) {
         logger.warn("Time budget low after scores — skipping slugs and classification");
