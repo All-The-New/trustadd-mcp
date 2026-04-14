@@ -14,7 +14,7 @@ export default defineConfig({
   runtime: "node",
   logLevel: "log",
   build: {
-    external: ["pg"],
+    external: ["pg", "viem"],
   },
   retries: {
     enabledInDev: false,
