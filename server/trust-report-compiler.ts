@@ -4,6 +4,7 @@ import {
   type X402Probe,
   type TrustReport,
   agents,
+  trustAnchors,
   trustReports,
   x402Probes,
 } from "../shared/schema.js";
@@ -108,6 +109,18 @@ export interface FullReportData {
     methodologyVersion: number;
     scoredAt: string | null;
     disclaimer: string;
+    anchor: {
+      merkleRoot: string;
+      merkleProof: string[];
+      leafHash: string;
+      anchoredScore: number;
+      txHash: string | null;
+      blockNumber: number | null;
+      anchoredAt: string;
+      contractAddress: string;
+      chain: string;
+      verificationUrl: string | null;
+    } | null;
   };
   sybil: {
     signals: Array<{ type: string; severity: string; detail: string; value: number }>;
@@ -382,6 +395,7 @@ export function compileFullReport(
       methodologyVersion: agent.trustMethodologyVersion ?? 1,
       scoredAt: agent.trustScoreUpdatedAt?.toISOString() ?? null,
       disclaimer: "TrustAdd scores reflect available evidence as of the assessment timestamp. They are not guarantees of safety. Verify independently for high-value decisions.",
+      anchor: null,
     },
     sybil: agent.sybilSignals ? {
       signals: agent.sybilSignals as any[],
@@ -405,12 +419,15 @@ export async function compileAndCacheReport(agentId: string): Promise<TrustRepor
   if (!agent) return null;
 
   // Fetch all data in parallel
-  const [crossChainData, eventCount, probes, txStats, feedback] = await Promise.all([
+  const [crossChainData, eventCount, probes, txStats, feedback, anchorRow] = await Promise.all([
     getAgentCrossChainData(agent.controllerAddress),
     getAgentEventCount(agentId),
     getAgentProbes(agentId),
     getAgentTransactionStats(agentId),
     storage.getCommunityFeedbackSummary(agentId).catch(() => null),
+    db.select().from(trustAnchors).where(eq(trustAnchors.agentId, agentId)).limit(1)
+      .then(rows => rows[0] ?? null)
+      .catch(() => null),
   ]);
 
   const rawBreakdown = calculateTrustScore(agent, feedback, eventCount, crossChainData.count);
@@ -425,6 +442,25 @@ export async function compileAndCacheReport(agentId: string): Promise<TrustRepor
 
   const quickCheckData = compileQuickCheck(agent, breakdown, crossChainData, txStats, verdict);
   const fullReportData = compileFullReport(agent, breakdown, crossChainData, eventCount, probes, txStats, feedback, verdict);
+
+  // Patch on-chain anchor proof into report (fetched in parallel above)
+  if (anchorRow) {
+    const trustRootAddress = process.env.TRUST_ROOT_ADDRESS ?? "";
+    fullReportData.provenance.anchor = {
+      merkleRoot: anchorRow.merkleRoot,
+      merkleProof: anchorRow.merkleProof as string[],
+      leafHash: anchorRow.leafHash,
+      anchoredScore: anchorRow.anchoredScore,
+      txHash: anchorRow.anchorTxHash,
+      blockNumber: anchorRow.anchorBlockNumber,
+      anchoredAt: anchorRow.anchoredAt.toISOString(),
+      contractAddress: trustRootAddress,
+      chain: "base",
+      verificationUrl: anchorRow.anchorTxHash
+        ? `https://basescan.org/tx/${anchorRow.anchorTxHash}`
+        : null,
+    };
+  }
 
   const now = new Date();
   const expiresAt = new Date(now.getTime() + REPORT_TTL_MS);
