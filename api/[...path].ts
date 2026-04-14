@@ -49,10 +49,16 @@ app.use((_req: any, res: any, next: any) => {
 });
 
 // DB-backed rate limiting (shared across all Vercel serverless instances)
-// Admin write actions (POST): strict limit. Admin reads (GET): generous limit for dashboard use.
+// Admin: app.use matches all sub-routes (/api/admin/login, /api/admin/logout, etc.)
 // Agent list: stricter limit to prevent scraping (anti-scraping, see docs/api-tiering.md).
-app.post("/api/admin", createRateLimiter({ prefix: "admin-write", windowMs: 60 * 60 * 1000, limit: 10 }));
-app.get("/api/admin", createRateLimiter({ prefix: "admin-read", windowMs: 60 * 1000, limit: 60 }));
+// Note: /api/agents requests hit both the agents-list AND the general api limiter.
+// The agents-list bucket (10/min) is the effective bottleneck; the general bucket (100/min) has headroom.
+app.use("/api/admin", (req, res, next) => {
+  const limiter = req.method === "POST"
+    ? createRateLimiter({ prefix: "admin-write", windowMs: 60 * 60 * 1000, limit: 10 })
+    : createRateLimiter({ prefix: "admin-read", windowMs: 60 * 1000, limit: 60 });
+  return limiter(req, res, next);
+});
 app.get("/api/agents", createRateLimiter({ prefix: "agents-list", windowMs: 60 * 1000, limit: 10 }));
 app.use("/api", createRateLimiter({ prefix: "api", windowMs: 60 * 1000, limit: 100 }));
 

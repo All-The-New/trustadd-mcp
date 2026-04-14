@@ -34,7 +34,7 @@ import { getAllPipelineHealth } from "./pipeline-health.js";
 // See docs/api-tiering.md for the full classification.
 
 /** Null-safe wrapper around computeVerdict — returns UNKNOWN for unscored agents. */
-function verdictFor(
+export function verdictFor(
   score: number | null,
   tier: string | null,
   flags: string[] | null,
@@ -44,7 +44,7 @@ function verdictFor(
 }
 
 /** Strip trust-intelligence fields from an agent object for public (free) responses. */
-function redactAgentForPublic(agent: Record<string, unknown>): Record<string, unknown> {
+export function redactAgentForPublic(agent: Record<string, unknown>): Record<string, unknown> {
   const verdict = verdictFor(
     agent.trustScore as number | null,
     (agent.qualityTier as string) ?? null,

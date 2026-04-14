@@ -6,48 +6,13 @@
  * No database required — pure function test.
  */
 import { describe, it, expect } from "vitest";
-import { computeVerdict } from "../server/trust-report-compiler.js";
-import type { Verdict } from "../server/trust-report-compiler.js";
+import { redactAgentForPublic } from "../server/routes.js";
 import {
   TRUSTED_AGENT,
   CAUTION_AGENT,
   SPAM_AGENT,
   UNKNOWN_AGENT,
 } from "./fixtures/agents.js";
-
-// Replicate the redaction function from routes.ts for testing.
-// This is the exact logic from server/routes.ts lines 34-66.
-function verdictFor(
-  score: number | null,
-  tier: string | null,
-  flags: string[] | null,
-  status: string | null,
-): Verdict {
-  return score == null ? "UNKNOWN" : computeVerdict(score, tier, flags, status);
-}
-
-function redactAgentForPublic(agent: Record<string, unknown>): Record<string, unknown> {
-  const verdict = verdictFor(
-    agent.trustScore as number | null,
-    (agent.qualityTier as string) ?? null,
-    (agent.spamFlags as string[]) ?? null,
-    (agent.lifecycleStatus as string) ?? null,
-  );
-  const {
-    trustScore: _ts,
-    trustScoreBreakdown: _tsb,
-    trustScoreUpdatedAt: _tsu,
-    qualityTier: _qt,
-    spamFlags: _sf,
-    lifecycleStatus: _ls,
-    ...publicFields
-  } = agent;
-  return {
-    ...publicFields,
-    verdict,
-    reportAvailable: true,
-  };
-}
 
 /** The 6 fields that MUST be stripped from free tier responses. */
 const PROTECTED_FIELDS = [

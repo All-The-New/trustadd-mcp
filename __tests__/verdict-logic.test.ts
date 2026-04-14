@@ -6,6 +6,7 @@
  * No database required — pure function tests.
  */
 import { describe, it, expect } from "vitest";
+import { createHash } from "crypto";
 import { computeVerdict } from "../server/trust-report-compiler.js";
 import { classifyAgent } from "../server/quality-classifier.js";
 import {
@@ -147,8 +148,7 @@ describe("classifyAgent", () => {
     });
 
     it("flags duplicate fingerprints", () => {
-      const dupes = new Set(["a1b2c3d4e5f6a7b8"]); // Matches sha256 of "https://example.com"
-      const fp = require("crypto").createHash("sha256").update("https://dupe.com").digest("hex").slice(0, 16);
+      const fp = createHash("sha256").update("https://dupe.com").digest("hex").slice(0, 16);
       const dupeSet = new Set([fp]);
       const result = classifyAgent({ name: "Agent", description: "desc", metadataUri: "https://dupe.com", trustScore: 0, createdAt: new Date() }, dupeSet);
       expect(result.spamFlags).toContain("duplicate_template");
