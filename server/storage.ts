@@ -295,7 +295,22 @@ export class DatabaseStorage implements IStorage {
     let orderClause;
     switch (options.sort) {
       case "trust-score":
-        orderClause = sql`${agents.trustScore} DESC NULLS LAST`;
+        // Verdict-aware ordering: TRUSTED first, then CAUTION, then UNTRUSTED, then unscored
+        orderClause = sql`
+          CASE
+            WHEN ${agents.trustScore} >= 60
+              AND ${agents.qualityTier} IN ('high', 'medium')
+              AND coalesce(array_length(${agents.spamFlags}, 1), 0) = 0
+              AND coalesce(${agents.lifecycleStatus}, 'active') != 'archived'
+            THEN 0
+            WHEN ${agents.trustScore} IS NOT NULL
+              AND ${agents.trustScore} >= 30
+              AND ${agents.qualityTier} NOT IN ('spam', 'archived')
+              AND coalesce(${agents.lifecycleStatus}, 'active') != 'archived'
+            THEN 1
+            WHEN ${agents.trustScore} IS NOT NULL THEN 2
+            ELSE 3
+          END ASC, ${agents.trustScore} DESC NULLS LAST`;
         break;
       case "oldest":
         orderClause = asc(agents.createdAt);
@@ -1227,7 +1242,14 @@ export class DatabaseStorage implements IStorage {
     };
   }
   async getTrustScoreLeaderboard(limit = 20, chainId?: number): Promise<Array<{ id: string; name: string | null; imageUrl: string | null; chainId: number; trustScore: number; trustScoreBreakdown: any; slug: string | null; primaryContractAddress: string | null; erc8004Id: string | null; description: string | null; x402Support: boolean | null; endpoints: any; qualityTier: string | null; spamFlags: any; lifecycleStatus: string | null }>> {
-    const conditions = [isNotNull(agents.trustScore)];
+    const conditions = [
+      isNotNull(agents.trustScore),
+      // TRUSTED verdict requires: score >= 60, high/medium tier, no spam flags, not archived
+      sql`${agents.trustScore} >= 60`,
+      inArray(agents.qualityTier, ["high", "medium"]),
+      sql`coalesce(array_length(${agents.spamFlags}, 1), 0) = 0`,
+      sql`coalesce(${agents.lifecycleStatus}, 'active') != 'archived'`,
+    ];
     if (chainId) conditions.push(eq(agents.chainId, chainId));
 
     const rows = await db.select({
