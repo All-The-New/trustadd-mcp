@@ -129,6 +129,20 @@ export const recalculateTask = schedules.task({
         logger.warn("Time budget low — skipping report recompilation phase");
       }
 
+      // Trigger on-chain score anchoring (fire-and-forget — runs in its own task)
+      try {
+        const { anchorScoresTask } = await import("./anchor-scores");
+        await anchorScoresTask.trigger({
+          scoredAt: new Date().toISOString(),
+          agentCount: recalcResult.updated,
+        });
+        logger.info("Triggered anchor-scores task");
+        metadata.set("anchorTriggered", true);
+      } catch (err) {
+        logger.error("Failed to trigger anchor-scores", { error: (err as Error).message });
+        metadata.set("anchorTriggered", false);
+      }
+
       const cost = usage.getCurrent();
       metadata.set("status", "completed");
       metadata.set("completedAt", new Date().toISOString());
