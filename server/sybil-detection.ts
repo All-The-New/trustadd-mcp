@@ -52,3 +52,30 @@ export function detectControllerCluster(agentCount: number): SybilSignal | null 
     value: agentCount,
   };
 }
+
+/**
+ * Detect metadata fingerprint duplication signal.
+ * Threshold: >1 controller sharing the same fingerprint.
+ * Severity: low (2-5), medium (6-20), high (>20).
+ */
+export function detectFingerprintDuplicate(
+  fingerprint: string | null,
+  fingerprintControllers: Map<string, Set<string>>,
+): SybilSignal | null {
+  if (!fingerprint) return null;
+  const controllers = fingerprintControllers.get(fingerprint);
+  if (!controllers || controllers.size <= 1) return null;
+
+  const count = controllers.size;
+  let severity: SybilSignal["severity"];
+  if (count > 20) severity = "high";
+  else if (count > 5) severity = "medium";
+  else severity = "low";
+
+  return {
+    type: "fingerprint_duplicate",
+    severity,
+    detail: `Metadata fingerprint shared by ${count} different controllers`,
+    value: count,
+  };
+}
