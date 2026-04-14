@@ -214,7 +214,7 @@ export async function prefetchSybilLookups(db: any): Promise<SybilLookups> {
     for (const row of (result as any).rows ?? []) {
       controllerAgentCounts.set(row.controller_address, row.cnt);
     }
-  } catch {}
+  } catch (e) { console.error("[sybil] controller count query failed:", (e as Error).message); }
 
   // 2. Fingerprint → set of controllers sharing it
   const fingerprintControllers = new Map<string, Set<string>>();
@@ -237,7 +237,7 @@ export async function prefetchSybilLookups(db: any): Promise<SybilLookups> {
     for (const [fp, controllers] of fingerprintControllers) {
       if (controllers.size <= 1) fingerprintControllers.delete(fp);
     }
-  } catch {}
+  } catch (e) { console.error("[sybil] fingerprint query failed:", (e as Error).message); }
 
   // 3. Transaction patterns per agent (self-referential + temporal burst)
   const transactionPatterns = new Map<string, { selfRefCount: number; totalCount: number; recentRatio: number }>();
@@ -252,16 +252,8 @@ export async function prefetchSybilLookups(db: any): Promise<SybilLookups> {
           t.agent_id,
           COUNT(*)::int AS total_count,
           COUNT(*) FILTER (
-            WHERE t.from_address IN (
-              SELECT a2.controller_address FROM agents a2
-              WHERE a2.controller_address = ac.controller_address
-                AND a2.id != t.agent_id
-            )
-            OR t.to_address IN (
-              SELECT a2.controller_address FROM agents a2
-              WHERE a2.controller_address = ac.controller_address
-                AND a2.id != t.agent_id
-            )
+            WHERE t.from_address = ac.controller_address
+               OR t.to_address = ac.controller_address
           )::int AS self_ref_count,
           COUNT(*) FILTER (
             WHERE t.block_timestamp > NOW() - INTERVAL '24 hours'
@@ -285,7 +277,7 @@ export async function prefetchSybilLookups(db: any): Promise<SybilLookups> {
         recentRatio: Number(row.recent_ratio),
       });
     }
-  } catch {}
+  } catch (e) { console.error("[sybil] transaction pattern query failed:", (e as Error).message); }
 
   return { controllerAgentCounts, fingerprintControllers, transactionPatterns };
 }

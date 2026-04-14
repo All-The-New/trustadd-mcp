@@ -413,7 +413,14 @@ export async function compileAndCacheReport(agentId: string): Promise<TrustRepor
     storage.getCommunityFeedbackSummary(agentId).catch(() => null),
   ]);
 
-  const breakdown = calculateTrustScore(agent, feedback, eventCount, crossChainData.count);
+  const rawBreakdown = calculateTrustScore(agent, feedback, eventCount, crossChainData.count);
+
+  // Apply sybil dampening (matches recalculateAllScores pipeline)
+  const { computeDampeningMultiplier } = await import("./sybil-detection.js");
+  const sybilMultiplier = computeDampeningMultiplier(agent.sybilRiskScore ?? 0);
+  const dampenedTotal = Math.round(rawBreakdown.total * sybilMultiplier);
+  const breakdown = { ...rawBreakdown, total: dampenedTotal };
+
   const verdict = computeVerdict(breakdown.total, agent.qualityTier, agent.spamFlags, agent.lifecycleStatus);
 
   const quickCheckData = compileQuickCheck(agent, breakdown, crossChainData, txStats, verdict);
