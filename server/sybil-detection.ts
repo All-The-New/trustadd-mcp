@@ -130,3 +130,31 @@ export function detectTemporalBurst(
     value: Math.round(pattern.recentRatio * 100),
   };
 }
+
+const SEVERITY_WEIGHTS: Record<SybilSignal["severity"], number> = {
+  low: 0.15,
+  medium: 0.3,
+  high: 0.5,
+};
+
+/**
+ * Compute aggregate sybil risk score from detected signals.
+ * Returns a value in [0, 1].
+ */
+export function computeSybilRiskScore(signals: SybilSignal[]): number {
+  if (signals.length === 0) return 0;
+  let score = 0;
+  for (const signal of signals) {
+    score += SEVERITY_WEIGHTS[signal.severity];
+  }
+  return Math.min(1.0, Math.round(score * 100) / 100);
+}
+
+/**
+ * Compute dampening multiplier from risk score.
+ * Maps [0, 1] risk score → [1.0, 0.5] multiplier.
+ */
+export function computeDampeningMultiplier(riskScore: number): number {
+  const clamped = Math.max(0, Math.min(1, riskScore));
+  return 1.0 - (clamped * 0.5);
+}

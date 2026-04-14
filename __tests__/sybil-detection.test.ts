@@ -4,7 +4,10 @@ import {
   detectFingerprintDuplicate,
   detectSelfReferentialPayment,
   detectTemporalBurst,
+  computeSybilRiskScore,
+  computeDampeningMultiplier,
 } from "../server/sybil-detection.js";
+import type { SybilSignal } from "../server/sybil-detection.js";
 
 describe("detectControllerCluster", () => {
   it("returns no signal for controller with <= 10 agents", () => {
@@ -134,5 +137,62 @@ describe("detectTemporalBurst", () => {
     const patterns = new Map([["agent-1", { selfRefCount: 0, totalCount: 3, recentRatio: 1.0 }]]);
     const signal = detectTemporalBurst("agent-1", patterns);
     expect(signal).toBeNull();
+  });
+});
+
+describe("computeSybilRiskScore", () => {
+  it("returns 0 for no signals", () => {
+    expect(computeSybilRiskScore([])).toBe(0);
+  });
+
+  it("returns low risk for single low-severity signal", () => {
+    const signals: SybilSignal[] = [
+      { type: "controller_cluster", severity: "low", detail: "15 agents", value: 15 },
+    ];
+    const score = computeSybilRiskScore(signals);
+    expect(score).toBeGreaterThan(0);
+    expect(score).toBeLessThanOrEqual(0.3);
+  });
+
+  it("returns high risk for multiple high-severity signals", () => {
+    const signals: SybilSignal[] = [
+      { type: "controller_cluster", severity: "high", detail: "6000 agents", value: 6000 },
+      { type: "fingerprint_duplicate", severity: "high", detail: "50 controllers", value: 50 },
+    ];
+    const score = computeSybilRiskScore(signals);
+    expect(score).toBeGreaterThanOrEqual(0.7);
+    expect(score).toBeLessThanOrEqual(1.0);
+  });
+
+  it("clamps to 1.0 maximum", () => {
+    const signals: SybilSignal[] = [
+      { type: "controller_cluster", severity: "high", detail: "", value: 6000 },
+      { type: "fingerprint_duplicate", severity: "high", detail: "", value: 50 },
+      { type: "self_referential_payment", severity: "high", detail: "", value: 10 },
+      { type: "temporal_burst", severity: "high", detail: "", value: 95 },
+    ];
+    const score = computeSybilRiskScore(signals);
+    expect(score).toBe(1.0);
+  });
+});
+
+describe("computeDampeningMultiplier", () => {
+  it("returns 1.0 for risk score 0 (no dampening)", () => {
+    expect(computeDampeningMultiplier(0)).toBe(1.0);
+  });
+
+  it("returns 0.5 for risk score 1.0 (maximum dampening)", () => {
+    expect(computeDampeningMultiplier(1.0)).toBe(0.5);
+  });
+
+  it("returns value between 0.5 and 1.0 for intermediate risk", () => {
+    const mult = computeDampeningMultiplier(0.5);
+    expect(mult).toBeGreaterThanOrEqual(0.5);
+    expect(mult).toBeLessThanOrEqual(1.0);
+    expect(mult).toBe(0.75);
+  });
+
+  it("clamps risk score below 0 to no dampening", () => {
+    expect(computeDampeningMultiplier(-0.5)).toBe(1.0);
   });
 });
