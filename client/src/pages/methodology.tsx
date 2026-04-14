@@ -54,9 +54,7 @@ const V2_TIERS = [
     icon: ShieldCheck,
     color: "text-emerald-400",
     bg: "bg-emerald-500/10 border-emerald-500/30",
-    barColor: "bg-emerald-500",
     description: "Extensive verified behavioral evidence from multiple sources confirms trust.",
-    machineAction: "Proceed with high confidence",
   },
   {
     name: "Trusted",
@@ -64,9 +62,7 @@ const V2_TIERS = [
     icon: CheckCircle,
     color: "text-green-400",
     bg: "bg-green-500/10 border-green-500/30",
-    barColor: "bg-green-500",
     description: "Meaningful transaction history and positive attestation signals.",
-    machineAction: "Proceed normally",
   },
   {
     name: "Building",
@@ -74,9 +70,7 @@ const V2_TIERS = [
     icon: TrendingUp,
     color: "text-blue-400",
     bg: "bg-blue-500/10 border-blue-500/30",
-    barColor: "bg-blue-500",
     description: "Early behavioral evidence — track record forming.",
-    machineAction: "Proceed with verification",
   },
   {
     name: "Insufficient Data",
@@ -84,9 +78,7 @@ const V2_TIERS = [
     icon: CircleDot,
     color: "text-zinc-400",
     bg: "bg-zinc-500/10 border-zinc-500/30",
-    barColor: "bg-zinc-500",
     description: "Profile present, no verified behavioral evidence yet.",
-    machineAction: "Apply extra caution",
   },
   {
     name: "Unverified",
@@ -94,9 +86,7 @@ const V2_TIERS = [
     icon: HelpCircle,
     color: "text-zinc-500",
     bg: "bg-zinc-600/10 border-zinc-600/30",
-    barColor: "bg-zinc-600",
     description: "Minimal profile, no behavioral evidence.",
-    machineAction: "Elevated scrutiny required",
   },
   {
     name: "Flagged",
@@ -104,9 +94,7 @@ const V2_TIERS = [
     icon: AlertTriangle,
     color: "text-red-400",
     bg: "bg-red-500/10 border-red-500/30",
-    barColor: "bg-red-500",
     description: "Active negative signals: spam patterns, failed transactions, confirmed bad behavior.",
-    machineAction: "Avoid or require manual approval",
   },
 ];
 
@@ -494,7 +482,7 @@ export default function Methodology() {
               {METHODOLOGY.categories.map((cat) => (
                 <CategoryWeightBar
                   key={cat.name}
-                  name={cat.name.replace("& Attestations", "")}
+                  name={cat.shortName}
                   points={cat.maxPoints}
                   color={cat.color}
                   type={cat.type}

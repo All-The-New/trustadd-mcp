@@ -338,6 +338,7 @@ export const METHODOLOGY = {
   categories: [
     {
       name: "Transaction Activity",
+      shortName: "Transactions",
       icon: "Coins" as const,
       maxPoints: 35,
       color: "bg-emerald-500",
@@ -354,6 +355,7 @@ export const METHODOLOGY = {
     },
     {
       name: "Reputation & Attestations",
+      shortName: "Reputation",
       icon: "Award" as const,
       maxPoints: 25,
       color: "bg-cyan-500",
@@ -367,6 +369,7 @@ export const METHODOLOGY = {
     },
     {
       name: "Agent Profile",
+      shortName: "Profile",
       icon: "Shield" as const,
       maxPoints: 15,
       color: "bg-indigo-500",
@@ -385,6 +388,7 @@ export const METHODOLOGY = {
     },
     {
       name: "Longevity & Consistency",
+      shortName: "Longevity",
       icon: "Clock" as const,
       maxPoints: 15,
       color: "bg-violet-500",
@@ -400,6 +404,7 @@ export const METHODOLOGY = {
     },
     {
       name: "Community",
+      shortName: "Community",
       icon: "Users" as const,
       maxPoints: 10,
       color: "bg-amber-500",
