@@ -185,7 +185,7 @@ Use `drizzle-kit push` to sync schema to database (no migration files needed).
 # Install dependencies
 npm install
 
-# Development (Express + Vite HMR on port 5000)
+# Development (Express + Vite HMR on port 5001)
 npm run dev
 
 # Type checking

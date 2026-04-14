@@ -6,7 +6,7 @@ Read `bootstrap.md` for the complete project documentation including architectur
 
 ```bash
 npm install
-npm run dev                    # Express + Vite HMR on port 5000
+npm run dev                    # Express + Vite HMR on port 5001
 ```
 
 ## Deployment Stack
@@ -128,7 +128,7 @@ See `bootstrap.md` for the full list of environment variables including API keys
 
 ```bash
 # Local development
-npm run dev                      # Express + Vite HMR on port 5000
+npm run dev                      # Express + Vite HMR on port 5001
 
 # Production (Vercel auto-deploys from main branch on push)
 npx vercel deploy --prod         # Manual deploy if needed

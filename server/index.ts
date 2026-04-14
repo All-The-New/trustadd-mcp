@@ -45,7 +45,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
 app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(",") || ["http://localhost:5000", "https://trustadd.com"],
+  origin: process.env.CORS_ORIGIN?.split(",") || ["http://localhost:5001", "https://trustadd.com"],
   methods: ["GET", "POST"],
   credentials: true,
 }));
@@ -200,7 +200,7 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
     await setupVite(httpServer, app);
   }
 
-  const port = parseInt(process.env.PORT || "5000", 10);
+  const port = parseInt(process.env.PORT || "5001", 10);
   httpServer.listen(
     {
       port,
