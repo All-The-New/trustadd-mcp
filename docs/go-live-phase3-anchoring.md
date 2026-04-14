@@ -32,15 +32,14 @@ git commit -am "deps: pin @openzeppelin/merkle-tree (private _leafHash API usage
 
 **Action (Foundry):**
 ```bash
-cd contracts
-forge create TrustRoot.sol:TrustRoot \
+# From the repo root (not inside contracts/)
+forge create contracts/TrustRoot.sol:TrustRoot \
   --rpc-url https://mainnet.base.org \
   --private-key $DEPLOYER_PRIVATE_KEY \
-  --broadcast \
   --verify \
   --etherscan-api-key $BASESCAN_API_KEY
 ```
-Constructor sets `msg.sender` as owner. Record the deployed address — it becomes `TRUST_ROOT_ADDRESS`.
+`forge create` broadcasts the transaction directly — no `--broadcast` flag needed (that's `forge script` only). Constructor sets `msg.sender` as owner. Record the deployed address — it becomes `TRUST_ROOT_ADDRESS`.
 
 **Alternative:** Remix + MetaMask with the deployer wallet.
 
