@@ -458,14 +458,20 @@ async function batchUpdateScoresWithSybil(updates: Array<{
 }>) {
   if (updates.length === 0) return;
   const now = new Date();
-  const ids = updates.map(u => u.id);
-  const scores = updates.map(u => u.score);
-  const breakdowns = updates.map(u => JSON.stringify(u.breakdown));
-  const hashes = updates.map(u => u.signalHash);
-  const confScores = updates.map(u => u.confidenceScore);
-  const confLevels = updates.map(u => u.confidenceLevel);
-  const sybilSigs = updates.map(u => u.sybilSignals ? JSON.stringify(u.sybilSignals) : null);
-  const sybilRisks = updates.map(u => u.sybilRiskScore);
+
+  // Use json_to_recordset to avoid pg array serialization issues with nullable columns.
+  // The unnest(${array}::text[]) pattern breaks when the array contains all-null elements
+  // because pg can't infer the element type, resulting in "cannot cast type record to text[]".
+  const data = JSON.stringify(updates.map(u => ({
+    id: u.id,
+    score: u.score,
+    breakdown: JSON.stringify(u.breakdown),
+    hash: u.signalHash,
+    conf_score: u.confidenceScore,
+    conf_level: u.confidenceLevel,
+    sybil_sig: u.sybilSignals != null ? JSON.stringify(u.sybilSignals) : null,
+    sybil_risk: u.sybilRiskScore,
+  })));
 
   await db.execute(sql`
     UPDATE agents SET
@@ -478,16 +484,11 @@ async function batchUpdateScoresWithSybil(updates: Array<{
       confidence_level = batch.conf_level,
       sybil_signals = batch.sybil_sig::jsonb,
       sybil_risk_score = batch.sybil_risk
-    FROM (
-      SELECT unnest(${ids}::text[]) AS id,
-             unnest(${scores}::int[]) AS score,
-             unnest(${breakdowns}::text[]) AS breakdown,
-             unnest(${hashes}::text[]) AS hash,
-             unnest(${confScores}::real[]) AS conf_score,
-             unnest(${confLevels}::text[]) AS conf_level,
-             unnest(${sybilSigs}::text[]) AS sybil_sig,
-             unnest(${sybilRisks}::real[]) AS sybil_risk
-    ) AS batch
+    FROM json_to_recordset(${data}::json) AS batch(
+      id text, score int, breakdown text, hash text,
+      conf_score real, conf_level text,
+      sybil_sig text, sybil_risk real
+    )
     WHERE agents.id = batch.id
   `);
 }
