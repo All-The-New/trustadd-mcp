@@ -39,6 +39,8 @@ export const agents = pgTable("agents", {
   trustMethodologyVersion: integer("trust_methodology_version").default(1),
   confidenceScore: real("confidence_score"),
   confidenceLevel: text("confidence_level").default("unknown"),
+  sybilSignals: jsonb("sybil_signals"),
+  sybilRiskScore: real("sybil_risk_score"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   index("idx_agents_chain_id").on(table.chainId),
