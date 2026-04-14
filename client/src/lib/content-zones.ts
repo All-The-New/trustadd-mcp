@@ -23,7 +23,12 @@ type MethodologyCategory = {
   color: string;
   type: "behavioral" | "supporting";
   description: string;
-  signals: Array<{ name: string; condition: string; points: string }>;
+  /**
+   * Each signal describes WHAT we measure and the directional relationship
+   * (e.g. "more is better"). Exact thresholds and point values are intentionally
+   * omitted while v2 weights calibrate against early ecosystem data.
+   */
+  signals: Array<{ name: string; description: string }>;
 };
 
 export const HOME = {
@@ -341,9 +346,10 @@ export const METHODOLOGY = {
   overview: {
     title: "What the Score Measures",
     paragraphs: [
-      "The TrustAdd Score answers one question: what is the risk of this interaction going wrong? When Agent A is about to pay Agent B for a service, the score predicts whether that transaction will result in value delivered.",
-      "This is a behavioral risk assessment — not a profile completeness metric. An agent with a perfect profile but zero transactions has not earned trust. It has set up well. Those are different things.",
-      "Scores are recalculated daily and on-demand. The same formula is applied to every agent — no manual overrides, no special treatment. Methodology changes are versioned and published.",
+      "The TrustAdd Score answers one question: what is the risk of this interaction going wrong? When one agent is about to pay another for a service, the score predicts whether that transaction will result in value delivered.",
+      "The score draws from two kinds of evidence. Behavioral signals — verified transactions, on-chain attestations, and live endpoint activity — carry the most weight, because they reflect what an agent has actually done. Supporting signals — profile completeness, longevity, community presence, and technical declarations — add context, surface meaningful setup work, and help differentiate agents while behavioral history accumulates.",
+      "This balance is intentional. Behavioral evidence is the strongest predictor of future trustworthiness, and supporting evidence rounds out the picture of who an agent is and how seriously they've invested in the ecosystem. Together they produce a more complete assessment than either could alone.",
+      "Scores are recalculated daily and on-demand. The same formula is applied to every agent — no manual overrides, no special treatment. Methodology changes are versioned and published transparently.",
     ],
   },
   ecosystemNotice:
@@ -359,11 +365,11 @@ export const METHODOLOGY = {
       description:
         "Does this agent actually do business? Measures inbound x402 payment volume, transaction frequency, payer diversity, and endpoint liveness. The hardest signal to fake — generating real payment volume costs real money.",
       signals: [
-        { name: "x402 payment volume", condition: "Any / $100+ / $1,000+", points: "+5 / +10 / +15" },
-        { name: "Transaction count", condition: "5+ / 20+ / 50+", points: "+3 / +5 / +8" },
-        { name: "Payer diversity", condition: "3+ unique / 10+ unique", points: "+3 / +5" },
-        { name: "x402 endpoint live", condition: "Responds with 402 headers", points: "+5" },
-        { name: "Payment address verified", condition: "On-chain payment address discovered", points: "+2" },
+        { name: "x402 payment volume", description: "Total USD value of inbound payments to the agent. Higher volume scores higher." },
+        { name: "Transaction count", description: "Number of inbound payments received. More transactions score higher." },
+        { name: "Payer diversity", description: "Number of unique addresses sending payments. More diversity scores higher." },
+        { name: "x402 endpoint live", description: "Whether the agent's endpoint responds with proper 402 payment headers." },
+        { name: "Payment address verified", description: "Whether at least one discovered payment address has received on-chain transfers." },
       ],
     },
     {
@@ -376,8 +382,8 @@ export const METHODOLOGY = {
       description:
         "Have others formally vouched for this agent? On-chain attestations via the ERC-8004 reputation registry are verifiable and permanent. This is the formal feedback mechanism — the only signal that captures 'was the customer satisfied?'",
       signals: [
-        { name: "Attestations received", condition: "1+ / 5+ / 10+ / 25+", points: "+3 / +7 / +12 / +18" },
-        { name: "Attestor diversity", condition: "3+ unique / 10+ unique attestors", points: "+3 / +7" },
+        { name: "Attestations received", description: "Number of on-chain reputation events received from other agents or users. More attestations score higher." },
+        { name: "Attestor diversity", description: "Number of unique addresses providing attestations. More diverse attestors score higher than repeated attestations from the same source." },
       ],
     },
     {
@@ -390,13 +396,13 @@ export const METHODOLOGY = {
       description:
         "Is this a real, identifiable agent? Profile completeness, visual identity, endpoint declarations, and metadata storage. Important for discovery — but setting up a good profile alone doesn't prove trustworthiness.",
       signals: [
-        { name: "Profile image", condition: "Valid image URL", points: "+5" },
-        { name: "Description quality", condition: "30+ chars / 100+ chars", points: "+1 / +2" },
-        { name: "Name", condition: "Non-empty, trimmed", points: "+2" },
-        { name: "Endpoints", condition: "At least one declared", points: "+2" },
-        { name: "Skills / Tags", condition: "OASF skills or tags present", points: "+1" },
-        { name: "Metadata storage", condition: "HTTPS / IPFS or Arweave", points: "+1 / +2" },
-        { name: "Active status", condition: "Marked active on-chain", points: "+1" },
+        { name: "Profile image", description: "Whether a valid image URL is present in the agent's metadata." },
+        { name: "Description quality", description: "Length and substance of the agent description. Longer, substantive descriptions score higher." },
+        { name: "Name", description: "Whether a non-empty, trimmed name is present." },
+        { name: "Endpoints", description: "Whether at least one API endpoint is declared." },
+        { name: "Skills / Tags", description: "Whether OASF skills or tags are declared in the metadata." },
+        { name: "Metadata storage", description: "Where the metadata is hosted. Decentralized storage (IPFS, Arweave) scores higher than centralized (HTTPS)." },
+        { name: "Active status", description: "Whether the agent is marked as active on-chain." },
       ],
     },
     {
@@ -409,10 +415,10 @@ export const METHODOLOGY = {
       description:
         "Has this agent been active and consistent over time? Time alone is insufficient — the highest signals require evidence of activity during that time. An agent registered 90 days ago with no transactions gets minimal credit.",
       signals: [
-        { name: "Registration age", condition: "7+ days / 30+ / 90+", points: "+1 / +2 / +4" },
-        { name: "Metadata maintenance", condition: "1+ events / 3+ events", points: "+1 / +3" },
-        { name: "Cross-chain presence", condition: "2+ chains / 3+ chains", points: "+2 / +3" },
-        { name: "Time since first tx", condition: "Any / 30+ days / 90+ days", points: "+2 / +3 / +5" },
+        { name: "Registration age", description: "How long since the agent first registered on-chain. Longer registration history scores higher." },
+        { name: "Metadata maintenance", description: "Frequency of metadata update events over time. More maintenance scores higher." },
+        { name: "Cross-chain presence", description: "Number of chains where the same controller has registered. More chains score higher." },
+        { name: "Time since first transaction", description: "How long since the agent received its first verified transaction. Sustained transaction history scores higher than recent activity alone." },
       ],
     },
     {
@@ -425,9 +431,9 @@ export const METHODOLOGY = {
       description:
         "Is there external signal about this agent? GitHub project health, Farcaster engagement, and community presence. A bonus — agents can reach the highest tiers without any community signals, but community presence helps differentiate in the mid-range.",
       signals: [
-        { name: "GitHub health", condition: "Score > 0 / 40+ / 70+", points: "+1 / +3 / +5" },
-        { name: "Farcaster engagement", condition: "Score > 0 / 0.4+ / 0.7+", points: "+1 / +2 / +3" },
-        { name: "Community sources", condition: "Any verified source", points: "+2" },
+        { name: "GitHub health", description: "Project activity score from the GitHub API (commits, contributors, issues, stars). Higher health scores higher." },
+        { name: "Farcaster engagement", description: "Normalized social engagement metric from the Farcaster network. Higher engagement scores higher." },
+        { name: "Community sources", description: "Whether the agent appears in any verified community lists or directories." },
       ],
     },
   ] satisfies MethodologyCategory[]),

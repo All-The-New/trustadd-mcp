@@ -47,38 +47,15 @@ const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>
   Award,
 };
 
+// Ordered low → high to read left-to-right alongside the gradient bar (red → green).
 const V2_TIERS = [
   {
-    name: "Verified",
-    range: "80–100",
-    icon: ShieldCheck,
-    color: "text-emerald-400",
-    bg: "bg-emerald-500/10 border-emerald-500/30",
-    description: "Extensive verified behavioral evidence from multiple sources confirms trust.",
-  },
-  {
-    name: "Trusted",
-    range: "60–79",
-    icon: CheckCircle,
-    color: "text-green-400",
-    bg: "bg-green-500/10 border-green-500/30",
-    description: "Meaningful transaction history and positive attestation signals.",
-  },
-  {
-    name: "Building",
-    range: "40–59",
-    icon: TrendingUp,
-    color: "text-blue-400",
-    bg: "bg-blue-500/10 border-blue-500/30",
-    description: "Early behavioral evidence — track record forming.",
-  },
-  {
-    name: "Insufficient Data",
-    range: "20–39",
-    icon: CircleDot,
-    color: "text-zinc-400",
-    bg: "bg-zinc-500/10 border-zinc-500/30",
-    description: "Profile present, no verified behavioral evidence yet.",
+    name: "Flagged",
+    range: "0–4",
+    icon: AlertTriangle,
+    color: "text-red-400",
+    bg: "bg-red-500/10 border-red-500/30",
+    description: "Active negative signals: spam patterns, failed transactions, confirmed bad behavior.",
   },
   {
     name: "Unverified",
@@ -89,16 +66,40 @@ const V2_TIERS = [
     description: "Minimal profile, no behavioral evidence.",
   },
   {
-    name: "Flagged",
-    range: "0–4",
-    icon: AlertTriangle,
-    color: "text-red-400",
-    bg: "bg-red-500/10 border-red-500/30",
-    description: "Active negative signals: spam patterns, failed transactions, confirmed bad behavior.",
+    name: "Insufficient Data",
+    range: "20–39",
+    icon: CircleDot,
+    color: "text-zinc-400",
+    bg: "bg-zinc-500/10 border-zinc-500/30",
+    description: "Profile present, no verified behavioral evidence yet.",
+  },
+  {
+    name: "Building",
+    range: "40–59",
+    icon: TrendingUp,
+    color: "text-blue-400",
+    bg: "bg-blue-500/10 border-blue-500/30",
+    description: "Early behavioral evidence — track record forming.",
+  },
+  {
+    name: "Trusted",
+    range: "60–79",
+    icon: CheckCircle,
+    color: "text-green-400",
+    bg: "bg-green-500/10 border-green-500/30",
+    description: "Meaningful transaction history and positive attestation signals.",
+  },
+  {
+    name: "Verified",
+    range: "80–100",
+    icon: ShieldCheck,
+    color: "text-emerald-400",
+    bg: "bg-emerald-500/10 border-emerald-500/30",
+    description: "Extensive verified behavioral evidence from multiple sources confirms trust.",
   },
 ];
 
-const PROFILE_BADGES = [
+const VERIFICATIONS = [
   { name: "Multi-Chain", icon: LinkIcon, desc: "Registered on 3+ chains", color: "text-violet-400" },
   { name: "x402 Enabled", icon: Zap, desc: "x402 endpoint detected and responsive", color: "text-emerald-400" },
   { name: "GitHub Connected", icon: Github, desc: "Linked GitHub project with health data", color: "text-zinc-300" },
@@ -111,12 +112,12 @@ const PROFILE_BADGES = [
 ];
 
 const DATA_SOURCES = [
-  { source: "ERC-8004 Indexer", data: "Identity, metadata events, reputation attestations", cadence: "Every 2 hours", icon: Database },
-  { source: "x402 Prober", data: "Payment endpoint discovery, pricing, liveness", cadence: "Daily", icon: Search },
-  { source: "Transaction Indexer", data: "Inbound payment volume to agent addresses", cadence: "Daily", icon: Activity },
-  { source: "Community Scraper", data: "GitHub health, Farcaster engagement", cadence: "Daily (4 AM UTC)", icon: Users },
-  { source: "Score Engine", data: "Composite scores, tiers, verdicts", cadence: "Daily (5 AM UTC)", icon: BarChart3 },
-  { source: "Report Compiler", data: "Cached trust reports for API", cadence: "1-hour TTL", icon: FileText },
+  { source: "ERC-8004 Indexer", data: "Identity, metadata events, reputation attestations", icon: Database },
+  { source: "x402 Prober", data: "Payment endpoint discovery, pricing, liveness", icon: Search },
+  { source: "Transaction Indexer", data: "Inbound payment volume to agent addresses", icon: Activity },
+  { source: "Community Scraper", data: "GitHub health, Farcaster engagement", icon: Users },
+  { source: "Score Engine", data: "Composite scores, tiers, verdicts", icon: BarChart3 },
+  { source: "Report Compiler", data: "Cached trust reports for API consumers", icon: FileText },
 ];
 
 /* ────────────────────────────────────────────────────────────
@@ -382,13 +383,13 @@ function TwoLayerArchitecture() {
         <div className="relative">
           <div className="flex items-center gap-2 mb-2">
             <Badge className="bg-indigo-500/20 text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/20">Layer 2</Badge>
-            <span className="text-lg font-bold text-indigo-300">Profile Badges</span>
+            <span className="text-lg font-bold text-indigo-300">Verifications</span>
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-            Positive recognition for metadata, community, and technical signals. Visible on profiles and listings. Do NOT inflate the Trust Rating.
+            Observable facts about an agent — confirmed presence on a chain, a working endpoint, a linked GitHub project. Each fact is shown as a Verification Badge on profiles and in listings. They don't affect the Trust Rating.
           </p>
           <div className="text-xs text-indigo-400/60 font-mono">
-            Signal → Badge → Visual Prominence
+            Signal → Verified Fact → Verification Badge
           </div>
         </div>
       </div>
@@ -459,7 +460,7 @@ export default function Methodology() {
         <section className="space-y-4">
           <h2 className="text-xl font-semibold">Two-Layer Architecture</h2>
           <p className="text-muted-foreground leading-relaxed">
-            TrustAdd separates what an agent has <strong className="text-foreground">done</strong> from how it has <strong className="text-foreground">set up</strong>. The Trust Rating measures behavioral track record. Profile Badges recognize setup quality. Both are useful — only one drives trust decisions.
+            TrustAdd separates what an agent has <strong className="text-foreground">done</strong> from how it has <strong className="text-foreground">set up</strong>. The Trust Rating measures behavioral track record. Verifications surface observable facts as visible badges on the profile. Both are useful — only one drives trust decisions.
           </p>
           <TwoLayerArchitecture />
         </section>
@@ -526,8 +527,16 @@ export default function Methodology() {
         </section>
 
         {/* ── SCORING CATEGORIES DETAIL ── */}
-        <section className="space-y-6">
+        <section className="space-y-5">
           <h2 className="text-xl font-semibold">Scoring Categories</h2>
+
+          {/* Calibration note */}
+          <div className="rounded-lg border border-zinc-700/40 bg-zinc-900/30 p-4 flex gap-3">
+            <Info className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <strong className="text-zinc-300">Weights are calibrating.</strong> Each category below describes <em>what</em> we measure and the directional relationship (e.g., "more transactions score higher"). Exact thresholds and point values are intentionally omitted while v2 weights calibrate against early ecosystem data. Precise weights will be published in a future methodology version once we have sufficient transaction and attestation volume to validate them.
+            </p>
+          </div>
 
           {METHODOLOGY.categories.map((cat) => {
             const IconComponent = CATEGORY_ICONS[cat.icon];
@@ -557,17 +566,15 @@ export default function Methodology() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b bg-muted/30">
-                          <th className="text-left px-3 py-2 font-medium">Signal</th>
-                          <th className="text-left px-3 py-2 font-medium">Condition</th>
-                          <th className="text-right px-3 py-2 font-medium">Points</th>
+                          <th className="text-left px-3 py-2 font-medium w-1/3">Signal</th>
+                          <th className="text-left px-3 py-2 font-medium">What It Measures</th>
                         </tr>
                       </thead>
                       <tbody>
                         {cat.signals.map((signal, i) => (
                           <tr key={i} className={i < cat.signals.length - 1 ? "border-b border-border/50" : ""}>
-                            <td className="px-3 py-2 font-medium text-foreground">{signal.name}</td>
-                            <td className="px-3 py-2 text-muted-foreground">{signal.condition}</td>
-                            <td className="px-3 py-2 text-right font-mono text-foreground">{signal.points}</td>
+                            <td className="px-3 py-2 font-medium text-foreground align-top">{signal.name}</td>
+                            <td className="px-3 py-2 text-muted-foreground leading-relaxed">{signal.description}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -588,23 +595,23 @@ export default function Methodology() {
           <EvidenceBasisComparison />
         </section>
 
-        {/* ── PROFILE BADGES ── */}
+        {/* ── VERIFICATIONS ── */}
         <section className="space-y-4">
-          <h2 className="text-xl font-semibold">Profile Badges</h2>
+          <h2 className="text-xl font-semibold">Verifications</h2>
           <p className="text-muted-foreground leading-relaxed">
-            Badges recognize setup quality and community presence. They appear on agent profiles and in directory listings but do <strong className="text-foreground">not</strong> affect the Trust Rating. They give new agents immediate, earnable milestones while they build behavioral history.
+            Verifications are observable facts about an agent — a working endpoint, presence on a chain, a linked GitHub project. Each verified fact appears as a <strong className="text-foreground">Verification Badge</strong> on agent profiles and in directory listings. Verification Badges do <strong className="text-foreground">not</strong> affect the Trust Rating, but they recognize meaningful setup work and give new agents earnable milestones while behavioral history accumulates.
           </p>
           <div className="grid sm:grid-cols-3 gap-2.5">
-            {PROFILE_BADGES.map((badge) => {
-              const Icon = badge.icon;
+            {VERIFICATIONS.map((verification) => {
+              const Icon = verification.icon;
               return (
-                <div key={badge.name} className="rounded-lg border bg-muted/10 p-3 flex items-start gap-3 hover:bg-muted/20 transition-colors">
-                  <div className={`w-8 h-8 rounded-lg bg-background border flex items-center justify-center shrink-0 ${badge.color}`}>
+                <div key={verification.name} className="rounded-lg border bg-muted/10 p-3 flex items-start gap-3 hover:bg-muted/20 transition-colors">
+                  <div className={`w-8 h-8 rounded-lg bg-background border flex items-center justify-center shrink-0 ${verification.color}`}>
                     <Icon className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-foreground">{badge.name}</div>
-                    <div className="text-[11px] text-muted-foreground leading-tight">{badge.desc}</div>
+                    <div className="text-sm font-medium text-foreground">{verification.name}</div>
+                    <div className="text-[11px] text-muted-foreground leading-tight">{verification.desc}</div>
                   </div>
                 </div>
               );
@@ -614,9 +621,9 @@ export default function Methodology() {
 
         {/* ── DATA SOURCES ── */}
         <section className="space-y-4">
-          <h2 className="text-xl font-semibold">Data Sources & Update Frequency</h2>
+          <h2 className="text-xl font-semibold">Data Sources</h2>
           <p className="text-muted-foreground leading-relaxed">
-            Trust scores are computed from on-chain and off-chain data. Each source has its own indexing cadence. All data is independently verifiable.
+            Trust scores are computed from on-chain and off-chain data, sourced from the systems below. Indexing cadence varies and may change as we tune the pipeline. All data is independently verifiable.
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
             {DATA_SOURCES.map((src) => {
@@ -628,7 +635,6 @@ export default function Methodology() {
                     <span className="text-sm font-medium text-foreground">{src.source}</span>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">{src.data}</p>
-                  <Badge variant="outline" className="text-[10px] mt-2">{src.cadence}</Badge>
                 </div>
               );
             })}
@@ -661,7 +667,7 @@ export default function Methodology() {
               <CardContent className="pt-4">
                 <Badge className="mb-2 bg-primary/20 text-primary border-primary/30 hover:bg-primary/20">Current</Badge>
                 <h3 className="text-sm font-semibold mb-1">v2 — Behavioral First</h3>
-                <p className="text-xs text-muted-foreground leading-relaxed">60/40 behavioral/supporting split. Six trust tiers. Profile badges separated from Trust Rating.</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">60/40 behavioral/supporting split. Six trust tiers. Verifications separated from Trust Rating.</p>
               </CardContent>
             </Card>
             <Card>
