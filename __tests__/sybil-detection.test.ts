@@ -9,6 +9,8 @@ import {
   analyzeSybilSignals,
 } from "../server/sybil-detection.js";
 import type { SybilSignal, SybilLookups } from "../server/sybil-detection.js";
+import { computeVerdict } from "../server/trust-report-compiler.js";
+import { SYBIL_FARM_AGENT, SOLO_CONTROLLER_AGENT } from "./fixtures/agents.js";
 
 describe("detectControllerCluster", () => {
   it("returns no signal for controller with <= 10 agents", () => {
@@ -247,5 +249,51 @@ describe("computeDampeningMultiplier", () => {
 
   it("clamps risk score below 0 to no dampening", () => {
     expect(computeDampeningMultiplier(-0.5)).toBe(1.0);
+  });
+});
+
+describe("sybil dampening integration", () => {
+  it("dampened score can change verdict from CAUTION to UNTRUSTED", () => {
+    // Agent with raw score 45 → CAUTION normally
+    const rawVerdict = computeVerdict(45, "low", [], "active");
+    expect(rawVerdict).toBe("CAUTION");
+
+    // After 50% dampening (high sybil risk) → score 23 → UNTRUSTED
+    const dampenedScore = Math.round(45 * 0.5);
+    const dampenedVerdict = computeVerdict(dampenedScore, "low", [], "active");
+    expect(dampenedVerdict).toBe("UNTRUSTED");
+  });
+
+  it("solo controller agent is not dampened", () => {
+    const lookups: SybilLookups = {
+      controllerAgentCounts: new Map([["0xsolocontroller00000000000000000000000001", 1]]),
+      fingerprintControllers: new Map(),
+      transactionPatterns: new Map(),
+    };
+    const result = analyzeSybilSignals(
+      SOLO_CONTROLLER_AGENT.id,
+      SOLO_CONTROLLER_AGENT.controllerAddress,
+      SOLO_CONTROLLER_AGENT.metadataFingerprint,
+      lookups,
+    );
+    expect(result.dampeningMultiplier).toBe(1.0);
+  });
+
+  it("high-severity farm agent gets significant dampening", () => {
+    const lookups: SybilLookups = {
+      controllerAgentCounts: new Map([["0xsybilcontroller000000000000000000000000001", 6000]]),
+      fingerprintControllers: new Map([
+        ["fp_duplicate_cluster_1", new Set(["0xsybilcontroller000000000000000000000000001", "0xother1", "0xother2"])],
+      ]),
+      transactionPatterns: new Map(),
+    };
+    const result = analyzeSybilSignals(
+      SYBIL_FARM_AGENT.id,
+      SYBIL_FARM_AGENT.controllerAddress,
+      SYBIL_FARM_AGENT.metadataFingerprint,
+      lookups,
+    );
+    expect(result.signals.length).toBeGreaterThanOrEqual(2);
+    expect(result.dampeningMultiplier).toBeLessThanOrEqual(0.7);
   });
 });
