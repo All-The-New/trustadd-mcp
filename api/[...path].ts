@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import express, { type Request, Response, NextFunction } from "express";
+import * as Sentry from "@sentry/node";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { registerRoutes } from "../server/routes.js";
@@ -105,6 +106,7 @@ const initPromise = registerRoutes(app).then(() => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
     errLog.error(`API Error: ${err.message}`, { status, stack: err.stack?.split("\n").slice(0, 3).join("\n") });
+    Sentry.captureException(err);
     if (res.headersSent) {
       return next(err);
     }
