@@ -9,8 +9,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "./theme-toggle";
 
-const analyticsRoutes = ["/analytics", "/economy", "/skills", "/bazaar", "/quality", "/status"];
-const aboutRoutes = ["/about", "/protocols", "/api-docs", "/methodology", "/principles"];
+const analyticsRoutes = ["/analytics", "/economy", "/skills", "/bazaar", "/status"];
+const aboutRoutes = ["/about", "/protocols", "/api-docs", "/methodology", "/principles", "/quality"];
 
 export function Header() {
   const [location] = useLocation();
@@ -39,6 +39,17 @@ export function Header() {
             >
               <Bot className="w-4 h-4" />
               <span className="hidden sm:inline">Agents</span>
+            </Button>
+          </Link>
+
+          <Link href="/trust-api">
+            <Button
+              variant={location === "/trust-api" ? "secondary" : "ghost"}
+              className="gap-2"
+              data-testid="link-trust-api"
+            >
+              <Zap className="w-4 h-4" />
+              <span className="hidden sm:inline">Trust API</span>
             </Button>
           </Link>
 
@@ -79,12 +90,6 @@ export function Header() {
                   Bazaar
                 </DropdownMenuItem>
               </Link>
-              <Link href="/quality">
-                <DropdownMenuItem className="gap-2 cursor-pointer">
-                  <ShieldCheck className="w-4 h-4" />
-                  Quality
-                </DropdownMenuItem>
-              </Link>
               <Link href="/status">
                 <DropdownMenuItem className="gap-2 cursor-pointer">
                   <Activity className="w-4 h-4" />
@@ -93,17 +98,6 @@ export function Header() {
               </Link>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          <Link href="/trust-api">
-            <Button
-              variant={location === "/trust-api" ? "secondary" : "ghost"}
-              className="gap-2"
-              data-testid="link-trust-api"
-            >
-              <Zap className="w-4 h-4" />
-              <span className="hidden sm:inline">Trust API</span>
-            </Button>
-          </Link>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -139,6 +133,12 @@ export function Header() {
                 <DropdownMenuItem className="gap-2 cursor-pointer">
                   <FlaskConical className="w-4 h-4" />
                   Methodology
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/quality">
+                <DropdownMenuItem className="gap-2 cursor-pointer">
+                  <ShieldCheck className="w-4 h-4" />
+                  Quality
                 </DropdownMenuItem>
               </Link>
               <Link href="/api-docs">

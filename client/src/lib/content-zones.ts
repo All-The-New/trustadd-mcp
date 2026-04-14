@@ -33,11 +33,11 @@ type MethodologyCategory = {
 
 export const HOME = {
   hero: {
-    tag: "The Trust Oracle for the Agent Economy",
-    title: "The Trust Oracle for the",
-    titleAccent: "Agent Economy",
+    tag: "The Reputation Layer for Agent Commerce",
+    title: "Trust Oracle",
+    titleAccent: "for the Agent Economy",
     subtitle:
-      "Before your agent transacts, it checks TrustAdd. We index identity, payments, and reputation across 9 chains into a single trust verdict — queryable by any agent via x402 micropayment.",
+      "Before your agent transacts, it checks TrustAdd. We resolve identity, payments, and reputation across every major chain into a single trust verdict — queryable by any agent via x402 micropayment.",
     ctaPrimary: "Explore Agents",
     ctaSecondary: "Trust API",
   },
