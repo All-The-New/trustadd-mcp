@@ -451,19 +451,63 @@ async function batchUpdateScores(updates: Array<{ id: string; score: number; bre
   `);
 }
 
+async function batchUpdateScoresWithSybil(updates: Array<{
+  id: string; score: number; breakdown: TrustScoreBreakdown;
+  signalHash: string; confidenceScore: number; confidenceLevel: string;
+  sybilSignals: any; sybilRiskScore: number;
+}>) {
+  if (updates.length === 0) return;
+  const now = new Date();
+  const ids = updates.map(u => u.id);
+  const scores = updates.map(u => u.score);
+  const breakdowns = updates.map(u => JSON.stringify(u.breakdown));
+  const hashes = updates.map(u => u.signalHash);
+  const confScores = updates.map(u => u.confidenceScore);
+  const confLevels = updates.map(u => u.confidenceLevel);
+  const sybilSigs = updates.map(u => u.sybilSignals ? JSON.stringify(u.sybilSignals) : null);
+  const sybilRisks = updates.map(u => u.sybilRiskScore);
+
+  await db.execute(sql`
+    UPDATE agents SET
+      trust_score = batch.score,
+      trust_score_breakdown = batch.breakdown::jsonb,
+      trust_score_updated_at = ${now},
+      trust_signal_hash = batch.hash,
+      trust_methodology_version = ${METHODOLOGY_VERSION},
+      confidence_score = batch.conf_score,
+      confidence_level = batch.conf_level,
+      sybil_signals = batch.sybil_sig::jsonb,
+      sybil_risk_score = batch.sybil_risk
+    FROM (
+      SELECT unnest(${ids}::text[]) AS id,
+             unnest(${scores}::int[]) AS score,
+             unnest(${breakdowns}::text[]) AS breakdown,
+             unnest(${hashes}::text[]) AS hash,
+             unnest(${confScores}::real[]) AS conf_score,
+             unnest(${confLevels}::text[]) AS conf_level,
+             unnest(${sybilSigs}::text[]) AS sybil_sig,
+             unnest(${sybilRisks}::real[]) AS sybil_risk
+    ) AS batch
+    WHERE agents.id = batch.id
+  `);
+}
+
 export async function recalculateAllScores(): Promise<{ updated: number; elapsed: number }> {
   const start = Date.now();
   log("Starting batch trust score recalculation...", "trust-score");
 
   const allAgents = await storage.getAllAgents();
   const { feedbackMap, controllerChains, eventCounts } = await prefetchScoreLookups();
+  const { analyzeSybilSignals, prefetchSybilLookups } = await import("./sybil-detection.js");
+  const sybilLookups = await prefetchSybilLookups(db);
+  log(`Sybil lookups: ${sybilLookups.controllerAgentCounts.size} flagged controllers, ${sybilLookups.fingerprintControllers.size} fingerprint clusters`, "trust-score");
 
   let updated = 0;
   const BATCH_SIZE = 500;
 
   for (let i = 0; i < allAgents.length; i += BATCH_SIZE) {
     const batch = allAgents.slice(i, i + BATCH_SIZE);
-    const updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown; signalHash: string; confidenceScore: number; confidenceLevel: string }> = [];
+    const updates: Array<{ id: string; score: number; breakdown: TrustScoreBreakdown; signalHash: string; confidenceScore: number; confidenceLevel: string; sybilSignals: any; sybilRiskScore: number }> = [];
 
     for (const agent of batch) {
       const feedback = feedbackMap.get(agent.id) ?? null;
@@ -478,10 +522,26 @@ export async function recalculateAllScores(): Promise<{ updated: number; elapsed
         hasGithub: (feedback?.githubHealthScore ?? 0) > 0,
         hasFarcaster: (feedback?.farcasterScore ?? 0) > 0,
       });
-      updates.push({ id: agent.id, score: breakdown.total, breakdown, signalHash, confidenceScore: confidence.score, confidenceLevel: confidence.level });
+      const sybil = analyzeSybilSignals(
+        agent.id,
+        agent.controllerAddress,
+        agent.metadataFingerprint,
+        sybilLookups,
+      );
+      const dampenedScore = Math.round(breakdown.total * sybil.dampeningMultiplier);
+      updates.push({
+        id: agent.id,
+        score: dampenedScore,
+        breakdown: { ...breakdown, total: dampenedScore },
+        signalHash,
+        confidenceScore: confidence.score,
+        confidenceLevel: confidence.level,
+        sybilSignals: sybil.signals.length > 0 ? sybil.signals : null,
+        sybilRiskScore: sybil.riskScore,
+      });
     }
 
-    await batchUpdateScores(updates);
+    await batchUpdateScoresWithSybil(updates);
 
     updated += updates.length;
     if (i % 5000 === 0 && i > 0) {
