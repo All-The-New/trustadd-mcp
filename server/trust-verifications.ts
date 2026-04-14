@@ -11,7 +11,13 @@
  */
 
 import type { Agent } from "../shared/schema.js";
-import type { TxStats, ProbeStats } from "./trust-score.js";
+import {
+  ACTIVE_MAINTAINER_MIN_AGE_DAYS,
+  ACTIVE_MAINTAINER_MIN_EVENTS,
+  EARLY_ADOPTER_CUTOFF,
+  type ProbeStats,
+  type TxStats,
+} from "./trust-score.js";
 
 export interface Verification {
   name: string;
@@ -30,13 +36,6 @@ export interface VerificationsInput {
   metadataEventCount: number;
   chainPresence: number;
 }
-
-/** Early-adopter cutoff — must match EARLY_ADOPTER_CUTOFF in trust-score.ts. */
-const EARLY_ADOPTER_CUTOFF = new Date("2026-06-01T00:00:00Z");
-
-/** Active-maintainer thresholds — must match trust-score.ts constants. */
-const ACTIVE_MAINTAINER_MIN_EVENTS = 3;
-const ACTIVE_MAINTAINER_MIN_AGE_DAYS = 90;
 
 /**
  * Compute the full set of 9 verifications for an agent.

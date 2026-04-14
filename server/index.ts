@@ -18,7 +18,7 @@ import { startIndexer, stopIndexer } from "./indexer.js";
 import { runSync } from "../scripts/sync-prod-to-dev.js";
 import { storage } from "./storage.js";
 import { initCommunityFeedback } from "./community-feedback/index.js";
-import { ensureScoresCalculated } from "./trust-score.js";
+import { ensureScoresCalculated } from "./trust-score-pipeline.js";
 import { ensureSlugsGenerated } from "./slugs.js";
 import { initProber, stopProber } from "./x402-prober.js";
 import { initTransactionIndexer, stopTransactionIndexer } from "./transaction-indexer.js";

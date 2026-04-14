@@ -9,7 +9,7 @@ export const recalculateTask = schedules.task({
     metadata.set("startedAt", new Date().toISOString());
 
     try {
-      const { recalculateAllScores } = await import("../server/trust-score");
+      const { recalculateAllScores } = await import("../server/trust-score-pipeline");
       const { ensureSlugsGenerated } = await import("../server/slugs");
       const { classifyAgent } = await import("../server/quality-classifier");
       const { db } = await import("../server/db");
