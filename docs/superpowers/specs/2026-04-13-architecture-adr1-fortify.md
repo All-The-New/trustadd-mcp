@@ -203,9 +203,9 @@ The in-memory rate limiter is a real bug — it provides false confidence that r
 1. [x] Set up Vitest + test DB configuration — `vitest.config.ts`, `__tests__/fixtures/agents.ts`
 2. [x] Write trust score + verdict logic tests (P0) — 32 + 29 tests, `trust-score.test.ts` + `verdict-logic.test.ts`
 3. [x] Write free tier redaction + confidence tests (P0) — 19 + 12 tests, `free-tier.test.ts` + `confidence.test.ts`
-4. [ ] Split `routes.ts` into 5 domain route files (P1) — **next session**
-5. [ ] Split `storage.ts` into 4 domain query files (P1) — **next session**
+4. [x] Split `routes.ts` into 5 domain route files (P1) — `routes/{helpers,status,agents,analytics,admin,trust}.ts`, orchestrator in `routes.ts`
+5. [x] Split `storage.ts` into 4 domain query files (P1) — `storage/{agents,indexer,feedback,analytics}.ts`, IStorage + delegator in `storage.ts`
 6. [x] Remove in-memory rate limiter, verify DB-backed limiter coverage (P1) — added `/api/agents` DB limiter
-7. [ ] Switch to `drizzle-kit generate` for migration files (P2)
+7. [x] Switch to `drizzle-kit generate` for migration files (P2) — `migrations/0000_lively_stature.sql` initial snapshot
 8. [x] Update `indexer-architecture.md` for current deployment model (P2) — Vercel + Trigger.dev refs
-9. [ ] Add Sentry to Express error handler (P2)
+9. [x] Add Sentry to Express error handler (P2) — `Sentry.captureException(err)` in `api/[...path].ts`

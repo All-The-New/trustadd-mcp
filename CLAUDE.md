@@ -44,14 +44,24 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - **Multi-chain**: 9 EVM chains share the same contract addresses; chain config in `shared/chains.ts`
 - **API tiering**: Free tier = ecosystem analytics + redacted agent directory (verdict badges, no scores). Paid tier (x402) = per-agent trust intelligence (scores, breakdowns, community signals, transactions). See `docs/api-tiering.md`
 - **ESM imports**: All relative imports use `.js` extensions for Vercel serverless compatibility
-- **Testing**: Vitest with 149 tests in `__tests__/` — trust scoring, verdict logic, free tier redaction, confidence. Run `npm test`. Architecture assessment in `docs/superpowers/specs/2026-04-13-architecture-adr1-fortify.md`
+- **Testing**: Vitest with 183+ tests in `__tests__/` and `server/__tests__/` — trust scoring, verdict logic, free tier redaction, confidence, sybil detection. Run `npm test`. Architecture assessment in `docs/superpowers/specs/2026-04-13-architecture-adr1-fortify.md` (all 9 items complete)
 
 ## Important Files
 
 - `shared/schema.ts` — All 12 database tables, insert schemas, and TypeScript types
 - `shared/chains.ts` — Multi-chain configuration (9 EVM chains, RPC URLs, contract addresses)
-- `server/storage.ts` — Database abstraction layer (IStorage interface, ~2300 lines)
-- `server/routes.ts` — All API endpoints (~900 lines)
+- `server/storage.ts` — Database abstraction layer (IStorage interface + thin DatabaseStorage delegator, ~340 lines)
+- `server/storage/agents.ts` — Agent CRUD, events, analytics, quality, skills, protocol queries (~1600 lines)
+- `server/storage/indexer.ts` — Indexer state, events, metrics queries (~130 lines)
+- `server/storage/feedback.ts` — Community feedback queries (~130 lines)
+- `server/storage/analytics.ts` — Probes, transactions, bazaar, status queries (~560 lines)
+- `server/routes.ts` — Route orchestrator (~20 lines) — calls 5 domain route files
+- `server/routes/helpers.ts` — Shared route utilities (verdictFor, redactAgentForPublic, cached, parseChainId)
+- `server/routes/status.ts` — Status, health, chains, sitemap routes
+- `server/routes/agents.ts` — Agent CRUD, trust-scores, per-agent feedback routes
+- `server/routes/analytics.ts` — Analytics, economy, skills, bazaar, quality routes
+- `server/routes/admin.ts` — Admin routes (auth, sync, usage, dashboard, audit)
+- `server/routes/trust.ts` — Trust Data Product API v1 (x402-gated)
 - `server/index.ts` — Local dev entry point (starts Vite HMR + background services)
 - `server/db.ts` — Lazy PostgreSQL pool + Drizzle setup (Supabase pooler compatible)
 - `api/[...path].ts` — Vercel serverless catch-all (wraps Express app)
@@ -126,7 +136,7 @@ npx vercel deploy --prod         # Manual deploy if needed
 # Manual deploy not available locally (no Docker) — use GitHub Actions or workflow_dispatch
 
 # Schema changes — must use Supabase SQL directly (trustadd_app doesn't own tables)
-# drizzle-kit push will fail; run DDL in Supabase SQL editor instead
+# Schema changes: run `npm run db:generate` to create migration SQL, then apply via Supabase MCP/SQL editor
 ```
 
 ## Critical Infrastructure Notes
