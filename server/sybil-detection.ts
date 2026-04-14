@@ -79,3 +79,54 @@ export function detectFingerprintDuplicate(
     value: count,
   };
 }
+
+/**
+ * Detect self-referential payment signal.
+ * Threshold: any self-referential transactions exist.
+ * Severity: medium (10-50% ratio), high (>50% ratio).
+ */
+export function detectSelfReferentialPayment(
+  agentId: string,
+  transactionPatterns: Map<string, { selfRefCount: number; totalCount: number; recentRatio: number }>,
+): SybilSignal | null {
+  const pattern = transactionPatterns.get(agentId);
+  if (!pattern || pattern.selfRefCount === 0) return null;
+
+  const ratio = pattern.selfRefCount / pattern.totalCount;
+  let severity: SybilSignal["severity"];
+  if (ratio > 0.5) severity = "high";
+  else if (ratio >= 0.1) severity = "medium";
+  else severity = "low";
+
+  return {
+    type: "self_referential_payment",
+    severity,
+    detail: `${pattern.selfRefCount}/${pattern.totalCount} transactions (${Math.round(ratio * 100)}%) are between controlled wallets`,
+    value: pattern.selfRefCount,
+  };
+}
+
+/**
+ * Detect temporal burst signal.
+ * Threshold: >=50% of tx volume in last 24h, min 5 total txns.
+ * Severity: medium (50-80%), high (>80%).
+ */
+export function detectTemporalBurst(
+  agentId: string,
+  transactionPatterns: Map<string, { selfRefCount: number; totalCount: number; recentRatio: number }>,
+): SybilSignal | null {
+  const pattern = transactionPatterns.get(agentId);
+  if (!pattern || pattern.totalCount < 5) return null;
+  if (pattern.recentRatio < 0.5) return null;
+
+  let severity: SybilSignal["severity"];
+  if (pattern.recentRatio > 0.8) severity = "high";
+  else severity = "medium";
+
+  return {
+    type: "temporal_burst",
+    severity,
+    detail: `${Math.round(pattern.recentRatio * 100)}% of transaction volume arrived in the last 24 hours`,
+    value: Math.round(pattern.recentRatio * 100),
+  };
+}
