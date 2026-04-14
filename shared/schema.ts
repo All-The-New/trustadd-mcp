@@ -400,6 +400,37 @@ export type InsertTrustReport = z.infer<typeof insertTrustReportSchema>;
 
 // --- End Trust Data Product ---
 
+// --- Trust Score Anchoring (on-chain Merkle proofs) ---
+
+export const trustAnchors = pgTable("trust_anchors", {
+  id: serial("id").primaryKey(),
+  agentId: varchar("agent_id").notNull().references(() => agents.id),
+  merkleRoot: text("merkle_root").notNull(),
+  merkleProof: jsonb("merkle_proof").notNull(), // string[] of hex proof nodes
+  leafIndex: integer("leaf_index").notNull(),
+  leafHash: text("leaf_hash").notNull(),
+  anchoredScore: integer("anchored_score").notNull(),
+  anchoredMethodologyVersion: integer("anchored_methodology_version").notNull().default(1),
+  anchorTxHash: text("anchor_tx_hash"),
+  anchorBlockNumber: integer("anchor_block_number"),
+  anchoredAt: timestamp("anchored_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("uq_trust_anchor_agent").on(table.agentId),
+  index("idx_trust_anchors_merkle_root").on(table.merkleRoot),
+  index("idx_trust_anchors_anchored_at").on(table.anchoredAt),
+]);
+
+export const insertTrustAnchorSchema = createInsertSchema(trustAnchors).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TrustAnchor = typeof trustAnchors.$inferSelect;
+export type InsertTrustAnchor = z.infer<typeof insertTrustAnchorSchema>;
+
+// --- End Trust Score Anchoring ---
+
 export const insertAgentSchema = createInsertSchema(agents).omit({
   id: true,
   createdAt: true,
