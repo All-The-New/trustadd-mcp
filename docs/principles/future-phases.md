@@ -26,9 +26,10 @@
 
 ## Phase 3: On-Chain Score Anchoring (Principles 3, 14)
 
-**Status:** Code complete — pending contract deployment
-**Completed:** 2026-04-13 (code), deployment TBD
+**Status:** Code + schema complete — pending contract deployment
+**Completed:** 2026-04-13 (code), 2026-04-14 (`trust_anchors` migration applied), deployment TBD
 **Dependencies:** Phase 1 complete, funded oracle wallet on Base
+**Go-live tracker:** [`docs/go-live-phase3-anchoring.md`](../go-live-phase3-anchoring.md)
 
 ### What was built:
 1. **TrustRoot.sol** — Minimal Solidity contract (`contracts/TrustRoot.sol`) for owner-only Merkle root publishing on Base. Functions: `publishRoot`, `latestRoot`, `roots`, `rootCount`, `transferOwnership`.
@@ -44,10 +45,11 @@
 ### Cost: ~$0.01/day on Base (22k gas per root publication).
 
 ### Remaining infrastructure steps:
+See [`docs/go-live-phase3-anchoring.md`](../go-live-phase3-anchoring.md) for the full cutover checklist. Summary:
 - Deploy `TrustRoot.sol` on Base mainnet
 - Fund oracle wallet with ~0.01 ETH on Base (lasts months)
-- Apply `migrations/0001_strange_punisher.sql` to create `trust_anchors` table
 - Set Trigger.dev env vars: `ORACLE_PRIVATE_KEY`, `TRUST_ROOT_ADDRESS`, `BASE_RPC_URL` (optional, defaults to `https://mainnet.base.org`)
+- Verify first anchoring run after 5 AM UTC recalculate
 
 ---
 
