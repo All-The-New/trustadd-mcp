@@ -77,7 +77,8 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - `client/src/lib/content-zones.ts` — Centralized copy for all public pages (all marketing/positioning text)
 - `client/src/pages/trust-api.tsx` — Trust API product page (pricing, live demo, x402 flow, integration guide)
 - `client/src/pages/methodology.tsx` — Scoring methodology page (5 categories, weights, signals, verdict thresholds, data sources)
-- `client/src/App.tsx` — React routing (20 pages: 14 public + 6 admin)
+- `client/src/pages/principles.tsx` — Design principles page (10 principles distilled from trust oracle research)
+- `client/src/App.tsx` — React routing (21 pages: 15 public + 6 admin)
 
 ## Required Environment Variables
 
