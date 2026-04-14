@@ -6,8 +6,9 @@ import {
   detectTemporalBurst,
   computeSybilRiskScore,
   computeDampeningMultiplier,
+  analyzeSybilSignals,
 } from "../server/sybil-detection.js";
-import type { SybilSignal } from "../server/sybil-detection.js";
+import type { SybilSignal, SybilLookups } from "../server/sybil-detection.js";
 
 describe("detectControllerCluster", () => {
   it("returns no signal for controller with <= 10 agents", () => {
@@ -173,6 +174,58 @@ describe("computeSybilRiskScore", () => {
     ];
     const score = computeSybilRiskScore(signals);
     expect(score).toBe(1.0);
+  });
+});
+
+describe("analyzeSybilSignals", () => {
+  const emptyLookups: SybilLookups = {
+    controllerAgentCounts: new Map(),
+    fingerprintControllers: new Map(),
+    transactionPatterns: new Map(),
+  };
+
+  it("returns clean analysis for solo controller agent", () => {
+    const lookups: SybilLookups = {
+      controllerAgentCounts: new Map([["0xsolo", 1]]),
+      fingerprintControllers: new Map(),
+      transactionPatterns: new Map(),
+    };
+    const result = analyzeSybilSignals("agent-1", "0xsolo", null, lookups);
+    expect(result.signals).toHaveLength(0);
+    expect(result.riskScore).toBe(0);
+    expect(result.dampeningMultiplier).toBe(1.0);
+  });
+
+  it("detects controller cluster signal", () => {
+    const lookups: SybilLookups = {
+      controllerAgentCounts: new Map([["0xfarm", 500]]),
+      fingerprintControllers: new Map(),
+      transactionPatterns: new Map(),
+    };
+    const result = analyzeSybilSignals("agent-1", "0xfarm", null, lookups);
+    expect(result.signals).toHaveLength(1);
+    expect(result.signals[0].type).toBe("controller_cluster");
+    expect(result.riskScore).toBeGreaterThan(0);
+    expect(result.dampeningMultiplier).toBeLessThan(1.0);
+  });
+
+  it("combines multiple signals and increases risk", () => {
+    const lookups: SybilLookups = {
+      controllerAgentCounts: new Map([["0xfarm", 6000]]),
+      fingerprintControllers: new Map([["fp_dup", new Set(["0xfarm", "0xother1", "0xother2"])]]),
+      transactionPatterns: new Map([["agent-1", { selfRefCount: 5, totalCount: 10, recentRatio: 0.9 }]]),
+    };
+    const result = analyzeSybilSignals("agent-1", "0xfarm", "fp_dup", lookups);
+    expect(result.signals.length).toBeGreaterThanOrEqual(3);
+    expect(result.riskScore).toBeGreaterThanOrEqual(0.7);
+    expect(result.dampeningMultiplier).toBeLessThanOrEqual(0.65);
+  });
+
+  it("handles missing controller address in lookups", () => {
+    const result = analyzeSybilSignals("agent-1", "0xunknown", null, emptyLookups);
+    expect(result.signals).toHaveLength(0);
+    expect(result.riskScore).toBe(0);
+    expect(result.dampeningMultiplier).toBe(1.0);
   });
 });
 

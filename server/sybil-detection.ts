@@ -158,3 +158,38 @@ export function computeDampeningMultiplier(riskScore: number): number {
   const clamped = Math.max(0, Math.min(1, riskScore));
   return 1.0 - (clamped * 0.5);
 }
+
+/**
+ * Orchestrate all sybil signal detectors for a single agent.
+ * Pure function — requires pre-fetched lookups (no DB access).
+ */
+export function analyzeSybilSignals(
+  agentId: string,
+  controllerAddress: string,
+  metadataFingerprint: string | null,
+  lookups: SybilLookups,
+): SybilAnalysis {
+  const signals: SybilSignal[] = [];
+
+  // 1. Controller clustering
+  const agentCount = lookups.controllerAgentCounts.get(controllerAddress) ?? 0;
+  const clusterSignal = detectControllerCluster(agentCount);
+  if (clusterSignal) signals.push(clusterSignal);
+
+  // 2. Fingerprint duplication
+  const fpSignal = detectFingerprintDuplicate(metadataFingerprint, lookups.fingerprintControllers);
+  if (fpSignal) signals.push(fpSignal);
+
+  // 3. Self-referential payments
+  const selfRefSignal = detectSelfReferentialPayment(agentId, lookups.transactionPatterns);
+  if (selfRefSignal) signals.push(selfRefSignal);
+
+  // 4. Temporal burst
+  const burstSignal = detectTemporalBurst(agentId, lookups.transactionPatterns);
+  if (burstSignal) signals.push(burstSignal);
+
+  const riskScore = computeSybilRiskScore(signals);
+  const dampeningMultiplier = computeDampeningMultiplier(riskScore);
+
+  return { signals, riskScore, dampeningMultiplier };
+}
