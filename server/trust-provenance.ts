@@ -149,7 +149,7 @@ export function computeSignalHash(
     // Identity
     hasName: Boolean(agent.name && agent.name.trim().length > 0),
     descriptionLength: agent.description?.trim().length ?? 0,
-    hasImage: Boolean(agent.imageUrl && agent.imageUrl.length > 0),
+    hasImage: Boolean(agent.imageUrl && agent.imageUrl.length >= 5),
     hasEndpoints,
     hasTags: sortedTags.length > 0 || (agent.oasfSkills?.length ?? 0) > 0,
     // Raw values for full auditability
