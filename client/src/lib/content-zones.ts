@@ -323,100 +323,120 @@ export const METHODOLOGY = {
   header: {
     title: "Scoring Methodology",
     subtitle:
-      "How TrustAdd computes trust scores and verdicts. Every signal, weight, and threshold is documented here — the same formula applied equally to every agent.",
+      "The TrustAdd Score measures interaction risk — the likelihood that a transaction with an agent will go wrong. Trust is earned through verifiable behavior, not self-reported metadata.",
   },
   overview: {
-    title: "How the TrustAdd Score Works",
+    title: "What the Score Measures",
     paragraphs: [
-      "Every agent indexed by TrustAdd receives a composite trust score from 0 to 100. The score is computed from five categories of on-chain and off-chain signals, each weighted to reflect its importance for autonomous decision-making.",
-      "Scores are recalculated daily and on-demand when new data arrives. The same formula is applied to every agent — no manual overrides, no special treatment. The score powers trust verdicts (TRUSTED, CAUTION, UNTRUSTED) that agents can query programmatically via the Trust API.",
+      "The TrustAdd Score answers one question: what is the risk of this interaction going wrong? When Agent A is about to pay Agent B for a service, the score predicts whether that transaction will result in value delivered.",
+      "This is a behavioral risk assessment — not a profile completeness metric. An agent with a perfect profile but zero transactions has not earned trust. It has set up well. Those are different things.",
+      "Scores are recalculated daily and on-demand. The same formula is applied to every agent — no manual overrides, no special treatment. Methodology changes are versioned and published.",
     ],
   },
+  ecosystemNotice:
+    "The AI agent economy is in its earliest stages. Most agents have limited or no transaction history, which means most Trust Ratings reflect profile data rather than verified behavioral evidence. As x402 payments and ERC-8004 attestations grow, Trust Ratings will become increasingly meaningful. TrustAdd is building the measurement infrastructure now so it's ready when the data arrives.",
   categories: [
     {
-      name: "Identity",
-      icon: "Shield" as const,
+      name: "Transaction Activity",
+      icon: "Coins" as const,
+      maxPoints: 35,
+      color: "bg-emerald-500",
+      type: "behavioral" as const,
+      description:
+        "Does this agent actually do business? Measures inbound x402 payment volume, transaction frequency, payer diversity, and endpoint liveness. The hardest signal to fake — generating real payment volume costs real money.",
+      signals: [
+        { name: "x402 payment volume", condition: "Any / $100+ / $1,000+", points: "+5 / +10 / +15" },
+        { name: "Transaction count", condition: "5+ / 20+ / 50+", points: "+3 / +5 / +8" },
+        { name: "Payer diversity", condition: "3+ unique / 10+ unique", points: "+3 / +5" },
+        { name: "x402 endpoint live", condition: "Responds with 402 headers", points: "+5" },
+        { name: "Payment address verified", condition: "On-chain payment address discovered", points: "+2" },
+      ],
+    },
+    {
+      name: "Reputation & Attestations",
+      icon: "Award" as const,
       maxPoints: 25,
-      color: "bg-blue-500",
+      color: "bg-cyan-500",
+      type: "behavioral" as const,
       description:
-        "Does the agent have a complete, well-maintained on-chain identity? Name, description, image, endpoints, and declared skills all contribute. Completeness signals intentional registration rather than placeholder entries.",
+        "Have others formally vouched for this agent? On-chain attestations via the ERC-8004 reputation registry are verifiable and permanent. This is the formal feedback mechanism — the only signal that captures 'was the customer satisfied?'",
       signals: [
-        { name: "Name", condition: "Non-empty name field", points: "+5" },
-        { name: "Description", condition: "Any / 30+ chars / 100+ chars", points: "+1 / +3 / +5" },
-        { name: "Image", condition: "Valid image URL (PNG, SVG, IPFS, etc.)", points: "+5" },
-        { name: "Endpoints", condition: "At least one endpoint declared", points: "+5" },
-        { name: "Skills / Tags", condition: "OASF skills or tags present", points: "+5" },
+        { name: "Attestations received", condition: "1+ / 5+ / 10+ / 25+", points: "+3 / +7 / +12 / +18" },
+        { name: "Attestor diversity", condition: "3+ unique / 10+ unique attestors", points: "+3 / +7" },
       ],
     },
     {
-      name: "History",
-      icon: "Clock" as const,
-      maxPoints: 20,
-      color: "bg-purple-500",
-      description:
-        "How long has the agent existed on-chain? Has it been actively maintained? Agents with longer history, metadata updates, and cross-chain presence demonstrate sustained commitment.",
-      signals: [
-        { name: "Registration age", condition: "1+ day / 7+ days / 30+ days", points: "+2 / +5 / +10" },
-        { name: "Metadata updates", condition: "1+ update events / 2+ update events", points: "+2 / +5" },
-        { name: "Cross-chain presence", condition: "2+ chains / 3+ chains (same controller)", points: "+3 / +5" },
-      ],
-    },
-    {
-      name: "Capability",
-      icon: "Zap" as const,
+      name: "Agent Profile",
+      icon: "Shield" as const,
       maxPoints: 15,
-      color: "bg-green-500",
+      color: "bg-indigo-500",
+      type: "supporting" as const,
       description:
-        "What can the agent actually do? x402 payment support, declared OASF skills, and exposed endpoints demonstrate functional capability beyond a static identity.",
+        "Is this a real, identifiable agent? Profile completeness, visual identity, endpoint declarations, and metadata storage. Important for discovery — but setting up a good profile alone doesn't prove trustworthiness.",
       signals: [
-        { name: "x402 support", condition: "Active x402 payment endpoint detected", points: "+5" },
-        { name: "OASF skills", condition: "1+ skill / 3+ skills declared", points: "+3 / +5" },
-        { name: "Endpoints", condition: "1+ endpoint / 3+ endpoints", points: "+3 / +5" },
+        { name: "Profile image", condition: "Valid image URL", points: "+5" },
+        { name: "Description quality", condition: "30+ chars / 100+ chars", points: "+1 / +2" },
+        { name: "Name", condition: "Non-empty, trimmed", points: "+2" },
+        { name: "Endpoints", condition: "At least one declared", points: "+2" },
+        { name: "Skills / Tags", condition: "OASF skills or tags present", points: "+1" },
+        { name: "Metadata storage", condition: "HTTPS / IPFS or Arweave", points: "+1 / +2" },
+        { name: "Active status", condition: "Marked active on-chain", points: "+1" },
+      ],
+    },
+    {
+      name: "Longevity & Consistency",
+      icon: "Clock" as const,
+      maxPoints: 15,
+      color: "bg-violet-500",
+      type: "supporting" as const,
+      description:
+        "Has this agent been active and consistent over time? Time alone is insufficient — the highest signals require evidence of activity during that time. An agent registered 90 days ago with no transactions gets minimal credit.",
+      signals: [
+        { name: "Registration age", condition: "7+ days / 30+ / 90+", points: "+1 / +2 / +4" },
+        { name: "Metadata maintenance", condition: "1+ events / 3+ events", points: "+1 / +3" },
+        { name: "Cross-chain presence", condition: "2+ chains / 3+ chains", points: "+2 / +3" },
+        { name: "Time since first tx", condition: "Any / 30+ days / 90+ days", points: "+2 / +3 / +5" },
       ],
     },
     {
       name: "Community",
       icon: "Users" as const,
-      maxPoints: 20,
+      maxPoints: 10,
       color: "bg-amber-500",
+      type: "supporting" as const,
       description:
-        "What do humans and systems say about this agent? GitHub project health, Farcaster social engagement, and on-chain reputation feedback from other agents provide external validation.",
+        "Is there external signal about this agent? GitHub project health, Farcaster engagement, and community presence. A bonus — agents can reach the highest tiers without any community signals, but community presence helps differentiate in the mid-range.",
       signals: [
-        { name: "GitHub health", condition: "Score > 0 / 40+ / 70+", points: "+3 / +6 / +10" },
-        { name: "Farcaster engagement", condition: "Score > 0 / 0.4+ / 0.7+", points: "+1 / +3 / +5" },
-        { name: "Community sources", condition: "Any verified community data source", points: "+5" },
-      ],
-    },
-    {
-      name: "Transparency",
-      icon: "Eye" as const,
-      maxPoints: 20,
-      color: "bg-teal-500",
-      description:
-        "Is the agent's metadata verifiable and immutable? Decentralized storage (IPFS, Arweave) scores highest. Declared trust mechanisms and active status signals further indicate accountability.",
-      signals: [
-        { name: "Metadata storage", condition: "data: / http / https / IPFS or Arweave", points: "+2 / +3 / +5 / +8" },
-        { name: "Trust mechanisms", condition: "1 declared / 2+ / 3+", points: "+3 / +5 / +7" },
-        { name: "Active status", condition: "Agent marked as active on-chain", points: "+5" },
+        { name: "GitHub health", condition: "Score > 0 / 40+ / 70+", points: "+1 / +3 / +5" },
+        { name: "Farcaster engagement", condition: "Score > 0 / 0.4+ / 0.7+", points: "+1 / +2 / +3" },
+        { name: "Community sources", condition: "Any verified source", points: "+2" },
       ],
     },
   ],
   principles: [
     {
+      title: "Behavioral First",
+      desc: "60% of the score comes from blockchain-verifiable behavioral signals — transactions, attestations, endpoint liveness. Profile metadata alone cannot earn a high Trust Rating.",
+    },
+    {
       title: "Equal Application",
-      desc: "The same formula is applied to every agent. No manual score overrides, no premium tiers, no special treatment. The methodology is the product.",
+      desc: "The same formula is applied to every agent. No manual overrides, no premium tiers, no special treatment. The methodology is the product.",
+    },
+    {
+      title: "Honest About Gaps",
+      desc: "When data is missing, we say so. 'Insufficient Data' is not a failure — it's an honest assessment. We'd rather under-rate a legitimate agent temporarily than over-rate a risky one.",
     },
     {
       title: "Observable Inputs Only",
-      desc: "Scores are computed from data anyone can verify — on-chain events, public metadata, open-source repos, and protocol-level signals. No private data, no secret sauce.",
+      desc: "Every signal can be independently verified — on-chain events, public metadata, open-source repos, protocol-level signals. No private data, no secret sauce.",
     },
     {
-      title: "Continuous Recalculation",
-      desc: "Scores update automatically as new data arrives. Indexers, probers, and scrapers run on known schedules. Stale reports are recompiled daily and on-demand.",
+      title: "Versioned Evolution",
+      desc: "Methodology changes are versioned, announced, and published with rationale. All scores recalculate on version bumps. You can always understand what produced a score and when.",
     },
     {
-      title: "Additive Scoring",
-      desc: "The score is purely additive — agents start at zero and earn points for each positive signal. There are no penalties or negative adjustments. More evidence means a higher score.",
+      title: "Gaming Resistance",
+      desc: "The highest-weighted signals are the hardest to fake. Generating real payment volume with diverse payers costs real money. Trust is expensive to manufacture.",
     },
   ],
 };
@@ -567,9 +587,9 @@ export const SEO = {
       "Query the TrustAdd oracle. Quick trust checks from $0.01 USDC, full evidence reports from $0.05. Paid via x402 micropayment on Base. Free ecosystem analytics included.",
   },
   methodology: {
-    title: "Scoring Methodology",
+    title: "Scoring Methodology v2",
     description:
-      "How TrustAdd computes agent trust scores. Five scoring categories, signal weights, verdict thresholds, and data sources — fully transparent and equally applied.",
+      "How TrustAdd measures agent trust. Behavioral-first scoring: 60% from verified transactions and attestations, 40% from profile and community signals. Six trust tiers from Verified to Flagged.",
   },
   principles: {
     title: "Our Principles",
