@@ -44,7 +44,7 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - **Multi-chain**: 9 EVM chains share the same contract addresses; chain config in `shared/chains.ts`
 - **API tiering**: Free tier = ecosystem analytics + redacted agent directory (verdict badges, no scores). Paid tier (x402) = per-agent trust intelligence (scores, breakdowns, community signals, transactions). See `docs/api-tiering.md`
 - **ESM imports**: All relative imports use `.js` extensions for Vercel serverless compatibility
-- **Testing**: Vitest with 183+ tests in `__tests__/` and `server/__tests__/` — trust scoring, verdict logic, free tier redaction, confidence, sybil detection. Run `npm test`. Architecture assessment in `docs/superpowers/specs/2026-04-13-architecture-adr1-fortify.md` (all 9 items complete)
+- **Testing**: Vitest with 184 tests in `__tests__/` — trust scoring, verdict logic, free tier redaction, confidence, sybil detection. Run `npm test`. Architecture assessment in `docs/superpowers/specs/2026-04-13-architecture-adr1-fortify.md` (all 9 items complete)
 
 ## Important Files
 
@@ -68,13 +68,14 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - `api/agent/[id].ts` — SSR meta tag injection for agent pages (SEO: serves index.html with per-agent title, description, OG tags, canonical, JSON-LD)
 - `api/health.ts` — Standalone health check with DB connection test
 - `server/lib/request-logger.ts` — Fire-and-forget API request logging middleware (path normalization, 90-day stochastic cleanup)
-- `trigger/` — 10 Trigger.dev tasks: `blockchain-indexer` (orchestrator, */2 cron) → `chain-indexer` (per-chain child, 2 cycles + 90s checkpointed wait), `community-feedback` (orchestrator, daily 4am) → `community-scrape` (per-platform child), `transaction-indexer`, `x402-prober`, `recalculate-scores` (scores + slugs + classification + report recompilation), `watchdog`, `bazaar-indexer`, + `alert` helper
+- `trigger/` — 10 Trigger.dev tasks: `blockchain-indexer` (orchestrator, */2 cron) → `chain-indexer` (per-chain child, 2 cycles + 90s checkpointed wait), `community-feedback` (orchestrator, daily 4am) → `community-scrape` (per-platform child), `transaction-indexer`, `x402-prober`, `recalculate-scores` (scores + sybil dampening + slugs + classification + report recompilation), `watchdog`, `bazaar-indexer`, + `alert` helper
 - `server/trust-score.ts` — Trust scoring engine (17-signal explainability, provenance hash, confidence integration)
 - `server/trust-provenance.ts` — Signal provenance hashing (SHA-256 of canonical scoring inputs, METHODOLOGY_VERSION)
 - `server/trust-confidence.ts` — Confidence level computation (source coverage weighting, consistency flags)
 - `server/trust-methodology.ts` — Public methodology definition (scoring rubric as JSON)
 - `server/pipeline-health.ts` — Pipeline health tracking with circuit breakers (dynamic imports for Trigger.dev compat)
-- `server/trust-report-compiler.ts` — Trust report compiler v2 (verdict logic, provenance, confidence, address resolution, cache)
+- `server/trust-report-compiler.ts` — Trust report compiler v2 (verdict logic, provenance, confidence, sybil, address resolution, cache)
+- `server/sybil-detection.ts` — Sybil detection module (4 signal detectors, risk scoring, dampening multiplier, SQL prefetcher)
 - `server/lib/x402-gate.ts` — x402 payment middleware for Trust Data Product (CDP facilitator on Base)
 - `docs/trust-product.md` — Trust Data Product specification (tiers, pricing, verdict logic, payment flow)
 - `docs/api-tiering.md` — API tiering architecture: free ecosystem analytics vs x402-gated trust intelligence

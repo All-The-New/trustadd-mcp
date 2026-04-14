@@ -103,6 +103,14 @@ describe("detectSelfReferentialPayment", () => {
     expect(signal!.severity).toBe("medium");
   });
 
+  it("returns high severity for corrupted data (selfRefCount > 0 but totalCount = 0)", () => {
+    const patterns = new Map([["agent-1", { selfRefCount: 3, totalCount: 0, recentRatio: 0 }]]);
+    const signal = detectSelfReferentialPayment("agent-1", patterns);
+    expect(signal).not.toBeNull();
+    expect(signal!.severity).toBe("high");
+    expect(signal!.type).toBe("self_referential_payment");
+  });
+
   it("returns high severity when self-referential ratio exceeds 50%", () => {
     const patterns = new Map([["agent-1", { selfRefCount: 8, totalCount: 10, recentRatio: 0.1 }]]);
     const signal = detectSelfReferentialPayment("agent-1", patterns);

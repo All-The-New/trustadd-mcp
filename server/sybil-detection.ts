@@ -93,6 +93,15 @@ export function detectSelfReferentialPayment(
 ): SybilSignal | null {
   const pattern = transactionPatterns.get(agentId);
   if (!pattern || pattern.selfRefCount === 0) return null;
+  if (pattern.totalCount <= 0) {
+    console.error(`[sybil] data integrity: agent ${agentId} has selfRefCount=${pattern.selfRefCount} but totalCount=${pattern.totalCount}`);
+    return {
+      type: "self_referential_payment",
+      severity: "high",
+      detail: `Data integrity anomaly: ${pattern.selfRefCount} self-referential transactions with ${pattern.totalCount} total`,
+      value: pattern.selfRefCount,
+    };
+  }
 
   const ratio = pattern.selfRefCount / pattern.totalCount;
   let severity: SybilSignal["severity"];

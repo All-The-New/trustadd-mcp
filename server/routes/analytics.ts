@@ -2,7 +2,6 @@ import type { Express } from "express";
 import { createLogger } from "../lib/logger.js";
 import { storage } from "../storage.js";
 import { pool } from "../db.js";
-import { getCommunityFeedbackScheduler, discoverAllSources } from "../community-feedback/index.js";
 import { cached, parseChainId, ANALYTICS_CACHE, ANALYTICS_TTL } from "./helpers.js";
 
 const logger = createLogger("routes:analytics");
