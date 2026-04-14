@@ -1244,10 +1244,9 @@ export class DatabaseStorage implements IStorage {
   async getTrustScoreLeaderboard(limit = 20, chainId?: number): Promise<Array<{ id: string; name: string | null; imageUrl: string | null; chainId: number; trustScore: number; trustScoreBreakdown: any; slug: string | null; primaryContractAddress: string | null; erc8004Id: string | null; description: string | null; x402Support: boolean | null; endpoints: any; qualityTier: string | null; spamFlags: any; lifecycleStatus: string | null }>> {
     const conditions = [
       isNotNull(agents.trustScore),
-      // TRUSTED verdict requires: score >= 60, high/medium tier, no spam flags, not archived
-      sql`${agents.trustScore} >= 60`,
-      inArray(agents.qualityTier, ["high", "medium"]),
-      sql`coalesce(array_length(${agents.spamFlags}, 1), 0) = 0`,
+      // Exclude UNTRUSTED: no spam/archived tier, not archived status, score >= 30
+      sql`${agents.trustScore} >= 30`,
+      sql`coalesce(${agents.qualityTier}, 'unclassified') NOT IN ('spam', 'archived')`,
       sql`coalesce(${agents.lifecycleStatus}, 'active') != 'archived'`,
     ];
     if (chainId) conditions.push(eq(agents.chainId, chainId));
@@ -1270,7 +1269,15 @@ export class DatabaseStorage implements IStorage {
       lifecycleStatus: agents.lifecycleStatus,
     }).from(agents)
       .where(and(...conditions))
-      .orderBy(sql`${agents.trustScore} DESC`)
+      // TRUSTED first (score>=60, high/medium tier, no flags), then CAUTION by score
+      .orderBy(sql`
+        CASE
+          WHEN ${agents.trustScore} >= 60
+            AND ${agents.qualityTier} IN ('high', 'medium')
+            AND coalesce(array_length(${agents.spamFlags}, 1), 0) = 0
+          THEN 0
+          ELSE 1
+        END ASC, ${agents.trustScore} DESC`)
       .limit(Math.min(limit, 100));
 
     return rows.map(r => ({ ...r, trustScore: r.trustScore! }));
