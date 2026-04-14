@@ -50,8 +50,10 @@ app.use((_req: any, res: any, next: any) => {
 
 // DB-backed rate limiting (shared across all Vercel serverless instances)
 // Admin write actions (POST): strict limit. Admin reads (GET): generous limit for dashboard use.
+// Agent list: stricter limit to prevent scraping (anti-scraping, see docs/api-tiering.md).
 app.post("/api/admin", createRateLimiter({ prefix: "admin-write", windowMs: 60 * 60 * 1000, limit: 10 }));
 app.get("/api/admin", createRateLimiter({ prefix: "admin-read", windowMs: 60 * 1000, limit: 60 }));
+app.get("/api/agents", createRateLimiter({ prefix: "agents-list", windowMs: 60 * 1000, limit: 10 }));
 app.use("/api", createRateLimiter({ prefix: "api", windowMs: 60 * 1000, limit: 100 }));
 
 // Persist API requests to DB for usage analytics

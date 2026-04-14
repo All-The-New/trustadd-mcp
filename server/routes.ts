@@ -67,32 +67,10 @@ function redactAgentForPublic(agent: Record<string, unknown>): Record<string, un
   };
 }
 
-// ─── Rate Limiting (best-effort, per-instance) ──────────────────
-// On Vercel serverless, each instance has its own Map — state is NOT shared.
-// This is a soft limit for warm instances. The DB-backed rate limiter in
-// api/[...path].ts provides the authoritative cross-instance limit.
-const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(ip: string, windowMs: number, maxRequests: number): boolean {
-  const now = Date.now();
-  const bucket = rateLimitBuckets.get(ip);
-  if (!bucket || bucket.resetAt <= now) {
-    rateLimitBuckets.set(ip, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-  bucket.count++;
-  return bucket.count <= maxRequests;
-}
-
-// Periodic cleanup of expired rate-limit buckets (every 5 min)
-setInterval(() => {
-  const now = Date.now();
-  const keys = Array.from(rateLimitBuckets.keys());
-  for (const ip of keys) {
-    const bucket = rateLimitBuckets.get(ip);
-    if (bucket && bucket.resetAt <= now) rateLimitBuckets.delete(ip);
-  }
-}, 300_000);
+// ─── Rate Limiting ───────────────────────────────────────────────
+// All rate limiting is handled by the DB-backed rate limiter in api/[...path].ts.
+// This ensures consistent enforcement across all Vercel serverless instances.
+// The per-route agents list limit (10 req/min) is also applied there.
 
 // Lightweight in-memory TTL cache for expensive query results.
 // Serverless functions are ephemeral, so memory is naturally bounded.
@@ -174,13 +152,7 @@ export async function registerRoutes(
 
   app.get("/api/agents", async (req, res) => {
     try {
-      // Rate limit: 10 requests per minute per IP
-      const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "unknown";
-      if (!checkRateLimit(`agents-list:${clientIp}`, 60_000, 10)) {
-        res.set("Retry-After", "60");
-        return res.status(429).json({ message: "Rate limit exceeded. Max 10 requests per minute." });
-      }
-
+      // Rate limit: 10 req/min enforced by DB-backed limiter in api/[...path].ts
       const limit = req.query.limit ? Math.min(Math.max(parseInt(req.query.limit as string, 10) || 20, 1), 20) : undefined;
       const offset = req.query.offset ? Math.max(parseInt(req.query.offset as string, 10) || 0, 0) : undefined;
       const search = req.query.search as string | undefined;
