@@ -17,3 +17,9 @@ Thumbs.db
 # Build artifacts
 server/public
 vite.config.ts.*
+
+# Trigger.dev build tmp
+.trigger
+
+# Superpowers session state
+.superpowers
