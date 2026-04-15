@@ -18,6 +18,8 @@ import {
 } from "./trust-score.js";
 import { computeConfidence, type ConfidenceResult } from "./trust-confidence.js";
 import { computeVerifications, type Verification } from "./trust-verifications.js";
+import { buildConfidenceInput } from "./trust-score-pipeline.js";
+import { computeDampeningMultiplier } from "./sybil-detection.js";
 import { storage } from "./storage.js";
 import { db } from "./db.js";
 import { eq, sql, lt } from "drizzle-orm";
@@ -160,8 +162,23 @@ export interface FullReportData {
   } | null;
 }
 
+// Report schema v3 (two-layer with evidenceBasis) pairs with methodology v2.
+// Schema version is independent of methodology version — bumped on any breaking shape change.
 const REPORT_VERSION = 3;
 const REPORT_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/** Normalize `agent.endpoints` (jsonb, shape varies) into an array form. */
+function normalizeEndpoints(endpoints: unknown): Array<{ name: string; url: string }> {
+  if (!endpoints) return [];
+  if (Array.isArray(endpoints)) return endpoints as Array<{ name: string; url: string }>;
+  if (typeof endpoints === "object") {
+    return Object.entries(endpoints as Record<string, any>).map(([name, url]) => ({
+      name,
+      url: typeof url === "string" ? url : JSON.stringify(url),
+    }));
+  }
+  return [];
+}
 
 const DISCLAIMER =
   "TrustAdd scores reflect available evidence as of the assessment timestamp. They are not guarantees of safety. Verify independently for high-value decisions.";
@@ -212,6 +229,7 @@ export function computeEvidenceBasis(
   agent: Pick<Agent, "name">,
 ): EvidenceBasis {
   const txCount = txStats.txCount;
+  // NOTE: v2 has attestations=0 always; branches below activate in v3.
   const attCount = attestationStats.received;
   const uniquePayers = txStats.uniquePayers;
   const uniqueAttestors = attestationStats.uniqueAttestors;
@@ -441,13 +459,15 @@ export interface CompileFullReportArgs {
   confidence: ConfidenceResult;
   evidenceBasis: EvidenceBasis;
   verifications: Verification[];
+  /** Score total BEFORE sybil dampening, for provenance on the sybil block. */
+  preDampeningTotal: number;
 }
 
 export function compileFullReport(args: CompileFullReportArgs): FullReportData {
   const {
     agent, breakdown, crossChainData, eventCount, probes,
     txStats, txReportStats, probeStats, feedback,
-    verdict, confidence, evidenceBasis, verifications,
+    verdict, confidence, evidenceBasis, verifications, preDampeningTotal,
   } = args;
 
   const ageDays = Math.floor((Date.now() - new Date(agent.createdAt).getTime()) / (1000 * 60 * 60 * 24));
@@ -468,16 +488,7 @@ export function compileFullReport(args: CompileFullReportArgs): FullReportData {
     }, [] as Array<{ address: string; network: string; token: string }>);
 
   // Normalize endpoints to array form for the report shape.
-  let endpointList: any[] = [];
-  if (agent.endpoints) {
-    if (Array.isArray(agent.endpoints)) endpointList = agent.endpoints;
-    else if (typeof agent.endpoints === "object") {
-      endpointList = Object.entries(agent.endpoints as Record<string, any>).map(([name, url]) => ({
-        name,
-        url: typeof url === "string" ? url : JSON.stringify(url),
-      }));
-    }
-  }
+  const endpointList = normalizeEndpoints(agent.endpoints);
 
   const latestProbeAt = probes.length > 0 ? probes[0].probedAt.toISOString() : null;
 
@@ -554,9 +565,7 @@ export function compileFullReport(args: CompileFullReportArgs): FullReportData {
       signals: agent.sybilSignals as any[],
       riskScore: agent.sybilRiskScore ?? 0,
       dampeningApplied: (agent.sybilRiskScore ?? 0) > 0,
-      rawScoreBeforeDampening: (agent.sybilRiskScore ?? 0) > 0
-        ? Math.round(breakdown.total / (1.0 - ((agent.sybilRiskScore ?? 0) * 0.5)))
-        : null,
+      rawScoreBeforeDampening: (agent.sybilRiskScore ?? 0) > 0 ? preDampeningTotal : null,
     } : null,
   };
 }
@@ -607,15 +616,15 @@ export async function compileAndCacheReport(agentId: string): Promise<TrustRepor
   };
 
   const rawBreakdown = calculateTrustScore(scoreInput);
+  const preDampeningTotal = rawBreakdown.total;
 
   // Apply sybil dampening using the persisted risk score from the recalc
   // pipeline. Duplicates the 3-line logic in trust-score-pipeline.ts
   // `applySybilDampening` — see that file for the authoritative version. We
   // use the persisted score here rather than re-running the analyzer so the
   // compiler stays decoupled from the sybil lookup prefetch path.
-  const { computeDampeningMultiplier } = await import("./sybil-detection.js");
   const sybilMultiplier = computeDampeningMultiplier(agent.sybilRiskScore ?? 0);
-  const dampenedTotal = Math.round(rawBreakdown.total * sybilMultiplier);
+  const dampenedTotal = Math.round(preDampeningTotal * sybilMultiplier);
   const breakdown: TrustScoreBreakdown = { ...rawBreakdown, total: dampenedTotal };
 
   // Verdict — 6-tier v2.
@@ -639,24 +648,12 @@ export async function compileAndCacheReport(agentId: string): Promise<TrustRepor
   // Evidence basis.
   const evidenceBasis = computeEvidenceBasis(txStats, attestationStats, probeStats, feedback, agent);
 
-  // Confidence — mirror the pipeline `buildConfidenceInput` shape inline so
-  // this file does not reach into the pipeline module's privates.
-  const endpointCount = agent.endpoints
-    ? Array.isArray(agent.endpoints)
-      ? agent.endpoints.length
-      : typeof agent.endpoints === "object"
-        ? Object.keys(agent.endpoints as Record<string, unknown>).length
-        : 0
-    : 0;
+  // Confidence — reuse the shared `buildConfidenceInput` helper from the
+  // pipeline so this file and the recalc path stay in lockstep. Consistency
+  // flags remain per-caller (the compiler knows about live probes/endpoints).
+  const endpointCount = normalizeEndpoints(agent.endpoints).length;
   const confidence = computeConfidence(
-    {
-      hasIdentity: !!(agent.name && agent.name.trim().length > 0),
-      hasProbes: probeStats.hasLive402 || probeStats.paymentAddressVerified,
-      hasTransactions: txStats.txCount > 0,
-      hasAttestations: attestationStats.received > 0,
-      hasGithub: (feedback?.githubHealthScore ?? 0) > 0,
-      hasFarcaster: (feedback?.farcasterScore ?? 0) > 0,
-    },
+    buildConfidenceInput(agent, txStats, probeStats, attestationStats, feedback),
     {
       x402ActiveButNoTransactions: agent.x402Support === true && txStats.txCount === 0,
       endpointsDeclaredButAllFail:
@@ -671,6 +668,7 @@ export async function compileAndCacheReport(agentId: string): Promise<TrustRepor
     agent, breakdown, crossChainData, eventCount, probes,
     txStats, txReportStats, probeStats, attestationStats,
     feedback, verdict, confidence, evidenceBasis, verifications,
+    preDampeningTotal,
   });
 
   // Patch anchor proof into provenance (if present).

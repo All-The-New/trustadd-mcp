@@ -58,7 +58,7 @@ const EMPTY_PROBE_STATS: ProbeStats = {
  * Build a `ConfidenceInput` from the raw agent-plus-stats bundle. Centralized
  * so both the single-agent and batch paths compute confidence identically.
  */
-function buildConfidenceInput(
+export function buildConfidenceInput(
   agent: Agent,
   txStats: TxStats,
   probeStats: ProbeStats,
