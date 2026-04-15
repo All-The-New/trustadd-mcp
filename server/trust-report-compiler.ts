@@ -164,7 +164,7 @@ export interface FullReportData {
 
 // Report schema v3 (two-layer with evidenceBasis) pairs with methodology v2.
 // Schema version is independent of methodology version — bumped on any breaking shape change.
-const REPORT_VERSION = 3;
+export const REPORT_VERSION = 3;
 const REPORT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 /** Normalize `agent.endpoints` (jsonb, shape varies) into an array form. */
@@ -781,7 +781,15 @@ export async function getOrCompileReport(address: string, chainId?: number): Pro
       .where(eq(trustReports.agentId, agent.id))
       .limit(1);
 
-    if (cached.length > 0 && new Date(cached[0].expiresAt) > new Date()) {
+    // Invalidate cache on both staleness AND report-version mismatch. After a
+    // methodology/report-shape bump, any cached v1/v2 blob is the wrong shape
+    // even if still within TTL — force recompile rather than return malformed
+    // data to paid x402 clients.
+    if (
+      cached.length > 0 &&
+      new Date(cached[0].expiresAt) > new Date() &&
+      cached[0].reportVersion === REPORT_VERSION
+    ) {
       return { report: cached[0], compiled: false };
     }
   } catch {}
