@@ -94,7 +94,13 @@ export interface TrustRating {
   confidence: ConfidenceResult;
   provenance: {
     signalHash: string | null;
-    methodologyVersion: number;
+    /**
+     * Methodology version that produced the persisted score — `null` when the
+     * agent has never been scored. Consumers should treat null as "report
+     * synthesized from current data but provenance not yet captured"; a
+     * non-null value always pairs with a non-null signalHash + scoredAt.
+     */
+    methodologyVersion: number | null;
     scoredAt: string | null;
     disclaimer: string;
     anchor: ProvenanceAnchor | null;
@@ -452,8 +458,6 @@ export interface CompileFullReportArgs {
     topTokens: Array<{ symbol: string; count: number; volumeUsd: number }>;
     lastTxAt: string | null;
   };
-  probeStats: ProbeStats;
-  attestationStats: AttestationStats;
   feedback: CommunityFeedbackSummary | null;
   verdict: Verdict;
   confidence: ConfidenceResult;
@@ -466,7 +470,7 @@ export interface CompileFullReportArgs {
 export function compileFullReport(args: CompileFullReportArgs): FullReportData {
   const {
     agent, breakdown, crossChainData, eventCount, probes,
-    txStats, txReportStats, probeStats, feedback,
+    txStats, txReportStats, feedback,
     verdict, confidence, evidenceBasis, verifications, preDampeningTotal,
   } = args;
 
@@ -492,9 +496,6 @@ export function compileFullReport(args: CompileFullReportArgs): FullReportData {
 
   const latestProbeAt = probes.length > 0 ? probes[0].probedAt.toISOString() : null;
 
-  // Suppress unused-variable warning while still documenting the intended wiring.
-  void probeStats;
-
   return {
     agent: {
       id: agent.id,
@@ -516,7 +517,12 @@ export function compileFullReport(args: CompileFullReportArgs): FullReportData {
       confidence,
       provenance: {
         signalHash: agent.trustSignalHash ?? null,
-        methodologyVersion: agent.trustMethodologyVersion ?? 2,
+        // Emit the methodology version ACTUALLY persisted for this agent.
+        // If never scored, stays null — don't default to current version, as
+        // that would claim provenance we don't have. Paired with signalHash +
+        // scoredAt so consumers can verify: all three non-null ⇒ fully
+        // audited; any null ⇒ incomplete provenance.
+        methodologyVersion: agent.trustMethodologyVersion ?? null,
         scoredAt: agent.trustScoreUpdatedAt?.toISOString() ?? null,
         disclaimer: DISCLAIMER,
         anchor: null,
@@ -591,7 +597,7 @@ export async function compileAndCacheReport(agentId: string): Promise<TrustRepor
     getAgentEventCount(agentId),
     getAgentProbes(agentId),
     getAgentTransactionAggregate(agentId),
-    storage.getCommunityFeedbackSummary(agentId).catch(() => null).then(v => v ?? null),
+    storage.getCommunityFeedbackSummary(agentId).then(v => v ?? null).catch(() => null),
     db.select().from(trustAnchors).where(eq(trustAnchors.agentId, agentId)).limit(1)
       .then(rows => rows[0] ?? null)
       .catch(() => null),
@@ -666,7 +672,7 @@ export async function compileAndCacheReport(agentId: string): Promise<TrustRepor
   );
   const fullReportData = compileFullReport({
     agent, breakdown, crossChainData, eventCount, probes,
-    txStats, txReportStats, probeStats, attestationStats,
+    txStats, txReportStats,
     feedback, verdict, confidence, evidenceBasis, verifications,
     preDampeningTotal,
   });

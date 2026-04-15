@@ -31,6 +31,7 @@ import {
   type TrustScoreInput,
   type TxStats,
 } from "./trust-score.js";
+import { computeDampeningMultiplier } from "./sybil-detection.js";
 import type { SybilLookups, SybilSignal } from "./sybil-detection.js";
 
 // ─── Empty fallbacks ─────────────────────────────────────────────────────────
@@ -386,30 +387,21 @@ export async function recalculateScore(
     buildConfidenceInput(agent, txStats, probeStats, attestationStats, feedback),
   );
 
-  // Apply sybil dampening (align with the batch path).
-  let breakdown = rawBreakdown;
-  let sybilSignals: SybilSignal[] | null = null;
-  let sybilRiskScore = 0;
-  try {
-    const { analyzeSybilSignals, prefetchSybilLookups } = await import(
-      "./sybil-detection.js"
-    );
-    const sybilLookups = await prefetchSybilLookups(db);
-    const dampened = applySybilDampening(
-      rawBreakdown,
-      agent,
-      sybilLookups,
-      analyzeSybilSignals,
-    );
-    breakdown = dampened.breakdown;
-    sybilSignals = dampened.sybilSignals;
-    sybilRiskScore = dampened.sybilRiskScore;
-  } catch (err) {
-    log(
-      `Sybil dampening failed for ${agentId}: ${(err as Error).message}`,
-      "trust-score",
-    );
-  }
+  // Apply sybil dampening using the PERSISTED `agent.sybilRiskScore` from the
+  // last batch run, rather than re-running the detector. This matches the
+  // approach in trust-report-compiler.ts `compileAndCacheReport` so that
+  // `agents.trustScore` and the compiled report always converge on the same
+  // dampened value. Re-running the detector would require
+  // `prefetchSybilLookups` (three full-table scans) on every event — this
+  // function is invoked fire-and-forget from the indexer per every
+  // AgentRegistered / URIUpdated / FeedbackPosted event across 9 chains.
+  //
+  // `sybilRiskScore === null` (freshly indexed agents before first batch run)
+  // yields `computeDampeningMultiplier(0) = 1.0` — a no-op. Subsequent batch
+  // runs refresh `sybil_signals` and `sybil_risk_score` authoritatively.
+  const sybilMultiplier = computeDampeningMultiplier(agent.sybilRiskScore ?? 0);
+  const dampenedTotal = Math.round(rawBreakdown.total * sybilMultiplier);
+  const breakdown: TrustScoreBreakdown = { ...rawBreakdown, total: dampenedTotal };
 
   await db
     .update(agents)
@@ -421,8 +413,6 @@ export async function recalculateScore(
       trustMethodologyVersion: METHODOLOGY_VERSION,
       confidenceScore: confidence.score,
       confidenceLevel: confidence.level,
-      sybilSignals: sybilSignals as any,
-      sybilRiskScore,
     })
     .where(eq(agents.id, agentId));
 
