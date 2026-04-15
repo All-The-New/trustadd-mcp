@@ -68,14 +68,14 @@ describe("redactAgentForPublic", () => {
       expect(redacted.verdict).toBe("TRUSTED");
     });
 
-    it("sets correct verdict for caution agent", () => {
+    it("sets correct verdict for caution agent (score 35 → INSUFFICIENT_DATA under v2)", () => {
       const redacted = redactAgentForPublic(CAUTION_AGENT as unknown as Record<string, unknown>);
-      expect(redacted.verdict).toBe("CAUTION");
+      expect(redacted.verdict).toBe("INSUFFICIENT_DATA");
     });
 
-    it("sets correct verdict for spam agent", () => {
+    it("sets correct verdict for spam agent (qualityTier='spam' → FLAGGED)", () => {
       const redacted = redactAgentForPublic(SPAM_AGENT as unknown as Record<string, unknown>);
-      expect(redacted.verdict).toBe("UNTRUSTED");
+      expect(redacted.verdict).toBe("FLAGGED");
     });
 
     it("sets UNKNOWN verdict for agent with null trustScore", () => {
