@@ -8,13 +8,15 @@ interface ScoreRailProps {
   className?: string;
 }
 
-/** Tier segment widths as percentages — matches spec §7. */
+/** Tier segment widths as percentages. BUILDING floor temporarily 20 — widths
+ * follow current v2 calibration: FLAG 0-4 | INSUFF 5-19 | BUILDING 20-59 |
+ * TRUSTED 60-79 | VERIFIED 80-100. Raise BUILDING floor with v3. */
 const TIER_SEGMENTS: Array<{ pct: number; color: string; label: string }> = [
-  { pct: 4,  color: "#ef4444", label: "FLAG" },         // FLAGGED 0-4
-  { pct: 36, color: "#a1a1aa", label: "INSUFFICIENT" }, // INSUFFICIENT 0-39 (actually 4-39, widened to 36)
-  { pct: 20, color: "#3b82f6", label: "BUILDING" },     // BUILDING 40-59
-  { pct: 20, color: "#22c55e", label: "TRUSTED" },      // TRUSTED 60-79
-  { pct: 20, color: "#10b981", label: "VERIFIED" },     // VERIFIED 80-100
+  { pct: 4,  color: "#ef4444", label: "FLAG" },
+  { pct: 16, color: "#a1a1aa", label: "INSUFFICIENT" },
+  { pct: 40, color: "#3b82f6", label: "BUILDING" },
+  { pct: 20, color: "#22c55e", label: "TRUSTED" },
+  { pct: 20, color: "#10b981", label: "VERIFIED" },
 ];
 
 /** Clamp the chip translateX so it stays in-frame near edges. */

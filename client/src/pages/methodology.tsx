@@ -59,7 +59,7 @@ const V2_TIERS = [
   },
   {
     name: "Insufficient",
-    range: "0–39",
+    range: "0–19",
     icon: CircleDot,
     color: "text-zinc-400",
     bg: "bg-zinc-500/10 border-zinc-500/30",
@@ -67,7 +67,7 @@ const V2_TIERS = [
   },
   {
     name: "Building",
-    range: "40–59",
+    range: "20–59",
     icon: TrendingUp,
     color: "text-blue-400",
     bg: "bg-blue-500/10 border-blue-500/30",

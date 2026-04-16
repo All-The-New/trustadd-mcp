@@ -207,6 +207,12 @@ export interface VerdictInput {
  * FLAGGED is reserved for ACTIVE negative evidence (spam/archived quality
  * tier, archived lifecycle, or spam flags plus a very low score). A benign
  * low-data agent at score 3 stays INSUFFICIENT — benefit of the doubt.
+ *
+ * BUILDING floor calibration (2026-04-16): floor set to 20 while the
+ * attestation pipeline is inactive and no agent in the current prod data
+ * clears 40 (max observed score is 39). Raise the floor as ecosystem
+ * activity grows — target floor=40 once attestation category lands in v3,
+ * and re-evaluate TRUSTED floor at the same time. See v3 backlog.
  */
 export function computeVerdict(input: VerdictInput): Verdict {
   const flags = input.spamFlags ?? [];
@@ -218,10 +224,10 @@ export function computeVerdict(input: VerdictInput): Verdict {
   if (status === "archived") return "FLAGGED";
   if (flags.length > 0 && input.score < 10) return "FLAGGED";
 
-  // Score-based tiers
+  // Score-based tiers — BUILDING floor temporarily 20 (see JSDoc above)
   if (input.score >= 80) return "VERIFIED";
   if (input.score >= 60) return "TRUSTED";
-  if (input.score >= 40) return "BUILDING";
+  if (input.score >= 20) return "BUILDING";
   return "INSUFFICIENT";
 }
 

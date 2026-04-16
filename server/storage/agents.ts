@@ -803,8 +803,10 @@ export async function getAnalyticsTopAgents(): Promise<{
 export async function getTrustScoreLeaderboard(limit = 20, chainId?: number): Promise<Array<{ id: string; name: string | null; imageUrl: string | null; chainId: number; trustScore: number; trustScoreBreakdown: any; slug: string | null; primaryContractAddress: string | null; erc8004Id: string | null; description: string | null; x402Support: boolean | null; endpoints: any; qualityTier: string | null; spamFlags: any; lifecycleStatus: string | null }>> {
   const conditions = [
     isNotNull(agents.trustScore),
-    // Exclude low-signal: score >= 40 (BUILDING floor per v2).
-    sql`${agents.trustScore} >= 40`,
+    // Exclude low-signal: score >= 20 (BUILDING floor — temporarily lowered
+    // from 40 while the attestation category is v3-gated; see
+    // computeVerdict() JSDoc in trust-report-compiler.ts).
+    sql`${agents.trustScore} >= 20`,
     sql`coalesce(${agents.qualityTier}, 'unclassified') NOT IN ('spam', 'archived')`,
     sql`coalesce(${agents.lifecycleStatus}, 'active') != 'archived'`,
   ];
@@ -880,7 +882,7 @@ export async function getTrustTierDistribution(): Promise<{
           WHEN coalesce(array_length(spam_flags, 1), 0) > 0 AND coalesce(trust_score, 0) < 10 THEN 'FLAGGED'
           WHEN trust_score >= 80 THEN 'VERIFIED'
           WHEN trust_score >= 60 THEN 'TRUSTED'
-          WHEN trust_score >= 40 THEN 'BUILDING'
+          WHEN trust_score >= 20 THEN 'BUILDING'
           ELSE 'INSUFFICIENT'
         END as tier,
         COUNT(*)::int as count
@@ -905,7 +907,7 @@ export async function getTrustTierDistribution(): Promise<{
         CASE
           WHEN trust_score >= 80 THEN 'VERIFIED'
           WHEN trust_score >= 60 THEN 'TRUSTED'
-          WHEN trust_score >= 40 THEN 'BUILDING'
+          WHEN trust_score >= 20 THEN 'BUILDING'
           ELSE 'INSUFFICIENT'
         END as tier,
         COUNT(*)::int as count

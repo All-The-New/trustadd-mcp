@@ -51,8 +51,8 @@ export function getMethodology(): Methodology {
     verdictThresholds: {
       VERIFIED: "score >= 80 AND no active negative evidence",
       TRUSTED: "score >= 60 AND < 80 AND no active negative evidence",
-      BUILDING: "score >= 40 AND < 60 AND no active negative evidence",
-      INSUFFICIENT: "score < 40 AND no active negative evidence",
+      BUILDING: "score >= 20 AND < 60 AND no active negative evidence (floor temporarily 20; raise with v3 attestation)",
+      INSUFFICIENT: "score < 20 AND no active negative evidence",
       FLAGGED: "tier in (spam, archived) OR lifecycleStatus = archived OR (spam_flags present AND score < 10)",
       UNKNOWN: "Score has not yet been calculated (API-only; UI renders as INSUFFICIENT with '—')",
     },
@@ -270,6 +270,12 @@ export function getMethodology(): Methodology {
         date: "2026-04-16",
         summary:
           "Consolidated verdict tiers from 6 to 5 (removed UNVERIFIED, renamed INSUFFICIENT_DATA → INSUFFICIENT). Added qualitative categoryStrengths output exposing Identity / Behavioral / Community / Attestation / Authenticity tiers on the free API surface while keeping raw category numerics gated behind the Full Report.",
+      },
+      {
+        version: 2,
+        date: "2026-04-16",
+        summary:
+          "BUILDING floor calibrated to 20 while the attestation category (max 25 pts) remains inactive pending v3. Current effective score ceiling is ~40 in production. Floor will raise to 40 once attestation is live.",
       },
     ],
     disclaimer:

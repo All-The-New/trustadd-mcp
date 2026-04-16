@@ -47,8 +47,14 @@ describe("computeVerdict", () => {
     });
   });
 
-  describe("BUILDING (40-59)", () => {
-    it("returns BUILDING at boundary 40", () => {
+  describe("BUILDING (20-59)", () => {
+    it("returns BUILDING at boundary 20", () => {
+      expect(verdict(20, { qualityTier: "low" })).toBe("BUILDING");
+    });
+    it("returns BUILDING at 39", () => {
+      expect(verdict(39, { qualityTier: "low" })).toBe("BUILDING");
+    });
+    it("returns BUILDING at 40", () => {
       expect(verdict(40, { qualityTier: "low" })).toBe("BUILDING");
     });
     it("returns BUILDING at 59", () => {
@@ -56,18 +62,15 @@ describe("computeVerdict", () => {
     });
   });
 
-  describe("INSUFFICIENT (0-39)", () => {
+  describe("INSUFFICIENT (0-19)", () => {
     it("returns INSUFFICIENT at boundary 0", () => {
       expect(verdict(0, { qualityTier: "low" })).toBe("INSUFFICIENT");
     });
     it("returns INSUFFICIENT at 5", () => {
       expect(verdict(5, { qualityTier: "low" })).toBe("INSUFFICIENT");
     });
-    it("returns INSUFFICIENT at 20", () => {
-      expect(verdict(20, { qualityTier: "low" })).toBe("INSUFFICIENT");
-    });
-    it("returns INSUFFICIENT at 39 (upper boundary)", () => {
-      expect(verdict(39, { qualityTier: "low" })).toBe("INSUFFICIENT");
+    it("returns INSUFFICIENT at 19 (upper boundary)", () => {
+      expect(verdict(19, { qualityTier: "low" })).toBe("INSUFFICIENT");
     });
   });
 
@@ -92,11 +95,14 @@ describe("computeVerdict", () => {
       expect(verdict(3, { spamFlags: [] })).toBe("INSUFFICIENT");
       expect(verdict(0, { spamFlags: [] })).toBe("INSUFFICIENT");
     });
-    it("does NOT return FLAGGED for score >= 10 with spam flags", () => {
+    it("does NOT return FLAGGED for score >= 10 with spam flags (lands INSUFFICIENT below 20)", () => {
       expect(verdict(15, { spamFlags: ["test_agent"] })).toBe("INSUFFICIENT");
     });
     it("does NOT return FLAGGED for score exactly 10 with spam flags", () => {
       expect(verdict(10, { spamFlags: ["test_agent"] })).toBe("INSUFFICIENT");
+    });
+    it("does NOT return FLAGGED for score >= 20 with spam flags (lands BUILDING)", () => {
+      expect(verdict(25, { spamFlags: ["test_agent"] })).toBe("BUILDING");
     });
   });
 
