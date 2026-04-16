@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Shield, Bot, BarChart3, ChevronDown, Zap, Info, BookOpen, Layers, Activity, ShieldCheck, Sparkles, Store, Coins, FlaskConical, Scale } from "lucide-react";
+import { Shield, Bot, BarChart3, ChevronDown, Zap, Info, BookOpen, Layers, Activity, ShieldCheck, Sparkles, Store, Coins, FlaskConical, Scale, Network } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "./theme-toggle";
 
-const analyticsRoutes = ["/analytics", "/economy", "/skills", "/bazaar", "/status"];
+const analyticsRoutes = ["/analytics", "/economy", "/skills", "/bazaar", "/mpp", "/status"];
 const aboutRoutes = ["/about", "/protocols", "/api-docs", "/methodology", "/principles", "/quality"];
 
 export function Header() {
@@ -90,6 +90,14 @@ export function Header() {
                   Bazaar
                 </DropdownMenuItem>
               </Link>
+              {import.meta.env.VITE_ENABLE_MPP_UI === "true" && (
+                <Link href="/mpp">
+                  <DropdownMenuItem className="gap-2 cursor-pointer">
+                    <Network className="w-4 h-4" />
+                    MPP
+                  </DropdownMenuItem>
+                </Link>
+              )}
               <Link href="/status">
                 <DropdownMenuItem className="gap-2 cursor-pointer">
                   <Activity className="w-4 h-4" />
