@@ -803,8 +803,8 @@ export async function getAnalyticsTopAgents(): Promise<{
 export async function getTrustScoreLeaderboard(limit = 20, chainId?: number): Promise<Array<{ id: string; name: string | null; imageUrl: string | null; chainId: number; trustScore: number; trustScoreBreakdown: any; slug: string | null; primaryContractAddress: string | null; erc8004Id: string | null; description: string | null; x402Support: boolean | null; endpoints: any; qualityTier: string | null; spamFlags: any; lifecycleStatus: string | null }>> {
   const conditions = [
     isNotNull(agents.trustScore),
-    // Exclude UNTRUSTED: no spam/archived tier, not archived status, score >= 30
-    sql`${agents.trustScore} >= 30`,
+    // Exclude low-signal: score >= 40 (BUILDING floor per v2).
+    sql`${agents.trustScore} >= 40`,
     sql`coalesce(${agents.qualityTier}, 'unclassified') NOT IN ('spam', 'archived')`,
     sql`coalesce(${agents.lifecycleStatus}, 'active') != 'archived'`,
   ];
