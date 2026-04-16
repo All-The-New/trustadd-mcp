@@ -19,10 +19,11 @@ import {
   Star,
   Trophy,
   Clock,
+  Zap,
 } from "lucide-react";
 
 const featureIcons = { Layers, Shield, Bot } as const;
-const pillarIcons = { Shield, Star, Eye } as const;
+const pillarIcons = { Shield, Star, Eye, Zap } as const;
 
 type AgentsResponse = {
   agents: AgentWithVerdict[];
@@ -222,7 +223,7 @@ export default function Landing() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {HOME.pillars.items.map((pillar) => {
             const Icon = pillarIcons[pillar.icon];
             const badgeClass =
