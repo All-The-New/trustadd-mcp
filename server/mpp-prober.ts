@@ -273,11 +273,7 @@ export async function probeAgentForMpp(agentId: string): Promise<number> {
     probed++;
 
     if (result.hasMpp && result.tempoAddress) {
-      await storage.upsertTransactionSyncState({
-        paymentAddress: result.tempoAddress,
-        chainId: TEMPO_CHAIN_ID,
-        lastSyncedBlock: 0,
-      });
+      await storage.upsertTransactionSyncState(result.tempoAddress, TEMPO_CHAIN_ID, 0);
       log.info(`MPP endpoint for ${agent.name || agentId}: tempo=${result.tempoAddress}`);
     }
 

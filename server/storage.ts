@@ -22,11 +22,19 @@ import {
   type InsertBazaarService,
   type BazaarSnapshot,
   type InsertBazaarSnapshot,
+  type MppDirectoryService,
+  type InsertMppDirectoryService,
+  type MppDirectorySnapshot,
+  type InsertMppDirectorySnapshot,
+  type MppProbe,
+  type InsertMppProbe,
+  type TransactionSyncState,
 } from "../shared/schema.js";
 import * as agentQueries from "./storage/agents.js";
 import * as indexerQueries from "./storage/indexer.js";
 import * as feedbackQueries from "./storage/feedback.js";
 import * as analyticsQueries from "./storage/analytics.js";
+import * as mppQueries from "./storage/mpp.js";
 
 export interface AgentQueryOptions {
   limit?: number;
@@ -228,6 +236,25 @@ export interface IStorage {
   getBazaarSnapshots(limit?: number): Promise<BazaarSnapshot[]>;
   createBazaarSnapshot(data: InsertBazaarSnapshot): Promise<BazaarSnapshot>;
   getBazaarTopServices(limit?: number): Promise<BazaarService[]>;
+
+  // --- MPP (Machine Payments Protocol) ---
+  upsertMppDirectoryService(record: InsertMppDirectoryService): Promise<void>;
+  markMppServicesInactive(beforeDate: Date): Promise<number>;
+  listMppServices(options?: { limit?: number; offset?: number; category?: string; paymentMethod?: string; search?: string }): Promise<{ services: MppDirectoryService[]; total: number }>;
+  getMppDirectoryStats(): Promise<Awaited<ReturnType<typeof mppQueries.getMppDirectoryStats>>>;
+  createMppSnapshot(record: InsertMppDirectorySnapshot): Promise<void>;
+  getMppDirectoryTrends(days?: number): Promise<any[]>;
+  createMppProbe(record: InsertMppProbe): Promise<void>;
+  getRecentMppProbeForEndpoint(agentId: string, endpointUrl: string): Promise<MppProbe | undefined>;
+  getStaleMppProbeAgentIds(staleHours: number): Promise<string[]>;
+  getMppProbeStats(): Promise<{ foundMpp: number; tempoAddresses: number }>;
+  getTransactionSyncStatesForChain(chainId: number): Promise<TransactionSyncState[]>;
+  updateTransactionSyncState(paymentAddress: string, chainId: number, lastSyncedBlock: number): Promise<void>;
+  upsertAgentTransaction(record: InsertAgentTransaction): Promise<void>;
+  getAgentByTempoAddress(address: string): Promise<Agent | undefined>;
+  getMultiProtocolAgentIds(): Promise<string[]>;
+  getMppAdoptionStats(): Promise<{ mpp: number; x402: number; both: number }>;
+  getMppTempoChainStats(): Promise<{ volume: number; txCount: number; uniquePayers: number; activeRecipients: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -331,6 +358,25 @@ export class DatabaseStorage implements IStorage {
   getBazaarSnapshots(limit?: number) { return analyticsQueries.getBazaarSnapshots(limit); }
   createBazaarSnapshot(data: InsertBazaarSnapshot) { return analyticsQueries.createBazaarSnapshot(data); }
   getBazaarTopServices(limit?: number) { return analyticsQueries.getBazaarTopServices(limit); }
+
+  // --- MPP (Machine Payments Protocol) ---
+  upsertMppDirectoryService(record: InsertMppDirectoryService) { return mppQueries.upsertMppDirectoryService(record); }
+  markMppServicesInactive(beforeDate: Date) { return mppQueries.markMppServicesInactive(beforeDate); }
+  listMppServices(options?: { limit?: number; offset?: number; category?: string; paymentMethod?: string; search?: string }) { return mppQueries.listMppServices(options); }
+  getMppDirectoryStats() { return mppQueries.getMppDirectoryStats(); }
+  createMppSnapshot(record: InsertMppDirectorySnapshot) { return mppQueries.createMppSnapshot(record); }
+  getMppDirectoryTrends(days?: number) { return mppQueries.getMppDirectoryTrends(days); }
+  createMppProbe(record: InsertMppProbe) { return mppQueries.createMppProbe(record); }
+  getRecentMppProbeForEndpoint(agentId: string, endpointUrl: string) { return mppQueries.getRecentMppProbeForEndpoint(agentId, endpointUrl); }
+  getStaleMppProbeAgentIds(staleHours: number) { return mppQueries.getStaleMppProbeAgentIds(staleHours); }
+  getMppProbeStats() { return mppQueries.getMppProbeStats(); }
+  getTransactionSyncStatesForChain(chainId: number) { return mppQueries.getTransactionSyncStatesForChain(chainId); }
+  updateTransactionSyncState(paymentAddress: string, chainId: number, lastSyncedBlock: number) { return mppQueries.updateTransactionSyncState(paymentAddress, chainId, lastSyncedBlock); }
+  upsertAgentTransaction(record: InsertAgentTransaction) { return mppQueries.upsertAgentTransaction(record); }
+  getAgentByTempoAddress(address: string) { return mppQueries.getAgentByTempoAddress(address); }
+  getMultiProtocolAgentIds() { return mppQueries.getMultiProtocolAgentIds(); }
+  getMppAdoptionStats() { return mppQueries.getMppAdoptionStats(); }
+  getMppTempoChainStats() { return mppQueries.getMppTempoChainStats(); }
 }
 
 export const storage = new DatabaseStorage();
