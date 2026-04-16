@@ -350,4 +350,57 @@ export function registerAdminRoutes(app: Express): void {
       res.status(500).json({ error: "Failed to fetch audit log" });
     }
   });
+
+  app.post("/api/admin/mpp/probe-all", requireAdmin(), async (_req, res) => {
+    try {
+      res.json({ message: "MPP probe started", status: "running" });
+      const { probeAllAgentsForMpp } = await import("../mpp-prober.js");
+      probeAllAgentsForMpp().catch((err) =>
+        logger.error("Manual MPP probe failed", { error: (err as Error).message }),
+      );
+    } catch (err) {
+      res.status(500).json({ error: "Failed to start MPP probe" });
+    }
+  });
+
+  app.post("/api/admin/mpp/index-directory", requireAdmin(), async (_req, res) => {
+    try {
+      res.json({ message: "MPP directory index started", status: "running" });
+      (async () => {
+        const { createDirectorySource } = await import("../mpp-directory.js");
+        const mode = (process.env.MPP_DIRECTORY_SOURCE as "api" | "scrape" | "auto") || "auto";
+        const source = createDirectorySource(mode);
+        const services = await source.fetchServices();
+        for (const s of services) {
+          await storage.upsertMppDirectoryService({
+            serviceUrl: s.serviceUrl,
+            serviceName: s.serviceName,
+            providerName: s.providerName,
+            description: s.description,
+            category: s.category,
+            pricingModel: s.pricingModel,
+            priceAmount: s.priceAmount,
+            priceCurrency: s.priceCurrency,
+            paymentMethods: s.paymentMethods as any,
+            recipientAddress: s.recipientAddress,
+            metadata: s.metadata,
+          });
+        }
+      })().catch((err) => logger.error("Manual directory index failed", { error: (err as Error).message }));
+    } catch (err) {
+      res.status(500).json({ error: "Failed to start directory index" });
+    }
+  });
+
+  app.post("/api/admin/mpp/index-tempo", requireAdmin(), async (_req, res) => {
+    try {
+      res.json({ message: "Tempo sync started", status: "running" });
+      const { syncAllTempoTransactions } = await import("../tempo-transaction-indexer.js");
+      syncAllTempoTransactions().catch((err) =>
+        logger.error("Manual Tempo sync failed", { error: (err as Error).message }),
+      );
+    } catch (err) {
+      res.status(500).json({ error: "Failed to start Tempo sync" });
+    }
+  });
 }
