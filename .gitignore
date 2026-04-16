@@ -14,6 +14,8 @@
 .superpowers/
 .trigger
 .vercel
+.worktrees
+.worktrees/
 Thumbs.db
 dist
 node_modules
