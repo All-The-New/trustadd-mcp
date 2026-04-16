@@ -383,6 +383,171 @@ function TrendCharts() {
   );
 }
 
+// --- Directory table ---
+
+interface MppServiceRow {
+  id: number;
+  serviceUrl: string;
+  serviceName: string | null;
+  providerName: string | null;
+  description: string | null;
+  category: string;
+  pricingModel: string | null;
+  priceAmount: string | null;
+  priceCurrency: string | null;
+  paymentMethods: Array<{ method: string; currency?: string; recipient?: string }>;
+  recipientAddress: string | null;
+  isActive: boolean;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+interface MppServicesResponse {
+  services: MppServiceRow[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+const PAGE_SIZE = 25;
+
+function formatPrice(amount: string | null): string {
+  if (!amount) return "—";
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return amount;
+  if (n < 0.001) return `$${n.toFixed(6)}`;
+  if (n < 0.01) return `$${n.toFixed(4)}`;
+  if (n < 1) return `$${n.toFixed(3)}`;
+  return `$${n.toFixed(2)}`;
+}
+
+function DirectoryTable() {
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDeferredValue(searchInput);
+  const [category, setCategory] = useState<string>("");
+  const [paymentMethod, setPaymentMethod] = useState<string>("");
+  const [page, setPage] = useState(1);
+
+  const { data, isLoading, isError } = useQuery<MppServicesResponse>({
+    queryKey: ["/api/mpp/directory/services", { category, paymentMethod, search, page }],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (category) params.set("category", category);
+      if (paymentMethod) params.set("paymentMethod", paymentMethod);
+      if (search) params.set("search", search);
+      params.set("page", String(page));
+      params.set("limit", String(PAGE_SIZE));
+      return fetch(`/api/mpp/directory/services?${params}`).then((r) => r.json());
+    },
+  });
+
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">MPP Directory</CardTitle>
+        <div className="flex flex-wrap gap-2 mt-2">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search services…"
+              value={searchInput}
+              onChange={(e) => { setSearchInput(e.target.value); setPage(1); }}
+              className="pl-8 h-9"
+            />
+          </div>
+          <select
+            value={category}
+            onChange={(e) => { setCategory(e.target.value); setPage(1); }}
+            className="h-9 rounded-md border bg-background px-2 text-sm"
+            data-testid="filter-mpp-category"
+          >
+            <option value="">All categories</option>
+            {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <select
+            value={paymentMethod}
+            onChange={(e) => { setPaymentMethod(e.target.value); setPage(1); }}
+            className="h-9 rounded-md border bg-background px-2 text-sm"
+            data-testid="filter-mpp-payment"
+          >
+            <option value="">Any payment</option>
+            <option value="tempo">Tempo</option>
+            <option value="stripe">Stripe</option>
+            <option value="lightning">Lightning</option>
+          </select>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-10" />)}</div>
+        ) : isError ? (
+          <ChartError message="Failed to load services" />
+        ) : !data?.services.length ? (
+          <EmptyState message={search || category || paymentMethod ? "No services match your filters." : "No services indexed yet."} />
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground uppercase tracking-wide">
+                    <th className="py-2 pr-3 font-medium">Service</th>
+                    <th className="py-2 px-3 font-medium">Provider</th>
+                    <th className="py-2 px-3 font-medium">Category</th>
+                    <th className="py-2 px-3 font-medium">Payment</th>
+                    <th className="py-2 px-3 font-medium text-right">Price</th>
+                    <th className="py-2 pl-3 font-medium text-right">Last Seen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.services.map((s) => (
+                    <tr key={s.id} className="border-b last:border-0 hover:bg-muted/30">
+                      <td className="py-2 pr-3">
+                        <a href={s.serviceUrl} target="_blank" rel="noopener noreferrer" className="font-medium hover:underline">
+                          {s.serviceName ?? s.serviceUrl}
+                        </a>
+                      </td>
+                      <td className="py-2 px-3 text-muted-foreground">{s.providerName ?? "—"}</td>
+                      <td className="py-2 px-3">
+                        <Badge variant="outline" className="text-xs" style={{ borderColor: CATEGORY_COLORS[s.category] ?? CATEGORY_COLORS.other, color: CATEGORY_COLORS[s.category] ?? CATEGORY_COLORS.other }}>
+                          {CATEGORY_LABELS[s.category] ?? s.category}
+                        </Badge>
+                      </td>
+                      <td className="py-2 px-3 space-x-1">
+                        {s.paymentMethods.map((p, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs">{p.method}</Badge>
+                        ))}
+                      </td>
+                      <td className="py-2 px-3 text-right">{formatPrice(s.priceAmount)}</td>
+                      <td className="py-2 pl-3 text-right text-muted-foreground">
+                        {new Date(s.lastSeenAt).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between mt-4 text-sm">
+              <span className="text-muted-foreground">
+                Page {page} of {totalPages} · {data.total} total
+              </span>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // --- Page ---
 
 export default function MppPage() {
@@ -397,6 +562,7 @@ export default function MppPage() {
         <HeroStats />
         <BreakdownCharts />
         <TrendCharts />
+        <DirectoryTable />
         {/* Sections added in Tasks 6-12 */}
       </div>
     </Layout>
