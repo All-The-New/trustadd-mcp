@@ -28,19 +28,18 @@ import { log } from "./lib/log.js";
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 /**
- * 6-tier verdict (methodology v2).
+ * 5-tier verdict (methodology v2, consolidated from the earlier 6-tier).
  *
  * UPPERCASE in memory and in the JSON blobs. The `verdict` column in
  * `trust_reports` is lowercased at write time for backward compatibility
  * with existing SQL aggregation queries.
  */
 export type Verdict =
-  | "VERIFIED"           // 80-100
-  | "TRUSTED"            // 60-79
-  | "BUILDING"           // 40-59
-  | "INSUFFICIENT_DATA"  // 20-39
-  | "UNVERIFIED"         // 5-19 (and default for 0-4 without active negative evidence)
-  | "FLAGGED";           // only when active negative evidence present
+  | "VERIFIED"       // 80-100
+  | "TRUSTED"        // 60-79
+  | "BUILDING"       // 40-59
+  | "INSUFFICIENT"   // 0-39 (absorbs the old UNVERIFIED + INSUFFICIENT_DATA)
+  | "FLAGGED";       // only when active negative evidence present
 
 /** Evidence basis — "how much do we know" companion to the score. */
 export interface EvidenceBasis {
@@ -189,7 +188,7 @@ function normalizeEndpoints(endpoints: unknown): Array<{ name: string; url: stri
 const DISCLAIMER =
   "TrustAdd scores reflect available evidence as of the assessment timestamp. They are not guarantees of safety. Verify independently for high-value decisions.";
 
-// ─── Verdict logic (6-tier, v2) ──────────────────────────────────────────────
+// ─── Verdict logic (5-tier, v2) ──────────────────────────────────────────────
 
 export interface VerdictInput {
   score: number;
@@ -199,11 +198,11 @@ export interface VerdictInput {
 }
 
 /**
- * Compute a 6-tier verdict from score + active-negative-evidence signals.
+ * Compute a 5-tier verdict from score + active-negative-evidence signals.
  *
  * FLAGGED is reserved for ACTIVE negative evidence (spam/archived quality
  * tier, archived lifecycle, or spam flags plus a very low score). A benign
- * low-data agent at score 3 stays UNVERIFIED — benefit of the doubt.
+ * low-data agent at score 3 stays INSUFFICIENT — benefit of the doubt.
  */
 export function computeVerdict(input: VerdictInput): Verdict {
   const flags = input.spamFlags ?? [];
@@ -219,10 +218,7 @@ export function computeVerdict(input: VerdictInput): Verdict {
   if (input.score >= 80) return "VERIFIED";
   if (input.score >= 60) return "TRUSTED";
   if (input.score >= 40) return "BUILDING";
-  if (input.score >= 20) return "INSUFFICIENT_DATA";
-  if (input.score >= 5) return "UNVERIFIED";
-  // 0-4 without active negative evidence → benefit of the doubt
-  return "UNVERIFIED";
+  return "INSUFFICIENT";
 }
 
 // ─── Evidence basis ──────────────────────────────────────────────────────────
