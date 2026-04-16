@@ -271,7 +271,8 @@ describe("sybil dampening integration", () => {
     });
     expect(rawVerdict).toBe("BUILDING");
 
-    // After 50% dampening → score 23 → INSUFFICIENT (0-39 under v2 consolidation).
+    // After 50% dampening → score 23 → BUILDING (20-59 under current v2 calibration,
+    // BUILDING floor temporarily 20; see computeVerdict JSDoc).
     const dampenedScore = Math.round(45 * 0.5);
     const dampenedVerdict = computeVerdict({
       score: dampenedScore,
@@ -279,7 +280,7 @@ describe("sybil dampening integration", () => {
       spamFlags: [],
       lifecycleStatus: "active",
     });
-    expect(dampenedVerdict).toBe("INSUFFICIENT");
+    expect(dampenedVerdict).toBe("BUILDING");
   });
 
   it("solo controller agent is not dampened", () => {

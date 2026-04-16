@@ -25,15 +25,16 @@ const TRUSTED: VerdictDescriptor = {
   color: "#22c55e", tintBg: "rgba(34, 197, 94, 0.14)",
   icon: CheckCircle, minScore: 60, maxScore: 79,
 };
+// BUILDING floor temporarily 20 (see computeVerdict JSDoc, raise with v3).
 const BUILDING: VerdictDescriptor = {
   tier: "BUILDING", label: "BUILDING", shortLabel: "BUILDING",
   color: "#3b82f6", tintBg: "rgba(59, 130, 246, 0.14)",
-  icon: TrendingUp, minScore: 40, maxScore: 59,
+  icon: TrendingUp, minScore: 20, maxScore: 59,
 };
 const INSUFFICIENT: VerdictDescriptor = {
   tier: "INSUFFICIENT", label: "INSUFFICIENT", shortLabel: "INSUFF",
   color: "#a1a1aa", tintBg: "rgba(161, 161, 170, 0.14)",
-  icon: CircleDot, minScore: 0, maxScore: 39,
+  icon: CircleDot, minScore: 0, maxScore: 19,
 };
 const FLAGGED: VerdictDescriptor = {
   tier: "FLAGGED", label: "FLAGGED", shortLabel: "FLAG",
