@@ -69,27 +69,45 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - `api/health.ts` — Standalone health check with DB connection test
 - `server/lib/request-logger.ts` — Fire-and-forget API request logging middleware (path normalization, 90-day stochastic cleanup)
 - `trigger/` — 11 Trigger.dev tasks: `blockchain-indexer` (orchestrator, */2 cron) → `chain-indexer` (per-chain child, 2 cycles + 90s checkpointed wait), `community-feedback` (orchestrator, daily 4am) → `community-scrape` (per-platform child), `transaction-indexer`, `x402-prober`, `recalculate-scores` (scores + sybil dampening + slugs + classification + report recompilation) → `anchor-scores` (Merkle root publish on Base, fire-and-forget child), `watchdog`, `bazaar-indexer`, + `alert` helper
-- `server/trust-score.ts` — Trust scoring engine (17-signal explainability, provenance hash, confidence integration)
-- `server/trust-provenance.ts` — Signal provenance hashing (SHA-256 of canonical scoring inputs, METHODOLOGY_VERSION)
-- `server/trust-confidence.ts` — Confidence level computation (source coverage weighting, consistency flags)
-- `server/trust-methodology.ts` — Public methodology definition (scoring rubric as JSON)
+- `server/trust-score.ts` — Trust scoring engine (5 categories, 21 signals, centralized thresholds, pure — no DB imports)
+- `server/trust-score-pipeline.ts` — DB orchestration: prefetchers, batch updates, recalc entry points (splits pipeline from pure scorer)
+- `server/trust-categories.ts` — `deriveCategoryStrengths()` — maps internal 5-category breakdown + sybilRiskScore to public `{identity, behavioral, community, attestation, authenticity}` qualitative tiers
+- `server/trust-verifications.ts` — 9-verifications Layer 2 (Multi-Chain, x402 Enabled, GitHub/Farcaster Connected, IPFS, OASF, Early Adopter, Active Maintainer, First Transaction) — pure function, does NOT affect score
+- `server/trust-provenance.ts` — Signal provenance hashing (SHA-256 of canonical scoring inputs, METHODOLOGY_VERSION=2)
+- `server/trust-confidence.ts` — Confidence level computation (6 sources weighted to sum 1.0, consistency flags)
+- `server/trust-methodology.ts` — Public methodology JSON (5-tier verdictThresholds, v2 changelog)
 - `server/pipeline-health.ts` — Pipeline health tracking with circuit breakers (dynamic imports for Trigger.dev compat)
-- `server/trust-report-compiler.ts` — Trust report compiler v2 (verdict logic, provenance, confidence, sybil, address resolution, cache)
-- `server/sybil-detection.ts` — Sybil detection module (4 signal detectors, risk scoring, dampening multiplier, SQL prefetcher)
+- `server/trust-report-compiler.ts` — Trust report compiler v4 (5-tier `computeVerdict`, two-layer shape, `categoryStrengths` field, provenance, confidence, sybil dampening)
+- `server/sybil-detection.ts` — Sybil detection module (4 signal detectors, risk scoring 0-1, dampening multiplier, SQL prefetcher)
 - `server/lib/x402-gate.ts` — x402 payment middleware for Trust Data Product (CDP facilitator on Base)
 - `docs/trust-product.md` — Trust Data Product specification (tiers, pricing, verdict logic, payment flow)
 - `docs/api-tiering.md` — API tiering architecture: free ecosystem analytics vs x402-gated trust intelligence
 - `docs/trust-api.yaml` — OpenAPI 3.1 spec for Trust API v1 endpoints
+- `docs/tier-calibration.md` — Current verdict thresholds, rationale for temporary BUILDING floor=20, conditions for re-raising, full change checklist
+- `docs/smoke-checklist-methodology-v2.md` — Pre-deploy smoke checklist for methodology v2 surfaces
 - `script/sync-trigger-env.ts` — Env var sync script for Trigger.dev (manual run)
 - `server/lib/admin-auth.ts` — Cookie-based admin auth (HMAC tokens, IP whitelist, session middleware)
 - `client/src/components/admin-layout.tsx` — Admin shell with nav, session guard, logout
 - `client/src/pages/admin/*.tsx` — 6 admin pages: login, dashboard, usage, status-details, tasks, audit-log
 - `vercel.json` — Vercel routing and build configuration
-- `client/src/lib/content-zones.ts` — Centralized copy for all public pages (all marketing/positioning text)
-- `client/src/pages/trust-api.tsx` — Trust API product page (pricing, live demo, x402 flow, integration guide)
-- `client/src/pages/methodology.tsx` — Scoring methodology page (5 categories, weights, signals, verdict thresholds, data sources)
+- `client/src/lib/content-zones.ts` — Centralized copy for all public pages (marketing, pillars, METHODOLOGY categories, verdict list)
+- `client/src/lib/verdict.ts` — Single source of truth for 5-tier `VerdictDescriptor` (color, icon, label, shortLabel, score range). Imported by every stamp/badge/strip
+- `client/src/lib/address-color.ts` — `addressToColor()` + `addressToGradientPair()` shared helpers
+- `client/src/components/trust-stamp.tsx` — `<TrustStamp />` 3 sizes (hero 340×101 / square 64×64 / chip 32px-tall), null-score renders INSUFFICIENT + `—`
+- `client/src/components/verification-chips.tsx` — Priority-ordered chip row with pure `computeVisibleCount()` + useLayoutEffect ResizeObserver overflow
+- `client/src/components/score-rail.tsx` — Segmented-bar gauge with floating chip (segment widths: 4/16/40/20/20 — reflects current BUILDING floor=20)
+- `client/src/components/category-bars.tsx` — 5 qualitative bars (Identity/Behavioral/Community/Attestation/Authenticity) driven by `categoryStrengths`
+- `client/src/components/zone-card.tsx` — Wrapper enforcing earned/populated/empty states with 3px left-border + status-tag
+- `client/src/components/chain-badge.tsx` — Chain badge with `short` variant (`⬡ 5c`) and `extraChainCount` prop
+- `client/src/pages/agent-profile.tsx` — Agent profile shell: banner + 5-tab scaffold (split into `agent-profile/` subdirectory)
+- `client/src/pages/agent-profile/` — 6 component files: `banner.tsx`, `overview-tab.tsx`, `score-tab.tsx`, `on-chain-tab.tsx`, `community-tab.tsx`, `history-tab.tsx`
+- `client/src/pages/trust-api.tsx` — Trust API product page (5-tier verdict, pricing, live demo with mini stamp, x402 flow, JSON examples, integration guide)
+- `client/src/pages/methodology.tsx` — Scoring methodology page (5 categories, 21 signals, 5-tier table, data sources, new `<EcosystemDistribution />` section)
+- `client/src/pages/analytics.tsx` — Analytics dashboard (includes 5-tier strip + 10-bucket histogram driven by `/api/analytics/trust-tiers`)
 - `client/src/pages/principles.tsx` — Design principles page (10 principles distilled from trust oracle research)
 - `client/src/App.tsx` — React routing (21 pages: 15 public + 6 admin)
+- `vitest.config.ts` — Node-env test suite (278 tests: trust scoring, verdict, sybil, confidence, category-strengths, free-tier, provenance, …)
+- `vitest.browser.config.ts` — jsdom-env test suite for `__tests__/browser/*.browser.test.tsx` (20 tests: TrustStamp, VerificationChips, ScoreRail). Run via `npm run test:browser`
 
 ## Required Environment Variables
 
