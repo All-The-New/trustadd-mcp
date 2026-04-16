@@ -548,6 +548,46 @@ function DirectoryTable() {
   );
 }
 
+// --- Top providers ---
+
+interface TopProviderRow {
+  provider_name: string;
+  service_count: number;
+}
+
+function TopProviders() {
+  const { data, isLoading, isError } = useQuery<TopProviderRow[]>({
+    queryKey: ["/api/mpp/directory/top-providers"],
+  });
+
+  return (
+    <Card>
+      <CardHeader className="pb-2"><CardTitle className="text-base">Top Providers</CardTitle></CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-8" />)}</div>
+        ) : isError ? (
+          <ChartError message="Failed to load top providers" />
+        ) : !data?.length ? (
+          <EmptyState message="No provider data yet." />
+        ) : (
+          <ol className="space-y-2">
+            {data.slice(0, 10).map((p, idx) => (
+              <li key={p.provider_name} className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-3">
+                  <span className="w-6 text-right text-muted-foreground tabular-nums">{idx + 1}.</span>
+                  <span className="font-medium">{p.provider_name}</span>
+                </span>
+                <Badge variant="secondary">{p.service_count} services</Badge>
+              </li>
+            ))}
+          </ol>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // --- Page ---
 
 export default function MppPage() {
@@ -563,6 +603,7 @@ export default function MppPage() {
         <BreakdownCharts />
         <TrendCharts />
         <DirectoryTable />
+        <TopProviders />
         {/* Sections added in Tasks 6-12 */}
       </div>
     </Layout>
