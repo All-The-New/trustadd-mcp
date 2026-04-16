@@ -8,6 +8,14 @@ const logger = createLogger("routes:mpp");
 // Feature flag: skip entirely if MPP UI is not enabled
 const ENABLE_MPP = process.env.ENABLE_MPP_UI === "true";
 
+/** Parse a positive integer from a query param with fallback. Clamps to [min, max]. */
+function parsePositiveInt(raw: unknown, fallback: number, min: number, max: number): number {
+  if (raw === undefined || raw === null || raw === "") return fallback;
+  const n = parseInt(String(raw), 10);
+  if (Number.isNaN(n) || !Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(n, max));
+}
+
 export function registerMppRoutes(app: Express): void {
   if (!ENABLE_MPP) {
     logger.info("MPP routes not registered (ENABLE_MPP_UI!=true)");
@@ -29,8 +37,8 @@ export function registerMppRoutes(app: Express): void {
 
   app.get("/api/mpp/directory/services", async (req, res) => {
     try {
-      const page = parseInt((req.query.page as string) || "1", 10);
-      const limit = Math.min(parseInt((req.query.limit as string) || "50", 10), 200);
+      const page = parsePositiveInt(req.query.page, 1, 1, 100_000);
+      const limit = parsePositiveInt(req.query.limit, 50, 1, 200);
       const offset = (page - 1) * limit;
 
       const result = await storage.listMppServices({
@@ -50,7 +58,7 @@ export function registerMppRoutes(app: Express): void {
 
   app.get("/api/mpp/directory/trends", async (req, res) => {
     try {
-      const days = Math.min(parseInt((req.query.days as string) || "30", 10), 180);
+      const days = parsePositiveInt(req.query.days, 30, 1, 180);
       const data = await cached(`mpp:directory:trends:${days}`, 60 * 60 * 1000, () => storage.getMppDirectoryTrends(days));
       res.set("Cache-Control", "public, s-maxage=3600");
       res.json(data);
@@ -98,7 +106,7 @@ export function registerMppRoutes(app: Express): void {
 
   app.get("/api/mpp/probes/recent", async (req, res) => {
     try {
-      const limit = Math.min(parseInt((req.query.limit as string) || "20", 10), 100);
+      const limit = parsePositiveInt(req.query.limit, 20, 1, 100);
       const { db } = await import("../db.js");
       const { mppProbes } = await import("../../shared/schema.js");
       const { desc, eq } = await import("drizzle-orm");
@@ -129,7 +137,7 @@ export function registerMppRoutes(app: Express): void {
 
   app.get("/api/mpp/chain/volume-trend", async (req, res) => {
     try {
-      const days = Math.min(parseInt((req.query.days as string) || "30", 10), 180);
+      const days = parsePositiveInt(req.query.days, 30, 1, 180);
       const data = await cached(`mpp:chain:volume-trend:${days}`, 60 * 60 * 1000, async () => {
         const { db } = await import("../db.js");
         const { sql } = await import("drizzle-orm");
@@ -197,11 +205,14 @@ export function registerMppRoutes(app: Express): void {
       const data = await cached("ecosystem:multi-protocol-agents", ANALYTICS_TTL, async () => {
         const ids = await storage.getMultiProtocolAgentIds();
         const limited = ids.slice(0, 100);
-        const agentList = [];
-        for (const id of limited) {
-          const agent = await storage.getAgent(id);
-          if (agent) agentList.push(redactAgentForPublic(agent as unknown as Record<string, unknown>));
-        }
+        if (limited.length === 0) return { total: 0, agents: [] };
+
+        // Batch fetch to avoid N+1 DB round-trips.
+        const { db } = await import("../db.js");
+        const { agents } = await import("../../shared/schema.js");
+        const { inArray } = await import("drizzle-orm");
+        const rows = await db.select().from(agents).where(inArray(agents.id, limited));
+        const agentList = rows.map((a) => redactAgentForPublic(a as unknown as Record<string, unknown>));
         return { total: ids.length, agents: agentList };
       });
       res.set("Cache-Control", ANALYTICS_CACHE);

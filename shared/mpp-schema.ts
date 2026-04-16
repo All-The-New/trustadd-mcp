@@ -1,5 +1,4 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, boolean, integer, jsonb, timestamp, serial, real, uniqueIndex, index, varchar, date } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, integer, jsonb, timestamp, serial, uniqueIndex, index, varchar, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { agents } from "./schema.js";

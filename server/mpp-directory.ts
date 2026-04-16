@@ -145,10 +145,10 @@ export function parseDirectoryHtml(html: string): RawMppService[] {
     // Look for nearby name + description within ~2KB after the match
     const windowStart = urlMatch.index;
     const windowEnd = Math.min(html.length, windowStart + 2048);
-    const window = html.slice(windowStart, windowEnd);
+    const snippet = html.slice(windowStart, windowEnd);
 
-    const nameMatches = Array.from(window.matchAll(namePattern));
-    const descMatches = Array.from(window.matchAll(descPattern));
+    const nameMatches = Array.from(snippet.matchAll(namePattern));
+    const descMatches = Array.from(snippet.matchAll(descPattern));
     const name = nameMatches[0]?.[1]?.trim() ?? null;
     const description = descMatches[0]?.[1]?.trim() ?? null;
 

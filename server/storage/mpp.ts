@@ -72,11 +72,12 @@ export async function listMppServices(options: {
     .limit(options.limit ?? 50)
     .offset(options.offset ?? 0);
 
-  const countResult = await db.execute(sql`
-    SELECT COUNT(*)::int AS n FROM mpp_directory_services WHERE is_active = true
-    ${options.category ? sql`AND category = ${options.category}` : sql``}
-  `);
-  const total = Number((countResult.rows[0] as any).n);
+  // Count must use the SAME predicate as the select, otherwise pagination
+  // total is wrong when filtering by search or paymentMethod.
+  const countRows = await db.select({ n: sql<number>`COUNT(*)::int` })
+    .from(mppDirectoryServices)
+    .where(where);
+  const total = Number(countRows[0]?.n ?? 0);
   return { services: rows, total };
 }
 

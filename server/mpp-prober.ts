@@ -161,6 +161,11 @@ function getWwwAuthenticateValues(headers: Headers): string[] {
 /**
  * Pick a Tempo recipient address from a parsed payment method, if available.
  * The address may live in the decoded `request` payload under various keys.
+ *
+ * Returns lowercase for consistency — the tempo-transaction-indexer
+ * decodes log topics to lowercase when matching against `mpp_probes.tempoAddress`
+ * and `transaction_sync_state.paymentAddress`, so any checksum casing here
+ * would cause lookups to miss.
  */
 function extractTempoAddress(challenges: ParsedPaymentChallenge[]): string | null {
   for (const c of challenges) {
@@ -169,7 +174,7 @@ function extractTempoAddress(challenges: ParsedPaymentChallenge[]): string | nul
     const keys = ["recipient", "payTo", "pay_to", "address", "to"];
     for (const k of keys) {
       const v = (req as Record<string, unknown>)[k];
-      if (typeof v === "string" && /^0x[a-fA-F0-9]{40}$/.test(v)) return v;
+      if (typeof v === "string" && /^0x[a-fA-F0-9]{40}$/.test(v)) return v.toLowerCase();
     }
   }
   return null;

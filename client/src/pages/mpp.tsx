@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Layout } from "@/components/layout";
 
 interface MppDirectoryStats {
   totalServices: number;
@@ -35,8 +36,9 @@ export default function MppPage() {
   });
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <header className="mb-8">
+    <Layout>
+      <div className="container mx-auto px-4 py-8">
+        <header className="mb-8">
         <h1 className="text-3xl font-bold">MPP Ecosystem Overview</h1>
         <p className="text-muted-foreground mt-2">
           Machine Payments Protocol — Stripe + Tempo Labs agent payment standard
@@ -101,6 +103,7 @@ export default function MppPage() {
           </p>
         </div>
       </section>
-    </div>
+      </div>
+    </Layout>
   );
 }

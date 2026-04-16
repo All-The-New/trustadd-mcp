@@ -11,7 +11,7 @@
  * - Simplex BFT finality: no reorgs, safe to index up to head
  */
 
-import { createLogger, sleep, retryWithBackoff } from "./lib/indexer-utils.js";
+import { createLogger, retryWithBackoff } from "./lib/indexer-utils.js";
 import { TEMPO_CHAIN_CONFIG, TEMPO_CHAIN_ID } from "../shared/chains.js";
 import type { InsertAgentTransaction } from "../shared/schema.js";
 
@@ -139,6 +139,53 @@ async function getLatestBlock(): Promise<number> {
   return parseInt(hex, 16);
 }
 
+/**
+ * Fetch block timestamp with a caller-provided cache. The cache lets us avoid
+ * hitting the RPC for every transfer in the same block (Tempo's sub-second
+ * finality means a busy address can see many transfers share a block).
+ *
+ * THROWS on RPC failure or missing timestamp. We deliberately do NOT fall back
+ * to wall-clock time: that would cache a fake timestamp, persist it with
+ * ON CONFLICT DO NOTHING (so it can't be corrected later), and turn a transient
+ * RPC outage into permanent corruption of `agent_transactions.block_timestamp`.
+ * The caller (`syncAllTempoTransactions`) catches this and skips the address
+ * WITHOUT advancing `lastSyncedBlock`, so the transfer is retried next run.
+ */
+async function getBlockTimestamp(
+  blockNumber: number,
+  cache: Map<number, Date>,
+): Promise<Date> {
+  const cached = cache.get(blockNumber);
+  if (cached) return cached;
+
+  const block = await retryWithBackoff(
+    async () => {
+      // Try fallback RPC if primary fails — mirrors getLogsWithFallback.
+      try {
+        return await rpcCall<{ timestamp: string } | null>(
+          TEMPO_CHAIN_CONFIG.rpcUrl,
+          "eth_getBlockByNumber",
+          [`0x${blockNumber.toString(16)}`, false],
+        );
+      } catch (err) {
+        if (!TEMPO_CHAIN_CONFIG.rpcUrlFallback) throw err;
+        return await rpcCall<{ timestamp: string } | null>(
+          TEMPO_CHAIN_CONFIG.rpcUrlFallback,
+          "eth_getBlockByNumber",
+          [`0x${blockNumber.toString(16)}`, false],
+        );
+      }
+    },
+    { maxAttempts: RPC_RETRY_ATTEMPTS, baseDelayMs: 500 },
+  );
+  if (!block?.timestamp) {
+    throw new Error(`Block ${blockNumber} returned no timestamp from Tempo RPC`);
+  }
+  const ts = new Date(parseInt(block.timestamp, 16) * 1000);
+  cache.set(blockNumber, ts);
+  return ts;
+}
+
 // --- Indexing loop ---
 
 export async function indexAddressInboundTransfers(
@@ -182,6 +229,9 @@ export async function syncAllTempoTransactions(): Promise<{ addresses: number; t
   log.info(`Tempo sync: ${syncStates.length} tracked addresses`);
 
   const latestBlock = await getLatestBlock();
+  // Block-timestamp cache shared across workers for this run — many transfers
+  // can share a block on a fast chain, so caching avoids redundant RPC calls.
+  const blockTsCache = new Map<number, Date>();
   let totalTransfers = 0;
   let errors = 0;
 
@@ -196,6 +246,7 @@ export async function syncAllTempoTransactions(): Promise<{ addresses: number; t
         for (const t of transfers) {
           const agent = await storage.getAgentByTempoAddress(t.to);
           if (!agent) continue;
+          const blockTimestamp = await getBlockTimestamp(t.blockNumber, blockTsCache);
           const record: InsertAgentTransaction = {
             agentId: agent.id,
             chainId: TEMPO_CHAIN_ID,
@@ -208,7 +259,7 @@ export async function syncAllTempoTransactions(): Promise<{ addresses: number; t
             amount: t.amount,
             amountUsd: parseFloat(t.amount),
             blockNumber: t.blockNumber,
-            blockTimestamp: new Date(), // Populated by BlockTimestamp lookup below; default now for fallback
+            blockTimestamp,
             category: "mpp_payment",
             metadata: t.memo ? { memo: t.memo } : null,
           };
