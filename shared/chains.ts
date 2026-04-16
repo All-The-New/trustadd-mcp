@@ -269,7 +269,7 @@ export const TEMPO_CHAIN_CONFIG = {
   nativeCurrency: { name: "USD", symbol: "USD", decimals: 6 },
   tokens: {
     pathUSD: {
-      address: "0x20c0000000000000000000000000000000000000",
+      address: "0x20c000000000000000000000b9537d11c60e8b50",
       symbol: "pathUSD",
       decimals: 6,
     },

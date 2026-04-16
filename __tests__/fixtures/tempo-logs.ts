@@ -5,7 +5,7 @@
 // topic0 = keccak("Transfer(address,address,uint256)")
 //        = 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
 export const TEMPO_TRANSFER_LOG = {
-  address: "0x20c0000000000000000000000000000000000000",
+  address: "0x20c000000000000000000000b9537d11c60e8b50",
   topics: [
     "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
     "0x0000000000000000000000001111111111111111111111111111111111111111", // from (padded)
@@ -23,7 +23,7 @@ export const TEMPO_TRANSFER_LOG = {
 // TransferWithMemo(address indexed from, address indexed to, uint256 value, bytes32 indexed memo)
 // topic0 = placeholder hash (to be confirmed against Tempo spec during impl; use fixture for tests)
 export const TEMPO_TRANSFER_WITH_MEMO_LOG = {
-  address: "0x20c0000000000000000000000000000000000000",
+  address: "0x20c000000000000000000000b9537d11c60e8b50",
   topics: [
     "0x" + "a".repeat(64), // placeholder event sig
     "0x0000000000000000000000001111111111111111111111111111111111111111",
