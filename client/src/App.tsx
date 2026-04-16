@@ -17,6 +17,7 @@ import Protocols from "@/pages/protocols";
 import Quality from "@/pages/quality";
 import Skills from "@/pages/skills";
 import Bazaar from "@/pages/bazaar";
+import MppPage from "@/pages/mpp";
 import TrustApi from "@/pages/trust-api";
 import Methodology from "@/pages/methodology";
 import Principles from "@/pages/principles";
@@ -43,6 +44,7 @@ function Router() {
       <Route path="/protocols" component={Protocols} />
       <Route path="/skills" component={Skills} />
       <Route path="/bazaar" component={Bazaar} />
+      <Route path="/mpp" component={MppPage} />
       <Route path="/trust-api" component={TrustApi} />
       <Route path="/methodology" component={Methodology} />
       <Route path="/principles" component={Principles} />
