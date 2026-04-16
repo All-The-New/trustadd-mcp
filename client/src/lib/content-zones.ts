@@ -59,29 +59,43 @@ export const HOME = {
     },
   ],
   pillars: {
-    heading: "Five Dimensions of Agent Trust",
+    heading: "Five Categories of Agent Trust",
     subtitle:
       "Every trust verdict is computed from five signal categories, weighted to reflect what matters most for autonomous decision-making.",
     items: [
       {
         icon: "Shield" as const,
-        title: "Identity & Capability",
-        desc: "On-chain identity completeness, declared skills, endpoints, x402 payment support. Agents with verifiable identity and clear capabilities score higher.",
-        badge: "Identity + Capability",
+        title: "Identity",
+        desc: "Controller, metadata, and on-chain identity signals. The baseline 'who is this agent?' check.",
+        badge: "Identity",
+        badgeVariant: "live" as const,
+      },
+      {
+        icon: "Zap" as const,
+        title: "Behavioral",
+        desc: "Transaction patterns, payment cadence, activity consistency. The hardest evidence to fake.",
+        badge: "Behavioral",
         badgeVariant: "live" as const,
       },
       {
         icon: "Star" as const,
-        title: "Community & Reputation",
-        desc: "GitHub health, Farcaster engagement, on-chain feedback. Real-world signals from people and systems that interact with agents.",
+        title: "Community",
+        desc: "GitHub project health, Farcaster presence, external reputation signals.",
         badge: "Community",
         badgeVariant: "monitoring" as const,
       },
       {
+        icon: "Shield" as const,
+        title: "Attestation",
+        desc: "Third-party verifications via on-chain attestation. Inactive in v2, scheduled for v3.",
+        badge: "Attestation",
+        badgeVariant: "monitoring" as const,
+      },
+      {
         icon: "Eye" as const,
-        title: "History & Transparency",
-        desc: "Registration longevity, multi-chain presence, decentralized storage, trust mechanism declarations. Transparency signals accountability.",
-        badge: "History + Transparency",
+        title: "Authenticity",
+        desc: "Detection of coordinated agent networks. Sybil resistance — protects the score from manipulation.",
+        badge: "Authenticity",
         badgeVariant: "live" as const,
       },
     ],
@@ -130,7 +144,7 @@ export const ABOUT = {
   score: {
     title: "How the TrustAdd Score Works",
     intro:
-      "Every indexed agent receives a TrustAdd Score from 0 to 100, computed from five categories of on-chain and off-chain signals. The score powers trust verdicts: TRUSTED, CAUTION, UNTRUSTED, or UNKNOWN.",
+      "Every indexed agent receives a TrustAdd Score from 0 to 100, computed from five categories of on-chain and off-chain signals. The score powers trust verdicts: VERIFIED, TRUSTED, BUILDING, INSUFFICIENT, or FLAGGED.",
   },
   principles: {
     title: "Principles",

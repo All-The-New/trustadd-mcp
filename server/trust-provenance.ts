@@ -1,65 +1,68 @@
 import { createHash } from "node:crypto";
-import type { Agent, CommunityFeedbackSummary } from "../shared/schema.js";
-import { looksLikeImageUrl } from "./trust-score.js";
+import type { TrustScoreInput } from "./trust-score.js";
+import { looksLikeImageUrl, VOLUME_THRESHOLDS_USD } from "./trust-score.js";
 
 /** Bump this when the scoring methodology changes to invalidate cached hashes. */
-export const METHODOLOGY_VERSION = 1;
+export const METHODOLOGY_VERSION = 2;
 
 /**
- * Subset of Agent fields actually read by calculateTrustScore.
- * Using Pick ensures we only declare the fields we depend on.
- */
-type AgentSignalFields = Pick<
-  Agent,
-  | "name"
-  | "description"
-  | "imageUrl"
-  | "endpoints"
-  | "tags"
-  | "oasfSkills"
-  | "oasfDomains"
-  | "x402Support"
-  | "metadataUri"
-  | "supportedTrust"
-  | "activeStatus"
-  | "createdAt"
->;
-
-/**
- * Canonical representation of all signals that feed into the trust score.
- * Field names are intentionally kept short/stable to avoid accidental hash
- * changes from refactoring. Keys are sorted alphabetically at serialization
- * time by JSON.stringify with a replacer that enforces key order.
+ * Canonical representation of all signals that feed into the trust score (v2).
+ *
+ * v2 adds behavioral fields (transactions, attestations, probes) to the v1
+ * profile/longevity fields. Field names are intentionally kept short and
+ * stable; they are sorted alphabetically at serialization time by
+ * `deterministicStringify` so the SHA-256 hash is invariant to property
+ * insertion order.
+ *
+ * `volumeUsdBucket` is an integer bucket (0..n) derived from
+ * `VOLUME_THRESHOLDS_USD` so small USD-price drift does not churn the hash.
  */
 interface CanonicalSignals {
-  // Identity
+  // Identity / profile
   hasName: boolean;
   descriptionLength: number;
   hasImage: boolean;
   hasEndpoints: boolean;
   hasTags: boolean;
-  // Raw values used by scoring (captured for full auditability)
   name: string;
   imageUrl: string;
-  // History
+
+  // Longevity
   ageDays: number;
   eventCount: number;
   crossChainCount: number;
-  // Capability
+
+  // Capability / profile
   x402Support: boolean;
   skillCount: number;
   endpointCount: number;
+
   // Community (from feedback)
   githubHealthScore: number;
   farcasterScore: number;
   totalSources: number;
+
   // Transparency
   metadataUriScheme: string;
   trustProtocolCount: number;
   activeStatus: boolean;
-  // Arrays (sorted for canonical ordering)
+
+  // Arrays (sorted)
   tags: string[];
   skills: string[];
+
+  // ── v2 behavioral fields ────────────────────────────────────────────────
+  /** Bucketed per VOLUME_THRESHOLDS_USD (e.g. 0 if <100, 1 if <1000, 2 if ≥1000). */
+  volumeUsdBucket: number;
+  txCount: number;
+  uniquePayers: number;
+  hasLive402: boolean;
+  paymentAddressVerified: boolean;
+  attestationCount: number;
+  uniqueAttestors: number;
+  /** Unix timestamp (seconds) of firstTxAt, null if no tx. */
+  firstTxAtEpoch: number | null;
+
   // Versioning
   methodologyVersion: number;
 }
@@ -80,10 +83,7 @@ function deterministicStringify(obj: unknown): string {
   return JSON.stringify(obj);
 }
 
-/**
- * Resolves the URI scheme from a metadata URI string.
- * Returns an empty string if the URI is null/empty.
- */
+/** Resolves the URI scheme from a metadata URI string. */
 function resolveUriScheme(uri: string | null | undefined): string {
   if (!uri) return "";
   if (uri.startsWith("ipfs://")) return "ipfs";
@@ -94,10 +94,7 @@ function resolveUriScheme(uri: string | null | undefined): string {
   return "other";
 }
 
-/**
- * Counts endpoints from the agent's endpoints field (JSON blob).
- * Matches the logic in calculateTrustScore.
- */
+/** Counts endpoints from the agent's endpoints field (JSON blob). */
 function countEndpoints(endpoints: unknown): number {
   if (!endpoints) return 0;
   if (Array.isArray(endpoints)) return endpoints.length;
@@ -105,26 +102,42 @@ function countEndpoints(endpoints: unknown): number {
   return 0;
 }
 
+/** Map a USD volume to its bucket index in VOLUME_THRESHOLDS_USD. */
+function volumeBucket(volumeUsd: number): number {
+  let bucket = 0;
+  // Thresholds are ascending entry points [0, 100, 1000]. The "entry" tier (0)
+  // only counts when there IS any inbound volume; zero volume stays bucket -1.
+  if (volumeUsd <= 0) return -1;
+  for (let i = 0; i < VOLUME_THRESHOLDS_USD.length; i++) {
+    if (volumeUsd >= VOLUME_THRESHOLDS_USD[i]) bucket = i;
+    else break;
+  }
+  return bucket;
+}
+
 /**
- * Compute a deterministic SHA-256 hash of all signals that feed into the
- * trust score. The hash changes whenever any scoring input changes, providing
- * an immutable audit trail for score updates.
+ * Compute a deterministic SHA-256 hash of all v2 scoring inputs.
  *
- * Array fields (tags, skills) are sorted before hashing so that insertion
- * order differences do not produce different hashes for equivalent data.
+ * The hash changes whenever any scoring input changes, providing an immutable
+ * audit trail for score updates. Array fields are sorted before hashing so
+ * that insertion order differences do not produce different hashes for
+ * equivalent data.
  *
- * @param agent    The agent record (only scoring-relevant fields are used)
- * @param feedback Optional community feedback summary
- * @param eventCount   Number of MetadataUpdated / AgentURISet events
- * @param crossChainCount Number of distinct chains for this controller address
- * @returns 64-character lowercase hex SHA-256 digest
+ * @param input Full TrustScoreInput (agent + txStats + attestationStats +
+ *              probeStats + feedback + metadataEventCount + chainPresence).
+ * @returns 64-character lowercase hex SHA-256 digest.
  */
-export function computeSignalHash(
-  agent: AgentSignalFields,
-  feedback: Pick<CommunityFeedbackSummary, "githubHealthScore" | "farcasterScore" | "totalSources"> | null | undefined,
-  eventCount: number,
-  crossChainCount: number,
-): string {
+export function computeSignalHash(input: TrustScoreInput): string {
+  const {
+    agent,
+    txStats,
+    attestationStats,
+    probeStats,
+    feedback,
+    metadataEventCount,
+    chainPresence,
+  } = input;
+
   const endpoints = agent.endpoints;
   const hasEndpoints =
     endpoints !== null &&
@@ -139,7 +152,6 @@ export function computeSignalHash(
   const skillCount =
     (agent.oasfSkills?.length ?? 0) + (agent.oasfDomains?.length ?? 0);
 
-  // Sort arrays to ensure canonical ordering regardless of insertion order
   const sortedTags = [...(agent.tags ?? [])].sort();
   const sortedSkills = [
     ...(agent.oasfSkills ?? []),
@@ -147,35 +159,48 @@ export function computeSignalHash(
   ].sort();
 
   const signals: CanonicalSignals = {
-    // Identity
+    // Identity / profile
     hasName: Boolean(agent.name && agent.name.trim().length > 0),
     descriptionLength: agent.description?.trim().length ?? 0,
     hasImage: Boolean(agent.imageUrl && looksLikeImageUrl(agent.imageUrl)),
     hasEndpoints,
     hasTags: sortedTags.length > 0 || (agent.oasfSkills?.length ?? 0) > 0,
-    // Raw values for full auditability
     name: agent.name?.trim() ?? "",
     imageUrl: agent.imageUrl ?? "",
-    // History
+
+    // Longevity
     ageDays: Math.floor(ageDays),
-    eventCount,
-    crossChainCount,
-    // Capability
+    eventCount: metadataEventCount,
+    crossChainCount: chainPresence,
+
+    // Capability / profile
     x402Support: agent.x402Support === true,
     skillCount,
     endpointCount: countEndpoints(endpoints),
+
     // Community
     githubHealthScore: feedback?.githubHealthScore ?? 0,
     farcasterScore: feedback?.farcasterScore ?? 0,
     totalSources: feedback?.totalSources ?? 0,
+
     // Transparency
     metadataUriScheme: resolveUriScheme(agent.metadataUri),
     trustProtocolCount: agent.supportedTrust?.length ?? 0,
     activeStatus: agent.activeStatus === true,
-    // Arrays (sorted)
+
     tags: sortedTags,
     skills: sortedSkills,
-    // Versioning
+
+    // v2 behavioral
+    volumeUsdBucket: volumeBucket(txStats.volumeUsd),
+    txCount: txStats.txCount,
+    uniquePayers: txStats.uniquePayers,
+    hasLive402: probeStats.hasLive402,
+    paymentAddressVerified: probeStats.paymentAddressVerified,
+    attestationCount: attestationStats.received,
+    uniqueAttestors: attestationStats.uniqueAttestors,
+    firstTxAtEpoch: txStats.firstTxAt ? Math.floor(new Date(txStats.firstTxAt).getTime() / 1000) : null,
+
     methodologyVersion: METHODOLOGY_VERSION,
   };
 

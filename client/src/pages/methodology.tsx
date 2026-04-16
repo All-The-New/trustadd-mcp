@@ -11,7 +11,6 @@ import {
   CheckCircle,
   TrendingUp,
   CircleDot,
-  HelpCircle,
   AlertTriangle,
   Coins,
   Award,
@@ -33,6 +32,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
 import { METHODOLOGY, SEO as SEO_CONTENT } from "@/lib/content-zones";
 
 /* ────────────────────────────────────────────────────────────
@@ -51,27 +51,19 @@ const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>
 const V2_TIERS = [
   {
     name: "Flagged",
-    range: "0–4",
+    range: "active negative evidence",
     icon: AlertTriangle,
     color: "text-red-400",
     bg: "bg-red-500/10 border-red-500/30",
     description: "Active negative signals: spam patterns, failed transactions, confirmed bad behavior.",
   },
   {
-    name: "Unverified",
-    range: "5–19",
-    icon: HelpCircle,
-    color: "text-zinc-500",
-    bg: "bg-zinc-600/10 border-zinc-600/30",
-    description: "Minimal profile, no behavioral evidence.",
-  },
-  {
-    name: "Insufficient Data",
-    range: "20–39",
+    name: "Insufficient",
+    range: "0–39",
     icon: CircleDot,
     color: "text-zinc-400",
     bg: "bg-zinc-500/10 border-zinc-500/30",
-    description: "Profile present, no verified behavioral evidence yet.",
+    description: "Minimal or no behavioral evidence yet. Profile data may be present.",
   },
   {
     name: "Building",
@@ -119,6 +111,50 @@ const DATA_SOURCES = [
   { source: "Score Engine", data: "Composite scores, tiers, verdicts", icon: BarChart3 },
   { source: "Report Compiler", data: "Cached trust reports for API consumers", icon: FileText },
 ];
+
+/* ────────────────────────────────────────────────────────────
+   ECOSYSTEM DISTRIBUTION
+   ──────────────────────────────────────────────────────────── */
+
+function EcosystemDistribution() {
+  const { data } = useQuery<{
+    tiers: Array<{ tier: string; count: number; pct: number; color: string }>;
+    buckets: Array<{ bucket: string; count: number; tier: string }>;
+    narrative: string;
+  }>({ queryKey: ["/api/analytics/trust-tiers"] });
+
+  if (!data) return null;
+  return (
+    <section className="mt-12" data-testid="methodology-distribution">
+      <h2 className="text-xl font-bold mb-4">Ecosystem Distribution</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
+        {data.tiers.map(t => (
+          <div key={t.tier} className="p-3 rounded-md border-l-[3px]" style={{ borderLeftColor: t.color }}>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t.tier}</p>
+            <p className="text-lg font-bold">{t.count.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">{t.pct.toFixed(1)}%</p>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-1 mb-4">
+        {data.buckets.map(b => {
+          const tierColor = data.tiers.find(t => t.tier === b.tier)?.color ?? "#a1a1aa";
+          const maxCount = Math.max(...data.buckets.map(x => x.count), 1);
+          return (
+            <div key={b.bucket} className="flex items-center gap-2">
+              <span className="text-[10px] font-mono w-14 text-right">{b.bucket}</span>
+              <div className="flex-1 h-3 rounded-sm overflow-hidden bg-muted">
+                <div className="h-full" style={{ width: `${(b.count / maxCount) * 100}%`, background: tierColor }} />
+              </div>
+              <span className="text-[11px] text-muted-foreground w-16">{b.count.toLocaleString()}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-sm text-muted-foreground italic">{data.narrative}</p>
+    </section>
+  );
+}
 
 /* ────────────────────────────────────────────────────────────
    INFOGRAPHIC COMPONENTS
@@ -190,11 +226,11 @@ function TierGradientBar() {
         <div
           className="absolute inset-0"
           style={{
-            background: "linear-gradient(to right, #ef4444 0%, #ef4444 4%, #71717a 4%, #71717a 19%, #a1a1aa 19%, #a1a1aa 39%, #3b82f6 39%, #3b82f6 59%, #22c55e 59%, #22c55e 79%, #10b981 79%, #10b981 100%)",
+            background: "linear-gradient(to right, #ef4444 0%, #ef4444 5%, #a1a1aa 5%, #a1a1aa 25%, #3b82f6 25%, #3b82f6 50%, #22c55e 50%, #22c55e 75%, #10b981 75%, #10b981 100%)",
           }}
         />
         {/* Segment dividers */}
-        {[4, 19, 39, 59, 79].map((pos) => (
+        {[5, 25, 50, 75].map((pos) => (
           <div
             key={pos}
             className="absolute top-0 bottom-0 w-0.5 bg-background/80"
@@ -204,7 +240,7 @@ function TierGradientBar() {
       </div>
 
       {/* Tier cards below */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
         {V2_TIERS.map((tier) => {
           const Icon = tier.icon;
           return (
@@ -232,7 +268,7 @@ function SignalFlowDiagram() {
     { label: "20+ Signals", sub: "Behavioral & profile", icon: Activity },
     { label: "5 Categories", sub: "Weighted 35/25/15/15/10", icon: BarChart3 },
     { label: "Score 0–100", sub: "Risk assessment", icon: Shield },
-    { label: "6 Tiers", sub: "Verified → Flagged", icon: ShieldCheck },
+    { label: "5 Tiers", sub: "Verified → Flagged", icon: ShieldCheck },
   ];
 
   return (
@@ -521,9 +557,10 @@ export default function Methodology() {
         <section className="space-y-5">
           <h2 className="text-xl font-semibold">Trust Tiers</h2>
           <p className="text-muted-foreground leading-relaxed">
-            Every agent receives one of six trust tiers. Tiers are designed to be machine-readable — agents querying the Trust API receive a tier string alongside the numeric score. <strong className="text-foreground">Flagged</strong> requires active negative evidence, not merely a low score.
+            Every agent receives one of five trust tiers. Tiers are designed to be machine-readable — agents querying the Trust API receive a tier string alongside the numeric score. <strong className="text-foreground">Flagged</strong> requires active negative evidence, not merely a low score.
           </p>
           <TierGradientBar />
+          <EcosystemDistribution />
         </section>
 
         {/* ── SCORING CATEGORIES DETAIL ── */}
@@ -667,7 +704,7 @@ export default function Methodology() {
               <CardContent className="pt-4">
                 <Badge className="mb-2 bg-primary/20 text-primary border-primary/30 hover:bg-primary/20">Current</Badge>
                 <h3 className="text-sm font-semibold mb-1">v2 — Behavioral First</h3>
-                <p className="text-xs text-muted-foreground leading-relaxed">60/40 behavioral/supporting split. Six trust tiers. Verifications separated from Trust Rating.</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">60/40 behavioral/supporting split. Five trust tiers. Verifications separated from Trust Rating.</p>
               </CardContent>
             </Card>
             <Card>

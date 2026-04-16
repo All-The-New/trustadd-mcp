@@ -16,17 +16,20 @@ import {
   ExternalLink,
   Search,
 } from "lucide-react";
+import { TrustStamp } from "@/components/trust-stamp";
+import { verdictDescriptor, type PublicVerdict, UNKNOWN_ICON } from "@/lib/verdict";
 
-function VerdictBadge({ verdict }: { verdict: string }) {
-  const variants: Record<string, string> = {
-    TRUSTED: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-    CAUTION: "bg-amber-500/10 text-amber-600 border-amber-500/20",
-    UNTRUSTED: "bg-red-500/10 text-red-600 border-red-500/20",
-    UNKNOWN: "bg-muted text-muted-foreground",
-  };
+function VerdictBadge({ verdict }: { verdict: PublicVerdict }) {
+  const desc = verdictDescriptor(verdict);
+  const Icon = verdict === "UNKNOWN" ? UNKNOWN_ICON : desc.icon;
   return (
-    <Badge variant="outline" className={variants[verdict] || variants.UNKNOWN}>
-      {verdict}
+    <Badge
+      variant="outline"
+      className="gap-1"
+      style={{ background: desc.tintBg, color: desc.color, borderColor: desc.color + "40" }}
+    >
+      <Icon className="w-3 h-3" />
+      {verdict === "UNKNOWN" ? "UNKNOWN" : desc.label}
     </Badge>
   );
 }
@@ -93,11 +96,13 @@ export default function TrustApi() {
               </p>
               <ul className="space-y-2 text-sm">
                 {[
-                  "Trust verdict (TRUSTED / CAUTION / UNTRUSTED / UNKNOWN)",
+                  "Trust verdict (VERIFIED / TRUSTED / BUILDING / INSUFFICIENT / FLAGGED / UNKNOWN)",
                   "Composite score (0\u2013100)",
-                  "5-category score breakdown",
-                  "Quality tier and flags",
-                  "x402 status and cross-chain presence",
+                  "Evidence basis summary",
+                  "9 verification states (earned + unearned)",
+                  "Confidence level",
+                  "Methodology version + provenance hash",
+                  "Category strengths (qualitative)",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
                     <CheckCircle className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
@@ -131,11 +136,14 @@ export default function TrustApi() {
               <ul className="space-y-2 text-sm">
                 {[
                   "Everything in Quick Check",
-                  "Full agent identity and metadata",
-                  "Transaction history and volume",
-                  "GitHub health and Farcaster engagement",
-                  "On-chain registration timeline",
-                  "Data freshness timestamps",
+                  "5 numeric category scores",
+                  "21 individual signal scores",
+                  "Sybil detection signals + dampening detail",
+                  "Agent identity + metadata",
+                  "Full transaction history + volume",
+                  "GitHub health + Farcaster engagement",
+                  "Per-chain transaction breakdown",
+                  "Registration timeline + data freshness",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
                     <CheckCircle className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
@@ -195,14 +203,12 @@ export default function TrustApi() {
               <CardContent className="pt-6 space-y-3">
                 {demoResult.found ? (
                   <>
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{demoResult.name || "Unnamed Agent"}</span>
-                      <VerdictBadge verdict={demoResult.verdict || "UNKNOWN"} />
-                    </div>
-                    <div className="text-sm text-muted-foreground space-y-1">
-                      <p>Quick Check: {demoResult.quickCheckPrice || "$0.01"} USDC</p>
-                      <p>Full Report: {demoResult.fullReportPrice || "$0.05"} USDC</p>
-                      <p>Payment: x402 on {demoResult.paymentNetwork || "Base"}</p>
+                    <div className="flex items-center gap-3">
+                      <TrustStamp verdict={demoResult.verdict ?? "UNKNOWN"} score={demoResult.score ?? null} size="square" className="!w-12 !h-12" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{demoResult.name || "Unnamed Agent"}</div>
+                        <div className="text-xs text-muted-foreground">{demoResult.evidenceSummary ?? "Profile data indexed."}</div>
+                      </div>
                     </div>
                     <Link href={`/agent/${searchAddress}`}>
                       <Button variant="outline" size="sm" className="gap-1 mt-2">
@@ -218,6 +224,54 @@ export default function TrustApi() {
               </CardContent>
             </Card>
           )}
+        </div>
+
+        {/* Response Shape */}
+        <div className="space-y-6">
+          <h2 className="text-2xl font-bold text-center">Response shape</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <h3 className="text-sm font-semibold mb-2">Quick Check — $0.01</h3>
+              <pre className="text-[11px] font-mono bg-muted p-3 rounded-md overflow-x-auto">
+{`{
+  "address": "0x...",
+  "verdict": "TRUSTED",
+  "score": 72,
+  "categoryStrengths": {
+    "identity": "high",
+    "behavioral": "medium",
+    "community": "low",
+    "authenticity": "high",
+    "attestation": "none"
+  },
+  "evidenceBasis": {
+    "transactionCount": 18,
+    "uniquePayers": 7,
+    "summary": "Based on 18 verified transactions ..."
+  },
+  "verificationCount": 5,
+  "reportVersion": 4
+}`}
+              </pre>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold mb-2">Full Report — $0.05</h3>
+              <pre className="text-[11px] font-mono bg-muted p-3 rounded-md overflow-x-auto">
+{`{
+  "trustRating": { "score": 72, "verdict": "TRUSTED",
+    "breakdown": { "categories": { "transactions": 20, ... } },
+    "categoryStrengths": { ... },
+    "confidence": { "level": "medium" },
+    "provenance": { "signalHash": "0x..." }
+  },
+  "verifications": [ { "name": "x402 Enabled", "earned": true }, ... ],
+  "community": { "githubHealthScore": 68, ... },
+  "economy": { "transactionCount": 18, "totalVolumeUsd": 125.42 },
+  "sybil": { "riskScore": 0, "dampeningApplied": false }
+}`}
+              </pre>
+            </div>
+          </div>
         </div>
 
         {/* How x402 Works */}

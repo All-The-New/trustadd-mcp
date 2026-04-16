@@ -3,7 +3,7 @@ import { storage } from "./storage.js";
 import { log } from "./lib/log.js";
 import { createLogger } from "./lib/logger.js";
 import { type ChainConfig, getEnabledChains, getRpcUrls } from "../shared/chains.js";
-import { recalculateScore } from "./trust-score.js";
+import { recalculateScore } from "./trust-score-pipeline.js";
 import { classifyAgent } from "./quality-classifier.js";
 
 const POLL_INTERVAL_MS = 60_000;         // 1 min between cycles

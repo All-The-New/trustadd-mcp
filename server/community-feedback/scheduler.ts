@@ -1,7 +1,7 @@
 import { storage } from "../storage.js";
 import type { FeedbackSourceAdapter, ScraperConfig } from "./types.js";
 import { DEFAULT_SCRAPER_CONFIG } from "./types.js";
-import { recalculateScore } from "../trust-score.js";
+import { recalculateScore } from "../trust-score-pipeline.js";
 import { createLogger } from "../lib/logger.js";
 
 const logger = createLogger("community-feedback");

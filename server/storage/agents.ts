@@ -803,8 +803,8 @@ export async function getAnalyticsTopAgents(): Promise<{
 export async function getTrustScoreLeaderboard(limit = 20, chainId?: number): Promise<Array<{ id: string; name: string | null; imageUrl: string | null; chainId: number; trustScore: number; trustScoreBreakdown: any; slug: string | null; primaryContractAddress: string | null; erc8004Id: string | null; description: string | null; x402Support: boolean | null; endpoints: any; qualityTier: string | null; spamFlags: any; lifecycleStatus: string | null }>> {
   const conditions = [
     isNotNull(agents.trustScore),
-    // Exclude UNTRUSTED: no spam/archived tier, not archived status, score >= 30
-    sql`${agents.trustScore} >= 30`,
+    // Exclude low-signal: score >= 40 (BUILDING floor per v2).
+    sql`${agents.trustScore} >= 40`,
     sql`coalesce(${agents.qualityTier}, 'unclassified') NOT IN ('spam', 'archived')`,
     sql`coalesce(${agents.lifecycleStatus}, 'active') != 'archived'`,
   ];
@@ -865,6 +865,77 @@ export async function getTrustScoreDistribution(chainId?: number): Promise<Array
     ORDER BY bucket DESC
   `);
   return ((result as any).rows ?? []).map((r: any) => ({ bucket: r.bucket, count: Number(r.count) }));
+}
+
+export async function getTrustTierDistribution(): Promise<{
+  tiers: Array<{ tier: string; count: number; pct: number; color: string }>;
+  buckets: Array<{ bucket: string; count: number; tier: string }>;
+}> {
+  const [tierResult, bucketResult] = await Promise.all([
+    db.execute(sql`
+      SELECT
+        CASE
+          WHEN coalesce(quality_tier, '') IN ('spam', 'archived') THEN 'FLAGGED'
+          WHEN coalesce(lifecycle_status, 'active') = 'archived' THEN 'FLAGGED'
+          WHEN coalesce(array_length(spam_flags, 1), 0) > 0 AND coalesce(trust_score, 0) < 10 THEN 'FLAGGED'
+          WHEN trust_score >= 80 THEN 'VERIFIED'
+          WHEN trust_score >= 60 THEN 'TRUSTED'
+          WHEN trust_score >= 40 THEN 'BUILDING'
+          ELSE 'INSUFFICIENT'
+        END as tier,
+        COUNT(*)::int as count
+      FROM agents
+      WHERE trust_score IS NOT NULL
+      GROUP BY tier
+    `),
+    db.execute(sql`
+      SELECT
+        CASE
+          WHEN trust_score >= 90 THEN '90-100'
+          WHEN trust_score >= 80 THEN '80-89'
+          WHEN trust_score >= 70 THEN '70-79'
+          WHEN trust_score >= 60 THEN '60-69'
+          WHEN trust_score >= 50 THEN '50-59'
+          WHEN trust_score >= 40 THEN '40-49'
+          WHEN trust_score >= 30 THEN '30-39'
+          WHEN trust_score >= 20 THEN '20-29'
+          WHEN trust_score >= 10 THEN '10-19'
+          ELSE '0-9'
+        END as bucket,
+        CASE
+          WHEN trust_score >= 80 THEN 'VERIFIED'
+          WHEN trust_score >= 60 THEN 'TRUSTED'
+          WHEN trust_score >= 40 THEN 'BUILDING'
+          ELSE 'INSUFFICIENT'
+        END as tier,
+        COUNT(*)::int as count
+      FROM agents
+      WHERE trust_score IS NOT NULL
+      GROUP BY bucket, tier
+      ORDER BY bucket DESC
+    `),
+  ]);
+
+  const tierRows = ((tierResult as any).rows ?? []) as Array<{ tier: string; count: number }>;
+  const totalCount = tierRows.reduce((a, r) => a + Number(r.count), 0) || 1;
+  const COLORS: Record<string, string> = {
+    VERIFIED: "#10b981", TRUSTED: "#22c55e", BUILDING: "#3b82f6",
+    INSUFFICIENT: "#a1a1aa", FLAGGED: "#ef4444",
+  };
+
+  const tiers = ["VERIFIED", "TRUSTED", "BUILDING", "INSUFFICIENT", "FLAGGED"].map(tier => {
+    const match = tierRows.find(r => r.tier === tier);
+    const count = Number(match?.count ?? 0);
+    return { tier, count, pct: (count / totalCount) * 100, color: COLORS[tier] };
+  });
+
+  const buckets = ((bucketResult as any).rows ?? []).map((r: any) => ({
+    bucket: String(r.bucket),
+    count: Number(r.count),
+    tier: String(r.tier),
+  }));
+
+  return { tiers, buckets };
 }
 
 export async function getTrustScoreStatsByChain(): Promise<Array<{ chainId: number; avgScore: number; agentCount: number }>> {

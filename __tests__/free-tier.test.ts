@@ -14,9 +14,8 @@ import {
   UNKNOWN_AGENT,
 } from "./fixtures/agents.js";
 
-/** The 6 fields that MUST be stripped from free tier responses. */
+/** The 5 fields that MUST be stripped from free tier responses. */
 const PROTECTED_FIELDS = [
-  "trustScore",
   "trustScoreBreakdown",
   "trustScoreUpdatedAt",
   "qualityTier",
@@ -29,21 +28,21 @@ const INJECTED_FIELDS = ["verdict", "reportAvailable"];
 
 describe("redactAgentForPublic", () => {
   describe("Field stripping", () => {
-    it("strips all 6 protected fields from a trusted agent", () => {
+    it("strips all 5 protected fields from a trusted agent", () => {
       const redacted = redactAgentForPublic(TRUSTED_AGENT as unknown as Record<string, unknown>);
       for (const field of PROTECTED_FIELDS) {
         expect(redacted).not.toHaveProperty(field);
       }
     });
 
-    it("strips all 6 protected fields from a spam agent", () => {
+    it("strips all 5 protected fields from a spam agent", () => {
       const redacted = redactAgentForPublic(SPAM_AGENT as unknown as Record<string, unknown>);
       for (const field of PROTECTED_FIELDS) {
         expect(redacted).not.toHaveProperty(field);
       }
     });
 
-    it("strips all 6 protected fields from an unknown agent", () => {
+    it("strips all 5 protected fields from an unknown agent", () => {
       const redacted = redactAgentForPublic(UNKNOWN_AGENT as unknown as Record<string, unknown>);
       for (const field of PROTECTED_FIELDS) {
         expect(redacted).not.toHaveProperty(field);
@@ -68,14 +67,14 @@ describe("redactAgentForPublic", () => {
       expect(redacted.verdict).toBe("TRUSTED");
     });
 
-    it("sets correct verdict for caution agent", () => {
+    it("sets correct verdict for caution agent (score 35 → INSUFFICIENT under v2)", () => {
       const redacted = redactAgentForPublic(CAUTION_AGENT as unknown as Record<string, unknown>);
-      expect(redacted.verdict).toBe("CAUTION");
+      expect(redacted.verdict).toBe("INSUFFICIENT");
     });
 
-    it("sets correct verdict for spam agent", () => {
+    it("sets correct verdict for spam agent (qualityTier='spam' → FLAGGED)", () => {
       const redacted = redactAgentForPublic(SPAM_AGENT as unknown as Record<string, unknown>);
-      expect(redacted.verdict).toBe("UNTRUSTED");
+      expect(redacted.verdict).toBe("FLAGGED");
     });
 
     it("sets UNKNOWN verdict for agent with null trustScore", () => {
@@ -114,15 +113,16 @@ describe("redactAgentForPublic", () => {
       const redacted = redactAgentForPublic(TRUSTED_AGENT as unknown as Record<string, unknown>);
       expect(redacted.imageUrl).toBe(TRUSTED_AGENT.imageUrl);
     });
+
+    it("preserves trustScore (v2 policy: aggregate score visible for leaderboard stamp)", () => {
+      const redacted = redactAgentForPublic(TRUSTED_AGENT as unknown as Record<string, unknown>);
+      expect(redacted.trustScore).toBe(TRUSTED_AGENT.trustScore);
+    });
   });
 
-  describe("No score leakage", () => {
-    it("numeric score is not present in any field value", () => {
+  describe("Protected field absence", () => {
+    it("trustScoreBreakdown is not present in redacted output", () => {
       const redacted = redactAgentForPublic(TRUSTED_AGENT as unknown as Record<string, unknown>);
-      const json = JSON.stringify(redacted);
-      // trustScore is 72 — ensure it doesn't appear as a standalone value
-      // (it might appear as part of erc8004Id or other data, which is fine)
-      expect(redacted).not.toHaveProperty("trustScore");
       expect(redacted).not.toHaveProperty("trustScoreBreakdown");
     });
 

@@ -177,7 +177,7 @@ const freeEndpoints: Endpoint[] = [
       },
       {
         field: "agents[].verdict",
-        description: 'High-level trust signal derived from ecosystem data: "TRUSTED", "CAUTION", "UNTRUSTED", or "UNKNOWN". Not a substitute for a full Trust Report.',
+        description: 'High-level trust signal derived from ecosystem data: "VERIFIED", "TRUSTED", "BUILDING", "INSUFFICIENT", "FLAGGED", or "UNKNOWN". Not a substitute for a full Trust Report.',
       },
       {
         field: "agents[].reportAvailable",
@@ -246,7 +246,7 @@ const freeEndpoints: Endpoint[] = [
       },
       {
         field: "verdict",
-        description: 'High-level trust signal: "TRUSTED", "CAUTION", "UNTRUSTED", or "UNKNOWN".',
+        description: 'High-level trust signal: "VERIFIED", "TRUSTED", "BUILDING", "INSUFFICIENT", "FLAGGED", or "UNKNOWN".',
       },
       {
         field: "reportAvailable",
@@ -545,7 +545,7 @@ const freeEndpoints: Endpoint[] = [
       },
       {
         field: "verdict",
-        description: 'High-level trust signal: "TRUSTED", "CAUTION", "UNTRUSTED", or "UNKNOWN".',
+        description: 'High-level trust signal: "VERIFIED", "TRUSTED", "BUILDING", "INSUFFICIENT", "FLAGGED", or "UNKNOWN".',
       },
       {
         field: "chainId",
@@ -670,7 +670,7 @@ const paidEndpoints: Endpoint[] = [
       },
       {
         field: "verdict",
-        description: 'Trust verdict: "TRUSTED", "CAUTION", "UNTRUSTED", or "UNKNOWN".',
+        description: 'Trust verdict: "VERIFIED", "TRUSTED", "BUILDING", "INSUFFICIENT", "FLAGGED", or "UNKNOWN".',
       },
       {
         field: "score",
@@ -735,7 +735,7 @@ const paidEndpoints: Endpoint[] = [
     responseFields: [
       {
         field: "verdict",
-        description: 'Trust verdict: "TRUSTED", "CAUTION", "UNTRUSTED", or "UNKNOWN".',
+        description: 'Trust verdict: "VERIFIED", "TRUSTED", "BUILDING", "INSUFFICIENT", "FLAGGED", or "UNKNOWN".',
       },
       {
         field: "score",

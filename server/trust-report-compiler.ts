@@ -3,22 +3,55 @@ import {
   type CommunityFeedbackSummary,
   type X402Probe,
   type TrustReport,
-  agents,
   trustAnchors,
   trustReports,
   x402Probes,
 } from "../shared/schema.js";
 import { CHAIN_CONFIGS } from "../shared/chains.js";
-import { type TrustScoreBreakdown, calculateTrustScore } from "./trust-score.js";
-import { computeConfidence } from "./trust-confidence.js";
+import {
+  type AttestationStats,
+  type ProbeStats,
+  type TrustScoreBreakdown,
+  type TrustScoreInput,
+  type TxStats,
+  calculateTrustScore,
+} from "./trust-score.js";
+import { computeConfidence, type ConfidenceResult } from "./trust-confidence.js";
+import { computeVerifications, type Verification } from "./trust-verifications.js";
+import { buildConfidenceInput } from "./trust-score-pipeline.js";
+import { computeDampeningMultiplier } from "./sybil-detection.js";
+import type { CategoryStrengths } from "./trust-categories.js";
+import { deriveCategoryStrengths } from "./trust-categories.js";
 import { storage } from "./storage.js";
 import { db } from "./db.js";
-import { eq, sql, lt, and } from "drizzle-orm";
+import { eq, sql, lt } from "drizzle-orm";
 import { log } from "./lib/log.js";
 
-// --- Types ---
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-export type Verdict = "TRUSTED" | "CAUTION" | "UNTRUSTED" | "UNKNOWN";
+/**
+ * 5-tier verdict (methodology v2, consolidated from the earlier 6-tier).
+ *
+ * UPPERCASE in memory and in the JSON blobs. The `verdict` column in
+ * `trust_reports` is lowercased at write time for backward compatibility
+ * with existing SQL aggregation queries.
+ */
+export type Verdict =
+  | "VERIFIED"       // 80-100
+  | "TRUSTED"        // 60-79
+  | "BUILDING"       // 40-59
+  | "INSUFFICIENT"   // 0-39 (absorbs the old UNVERIFIED + INSUFFICIENT_DATA)
+  | "FLAGGED";       // only when active negative evidence present
+
+/** Evidence basis — "how much do we know" companion to the score. */
+export interface EvidenceBasis {
+  transactionCount: number;
+  attestationCount: number;
+  uniquePayers: number;
+  uniqueAttestors: number;
+  dataSources: string[];
+  summary: string;
+}
 
 export interface QuickCheckData {
   address: string;
@@ -27,15 +60,58 @@ export interface QuickCheckData {
   verdict: Verdict;
   score: number;
   scoreBreakdown: TrustScoreBreakdown;
-  tier: string;
+  qualityTier: string;
   flags: string[];
   x402Active: boolean;
   ageInDays: number;
   crossChainPresence: number;
   transactionCount: number;
+  verificationCount: number;
+  categoryStrengths: CategoryStrengths;
+  evidenceBasis: EvidenceBasis;
   reportAvailable: boolean;
   generatedAt: string;
   reportVersion: number;
+}
+
+export interface ProvenanceAnchor {
+  merkleRoot: string;
+  merkleProof: string[];
+  leafHash: string;
+  anchoredScore: number;
+  anchoredMethodologyVersion: number;
+  txHash: string | null;
+  blockNumber: number | null;
+  anchoredAt: string;
+  contractAddress: string | null;
+  chain: string;
+  verificationUrl: string | null;
+}
+
+export interface TrustRating {
+  score: number;
+  verdict: Verdict;
+  breakdown: TrustScoreBreakdown;
+  evidenceBasis: EvidenceBasis;
+  confidence: ConfidenceResult;
+  categoryStrengths: CategoryStrengths;
+  provenance: {
+    signalHash: string | null;
+    /**
+     * Methodology version that produced the persisted score — `null` when the
+     * agent has never been scored. Consumers should treat null as "report
+     * synthesized from current data but provenance not yet captured"; a
+     * non-null value always pairs with a non-null signalHash + scoredAt.
+     */
+    methodologyVersion: number | null;
+    scoredAt: string | null;
+    disclaimer: string;
+    anchor: ProvenanceAnchor | null;
+  };
+  qualityTier: string;
+  spamFlags: string[];
+  lifecycleStatus: string;
+  updatedAt: string | null;
 }
 
 export interface FullReportData {
@@ -51,25 +127,8 @@ export interface FullReportData {
     capabilities: string[];
     skills: string[];
   };
-  trust: {
-    verdict: Verdict;
-    score: number;
-    breakdown: TrustScoreBreakdown;
-    tier: string;
-    flags: string[];
-    lifecycleStatus: string;
-    updatedAt: string | null;
-    signalHash: string | null;
-    methodologyVersion: number;
-    confidence: {
-      level: string;
-      score: number;
-      sourcesActive: number;
-      sourcesTotal: number;
-      missing: string[];
-      flags: string[];
-    };
-  };
+  trustRating: TrustRating;
+  verifications: Verification[];
   onChain: {
     firstSeenAt: string | null;
     ageInDays: number;
@@ -104,25 +163,6 @@ export interface FullReportData {
       community: string | null;
     };
   };
-  provenance: {
-    signalHash: string | null;
-    methodologyVersion: number;
-    scoredAt: string | null;
-    disclaimer: string;
-    anchor: {
-      merkleRoot: string;
-      merkleProof: string[];
-      leafHash: string;
-      anchoredScore: number;
-      anchoredMethodologyVersion: number;
-      txHash: string | null;
-      blockNumber: number | null;
-      anchoredAt: string;
-      contractAddress: string | null;
-      chain: string;
-      verificationUrl: string | null;
-    } | null;
-  };
   sybil: {
     signals: Array<{ type: string; severity: string; detail: string; value: number }>;
     riskScore: number;
@@ -131,35 +171,107 @@ export interface FullReportData {
   } | null;
 }
 
-const REPORT_VERSION = 2;
+// Report schema v3 (two-layer with evidenceBasis) pairs with methodology v2.
+// Schema version is independent of methodology version — bumped on any breaking shape change.
+export const REPORT_VERSION = 4;
 const REPORT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-// --- Verdict Logic ---
-
-export function computeVerdict(
-  score: number,
-  tier: string | null,
-  spamFlags: string[] | null,
-  lifecycleStatus: string | null,
-): Verdict {
-  const flags = spamFlags ?? [];
-  const status = lifecycleStatus ?? "active";
-
-  // Hard untrusted conditions
-  if (tier === "spam" || tier === "archived") return "UNTRUSTED";
-  if (status === "archived") return "UNTRUSTED";
-  if (score < 30) return "UNTRUSTED";
-
-  // Trusted: high/medium tier, good score, no flags
-  if (score >= 60 && (tier === "high" || tier === "medium") && flags.length === 0) {
-    return "TRUSTED";
+/** Normalize `agent.endpoints` (jsonb, shape varies) into an array form. */
+function normalizeEndpoints(endpoints: unknown): Array<{ name: string; url: string }> {
+  if (!endpoints) return [];
+  if (Array.isArray(endpoints)) return endpoints as Array<{ name: string; url: string }>;
+  if (typeof endpoints === "object") {
+    return Object.entries(endpoints as Record<string, any>).map(([name, url]) => ({
+      name,
+      url: typeof url === "string" ? url : JSON.stringify(url),
+    }));
   }
-
-  // Everything else is caution
-  return "CAUTION";
+  return [];
 }
 
-// --- Data Fetching Helpers ---
+const DISCLAIMER =
+  "TrustAdd scores reflect available evidence as of the assessment timestamp. They are not guarantees of safety. Verify independently for high-value decisions.";
+
+// ─── Verdict logic (5-tier, v2) ──────────────────────────────────────────────
+
+export interface VerdictInput {
+  score: number;
+  qualityTier: string | null;
+  spamFlags: string[] | null;
+  lifecycleStatus: string | null;
+}
+
+/**
+ * Compute a 5-tier verdict from score + active-negative-evidence signals.
+ *
+ * FLAGGED is reserved for ACTIVE negative evidence (spam/archived quality
+ * tier, archived lifecycle, or spam flags plus a very low score). A benign
+ * low-data agent at score 3 stays INSUFFICIENT — benefit of the doubt.
+ */
+export function computeVerdict(input: VerdictInput): Verdict {
+  const flags = input.spamFlags ?? [];
+  const tier = input.qualityTier;
+  const status = input.lifecycleStatus ?? "active";
+
+  // Hard FLAGGED: active negative evidence required
+  if (tier === "spam" || tier === "archived") return "FLAGGED";
+  if (status === "archived") return "FLAGGED";
+  if (flags.length > 0 && input.score < 10) return "FLAGGED";
+
+  // Score-based tiers
+  if (input.score >= 80) return "VERIFIED";
+  if (input.score >= 60) return "TRUSTED";
+  if (input.score >= 40) return "BUILDING";
+  return "INSUFFICIENT";
+}
+
+// ─── Evidence basis ──────────────────────────────────────────────────────────
+
+export function computeEvidenceBasis(
+  txStats: TxStats,
+  attestationStats: AttestationStats,
+  probeStats: ProbeStats,
+  feedback: CommunityFeedbackSummary | null | undefined,
+  agent: Pick<Agent, "name">,
+): EvidenceBasis {
+  const txCount = txStats.txCount;
+  // NOTE: v2 has attestations=0 always; branches below activate in v3.
+  const attCount = attestationStats.received;
+  const uniquePayers = txStats.uniquePayers;
+  const uniqueAttestors = attestationStats.uniqueAttestors;
+
+  const dataSources: string[] = [];
+  if (agent.name && agent.name.trim().length > 0) dataSources.push("identity");
+  if (txCount > 0) dataSources.push("transactions");
+  if (attCount > 0) dataSources.push("attestations");
+  if (probeStats.hasLive402 || probeStats.paymentAddressVerified) dataSources.push("x402_probes");
+  if ((feedback?.githubHealthScore ?? 0) > 0) dataSources.push("github");
+  if ((feedback?.farcasterScore ?? 0) > 0) dataSources.push("farcaster");
+
+  let summary: string;
+  if (txCount === 0 && attCount === 0) {
+    summary = "Based on profile data only — no verified transactions recorded yet";
+  } else if (txCount > 0 && attCount === 0) {
+    summary = `Based on ${txCount} verified transaction${txCount === 1 ? "" : "s"}`;
+  } else if (txCount === 0 && attCount > 0) {
+    summary = `Based on ${attCount} on-chain attestation${attCount === 1 ? "" : "s"}`;
+  } else if (txCount >= 5 && uniquePayers >= 3) {
+    summary = `Based on ${txCount} transactions from ${uniquePayers} unique payers and ${attCount} attestation${attCount === 1 ? "" : "s"}`;
+  } else {
+    summary = `Based on ${txCount} verified transaction${txCount === 1 ? "" : "s"} and ${attCount} attestation${attCount === 1 ? "" : "s"}`;
+  }
+
+  return {
+    transactionCount: txCount,
+    attestationCount: attCount,
+    uniquePayers,
+    uniqueAttestors,
+    dataSources,
+    summary,
+  };
+}
+
+// ─── Data fetching helpers ───────────────────────────────────────────────────
 
 async function getAgentCrossChainData(controllerAddress: string): Promise<{
   count: number;
@@ -207,19 +319,26 @@ async function getAgentProbes(agentId: string): Promise<X402Probe[]> {
   }
 }
 
-async function getAgentTransactionStats(agentId: string): Promise<{
-  count: number;
+/**
+ * Fetch tx aggregate stats + per-token breakdown.
+ *
+ * Returns both the scoring-grade `TxStats` (volume, count, payers, firstTxAt)
+ * and the report-grade breakdown fields (top tokens, last tx timestamp).
+ */
+async function getAgentTransactionAggregate(agentId: string): Promise<{
+  txStats: TxStats;
   totalVolumeUsd: number;
   topTokens: Array<{ symbol: string; count: number; volumeUsd: number }>;
   lastTxAt: string | null;
 }> {
   try {
-    // Single query: aggregate stats + per-token breakdown + last timestamp
     const result = await db.execute(sql`
       WITH stats AS (
         SELECT
           COUNT(*)::int as total_count,
           COALESCE(SUM(amount_usd), 0)::float as total_volume_usd,
+          COUNT(DISTINCT from_address)::int as unique_payers,
+          MIN(block_timestamp) as first_tx_at,
           MAX(block_timestamp) as last_tx_at
         FROM agent_transactions WHERE agent_id = ${agentId}
       ),
@@ -230,35 +349,79 @@ async function getAgentTransactionStats(agentId: string): Promise<{
         GROUP BY token_symbol ORDER BY volume_usd DESC LIMIT 5
       )
       SELECT
-        s.total_count, s.total_volume_usd, s.last_tx_at,
+        s.total_count, s.total_volume_usd, s.unique_payers,
+        s.first_tx_at, s.last_tx_at,
         COALESCE(json_agg(json_build_object(
           'symbol', t.token_symbol, 'count', t.count, 'volumeUsd', t.volume_usd
         )) FILTER (WHERE t.token_symbol IS NOT NULL), '[]') as top_tokens
       FROM stats s LEFT JOIN tokens t ON true
-      GROUP BY s.total_count, s.total_volume_usd, s.last_tx_at
+      GROUP BY s.total_count, s.total_volume_usd, s.unique_payers,
+               s.first_tx_at, s.last_tx_at
     `);
     const row = (result as any).rows?.[0];
-    if (!row) return { count: 0, totalVolumeUsd: 0, topTokens: [], lastTxAt: null };
+    if (!row) {
+      return {
+        txStats: { volumeUsd: 0, txCount: 0, uniquePayers: 0, firstTxAt: null },
+        totalVolumeUsd: 0,
+        topTokens: [],
+        lastTxAt: null,
+      };
+    }
+
+    const totalCount = Number(row.total_count ?? 0);
+    const totalVolumeUsd = Number(row.total_volume_usd ?? 0);
+    const uniquePayers = Number(row.unique_payers ?? 0);
+    const firstTxAt = row.first_tx_at ? new Date(row.first_tx_at) : null;
+    const lastTxAtRaw = row.last_tx_at;
+    const lastTxAt =
+      lastTxAtRaw?.toISOString?.() ?? (lastTxAtRaw ? String(lastTxAtRaw) : null);
+
+    const topTokens =
+      (typeof row.top_tokens === "string" ? JSON.parse(row.top_tokens) : row.top_tokens) ?? [];
 
     return {
-      count: Number(row.total_count ?? 0),
-      totalVolumeUsd: Number(row.total_volume_usd ?? 0),
-      topTokens: (typeof row.top_tokens === "string" ? JSON.parse(row.top_tokens) : row.top_tokens) ?? [],
-      lastTxAt: row.last_tx_at?.toISOString?.() ?? (row.last_tx_at ? String(row.last_tx_at) : null),
+      txStats: {
+        volumeUsd: totalVolumeUsd,
+        txCount: totalCount,
+        uniquePayers,
+        firstTxAt,
+      },
+      totalVolumeUsd,
+      topTokens,
+      lastTxAt,
     };
   } catch {
-    return { count: 0, totalVolumeUsd: 0, topTokens: [], lastTxAt: null };
+    return {
+      txStats: { volumeUsd: 0, txCount: 0, uniquePayers: 0, firstTxAt: null },
+      totalVolumeUsd: 0,
+      topTokens: [],
+      lastTxAt: null,
+    };
   }
 }
 
-// --- Compilers ---
+/** Derive `ProbeStats` from the already-fetched probe rows. */
+function deriveProbeStats(probes: X402Probe[]): ProbeStats {
+  let hasLive402 = false;
+  let paymentAddressVerified = false;
+  for (const p of probes) {
+    if (p.probeStatus === "success" && p.httpStatus === 402) hasLive402 = true;
+    if (p.probeStatus === "success" && p.paymentAddress) paymentAddressVerified = true;
+    if (hasLive402 && paymentAddressVerified) break;
+  }
+  return { hasLive402, paymentAddressVerified };
+}
+
+// ─── Compilers ───────────────────────────────────────────────────────────────
 
 export function compileQuickCheck(
   agent: Agent,
   breakdown: TrustScoreBreakdown,
   crossChainData: { count: number },
-  txStats: { count: number },
+  txStats: TxStats,
   verdict: Verdict,
+  verifications: Verification[],
+  evidenceBasis: EvidenceBasis,
 ): QuickCheckData {
   const ageDays = Math.floor((Date.now() - new Date(agent.createdAt).getTime()) / (1000 * 60 * 60 * 24));
 
@@ -269,28 +432,49 @@ export function compileQuickCheck(
     verdict,
     score: breakdown.total,
     scoreBreakdown: breakdown,
-    tier: agent.qualityTier ?? "unclassified",
+    qualityTier: agent.qualityTier ?? "unclassified",
     flags: agent.spamFlags ?? [],
     x402Active: agent.x402Support === true,
     ageInDays: ageDays,
     crossChainPresence: crossChainData.count,
-    transactionCount: txStats.count,
+    transactionCount: txStats.txCount,
+    verificationCount: verifications.filter(v => v.earned).length,
+    categoryStrengths: deriveCategoryStrengths(breakdown, agent.sybilRiskScore ?? 0),
+    evidenceBasis,
     reportAvailable: true,
     generatedAt: new Date().toISOString(),
     reportVersion: REPORT_VERSION,
   };
 }
 
-export function compileFullReport(
-  agent: Agent,
-  breakdown: TrustScoreBreakdown,
-  crossChainData: { count: number; chains: Array<{ chainId: number; name: string; firstSeenBlock: number }> },
-  eventCount: number,
-  probes: X402Probe[],
-  txStats: { count: number; totalVolumeUsd: number; topTokens: Array<{ symbol: string; count: number; volumeUsd: number }>; lastTxAt: string | null },
-  feedback: CommunityFeedbackSummary | null,
-  verdict: Verdict,
-): FullReportData {
+export interface CompileFullReportArgs {
+  agent: Agent;
+  breakdown: TrustScoreBreakdown;
+  crossChainData: { count: number; chains: Array<{ chainId: number; name: string; firstSeenBlock: number }> };
+  eventCount: number;
+  probes: X402Probe[];
+  txStats: TxStats;
+  txReportStats: {
+    totalVolumeUsd: number;
+    topTokens: Array<{ symbol: string; count: number; volumeUsd: number }>;
+    lastTxAt: string | null;
+  };
+  feedback: CommunityFeedbackSummary | null;
+  verdict: Verdict;
+  confidence: ConfidenceResult;
+  evidenceBasis: EvidenceBasis;
+  verifications: Verification[];
+  /** Score total BEFORE sybil dampening, for provenance on the sybil block. */
+  preDampeningTotal: number;
+}
+
+export function compileFullReport(args: CompileFullReportArgs): FullReportData {
+  const {
+    agent, breakdown, crossChainData, eventCount, probes,
+    txStats, txReportStats, feedback,
+    verdict, confidence, evidenceBasis, verifications, preDampeningTotal,
+  } = args;
+
   const ageDays = Math.floor((Date.now() - new Date(agent.createdAt).getTime()) / (1000 * 60 * 60 * 24));
 
   // Extract payment addresses from successful probes
@@ -308,19 +492,9 @@ export function compileFullReport(
       return acc;
     }, [] as Array<{ address: string; network: string; token: string }>);
 
-  // Extract endpoints as array
-  let endpointList: any[] = [];
-  if (agent.endpoints) {
-    if (Array.isArray(agent.endpoints)) endpointList = agent.endpoints;
-    else if (typeof agent.endpoints === "object") {
-      endpointList = Object.entries(agent.endpoints as Record<string, any>).map(([name, url]) => ({
-        name,
-        url: typeof url === "string" ? url : JSON.stringify(url),
-      }));
-    }
-  }
+  // Normalize endpoints to array form for the report shape.
+  const endpointList = normalizeEndpoints(agent.endpoints);
 
-  const hasEndpoints = endpointList.length > 0;
   const latestProbeAt = probes.length > 0 ? probes[0].probedAt.toISOString() : null;
 
   return {
@@ -336,27 +510,31 @@ export function compileFullReport(
       capabilities: agent.capabilities ?? [],
       skills: agent.oasfSkills ?? [],
     },
-    trust: {
-      verdict,
+    trustRating: {
       score: breakdown.total,
+      verdict,
       breakdown,
-      tier: agent.qualityTier ?? "unclassified",
-      flags: agent.spamFlags ?? [],
+      evidenceBasis,
+      confidence,
+      categoryStrengths: deriveCategoryStrengths(breakdown, agent.sybilRiskScore ?? 0),
+      provenance: {
+        signalHash: agent.trustSignalHash ?? null,
+        // Emit the methodology version ACTUALLY persisted for this agent.
+        // If never scored, stays null — don't default to current version, as
+        // that would claim provenance we don't have. Paired with signalHash +
+        // scoredAt so consumers can verify: all three non-null ⇒ fully
+        // audited; any null ⇒ incomplete provenance.
+        methodologyVersion: agent.trustMethodologyVersion ?? null,
+        scoredAt: agent.trustScoreUpdatedAt?.toISOString() ?? null,
+        disclaimer: DISCLAIMER,
+        anchor: null,
+      },
+      qualityTier: agent.qualityTier ?? "unclassified",
+      spamFlags: agent.spamFlags ?? [],
       lifecycleStatus: agent.lifecycleStatus ?? "active",
       updatedAt: agent.trustScoreUpdatedAt?.toISOString() ?? null,
-      signalHash: agent.trustSignalHash ?? null,
-      methodologyVersion: agent.trustMethodologyVersion ?? 1,
-      confidence: computeConfidence({
-        hasIdentity: !!(agent.name && agent.name.trim().length > 0),
-        hasProbes: probes.length > 0,
-        hasTransactions: txStats.count > 0,
-        hasGithub: (feedback?.githubHealthScore ?? 0) > 0,
-        hasFarcaster: (feedback?.farcasterScore ?? 0) > 0,
-      }, {
-        x402ActiveButNoTransactions: agent.x402Support === true && txStats.count === 0,
-        endpointsDeclaredButAllFail: !!hasEndpoints && probes.length > 0 && probes.every(p => p.probeStatus !== "success"),
-      }),
     },
+    verifications,
     onChain: {
       firstSeenAt: agent.createdAt.toISOString(),
       ageInDays: ageDays,
@@ -367,9 +545,9 @@ export function compileFullReport(
     economy: {
       x402Support: agent.x402Support === true,
       paymentAddresses,
-      transactionCount: txStats.count,
-      totalVolumeUsd: txStats.totalVolumeUsd,
-      topTokens: txStats.topTokens,
+      transactionCount: txStats.txCount,
+      totalVolumeUsd: txReportStats.totalVolumeUsd,
+      topTokens: txReportStats.topTokens,
     },
     community: {
       githubHealthScore: feedback?.githubHealthScore ?? null,
@@ -387,67 +565,124 @@ export function compileFullReport(
       dataFreshness: {
         trustScore: agent.trustScoreUpdatedAt?.toISOString() ?? null,
         probes: latestProbeAt,
-        transactions: txStats.lastTxAt,
+        transactions: txReportStats.lastTxAt,
         community: feedback?.lastUpdatedAt?.toISOString() ?? null,
       },
-    },
-    provenance: {
-      signalHash: agent.trustSignalHash ?? null,
-      methodologyVersion: agent.trustMethodologyVersion ?? 1,
-      scoredAt: agent.trustScoreUpdatedAt?.toISOString() ?? null,
-      disclaimer: "TrustAdd scores reflect available evidence as of the assessment timestamp. They are not guarantees of safety. Verify independently for high-value decisions.",
-      anchor: null,
     },
     sybil: agent.sybilSignals ? {
       signals: agent.sybilSignals as any[],
       riskScore: agent.sybilRiskScore ?? 0,
       dampeningApplied: (agent.sybilRiskScore ?? 0) > 0,
-      rawScoreBeforeDampening: (agent.sybilRiskScore ?? 0) > 0
-        ? Math.round(breakdown.total / (1.0 - ((agent.sybilRiskScore ?? 0) * 0.5)))
-        : null,
+      rawScoreBeforeDampening: (agent.sybilRiskScore ?? 0) > 0 ? preDampeningTotal : null,
     } : null,
   };
 }
 
-// --- Core Operations ---
+// ─── Core operations ─────────────────────────────────────────────────────────
 
 /**
  * Compile and cache a trust report for a given agent.
- * Fetches all required data, compiles both tiers, and upserts into trust_reports.
+ *
+ * Fetches raw inputs, builds the v2 `TrustScoreInput`, runs the pure scorer,
+ * applies the same sybil dampening the recalc pipeline applies (reusing the
+ * persisted `sybilRiskScore` on the agent row — batch path authoritative),
+ * derives the verdict + verifications + evidence basis, and upserts a cached
+ * `trust_reports` row.
  */
 export async function compileAndCacheReport(agentId: string): Promise<TrustReport | null> {
   const agent = await storage.getAgent(agentId);
   if (!agent) return null;
 
-  // Fetch all data in parallel
-  const [crossChainData, eventCount, probes, txStats, feedback, anchorRow] = await Promise.all([
+  // Fetch everything in parallel.
+  const [crossChainData, eventCount, probes, txAggregate, feedbackRaw, anchorRow] = await Promise.all([
     getAgentCrossChainData(agent.controllerAddress),
     getAgentEventCount(agentId),
     getAgentProbes(agentId),
-    getAgentTransactionStats(agentId),
-    storage.getCommunityFeedbackSummary(agentId).catch(() => null),
+    getAgentTransactionAggregate(agentId),
+    storage.getCommunityFeedbackSummary(agentId).then(v => v ?? null).catch(() => null),
     db.select().from(trustAnchors).where(eq(trustAnchors.agentId, agentId)).limit(1)
       .then(rows => rows[0] ?? null)
       .catch(() => null),
   ]);
 
-  const rawBreakdown = calculateTrustScore(agent, feedback, eventCount, crossChainData.count);
+  const feedback: CommunityFeedbackSummary | null = feedbackRaw;
+  const { txStats, ...txReportStats } = txAggregate;
+  const probeStats = deriveProbeStats(probes);
 
-  // Apply sybil dampening (matches recalculateAllScores pipeline)
-  const { computeDampeningMultiplier } = await import("./sybil-detection.js");
+  // TODO(v3): wire a real attestation pipeline. Until then the scorer sees
+  // zero received/attestors for everyone.
+  const attestationStats: AttestationStats = { received: 0, uniqueAttestors: 0 };
+
+  const scoreInput: TrustScoreInput = {
+    agent,
+    txStats,
+    attestationStats,
+    probeStats,
+    feedback,
+    metadataEventCount: eventCount,
+    chainPresence: crossChainData.count,
+  };
+
+  const rawBreakdown = calculateTrustScore(scoreInput);
+  const preDampeningTotal = rawBreakdown.total;
+
+  // Apply sybil dampening using the persisted risk score from the recalc
+  // pipeline. Duplicates the 3-line logic in trust-score-pipeline.ts
+  // `applySybilDampening` — see that file for the authoritative version. We
+  // use the persisted score here rather than re-running the analyzer so the
+  // compiler stays decoupled from the sybil lookup prefetch path.
   const sybilMultiplier = computeDampeningMultiplier(agent.sybilRiskScore ?? 0);
-  const dampenedTotal = Math.round(rawBreakdown.total * sybilMultiplier);
-  const breakdown = { ...rawBreakdown, total: dampenedTotal };
+  const dampenedTotal = Math.round(preDampeningTotal * sybilMultiplier);
+  const breakdown: TrustScoreBreakdown = { ...rawBreakdown, total: dampenedTotal };
 
-  const verdict = computeVerdict(breakdown.total, agent.qualityTier, agent.spamFlags, agent.lifecycleStatus);
+  // Verdict — 5-tier v2.
+  const verdict = computeVerdict({
+    score: breakdown.total,
+    qualityTier: agent.qualityTier,
+    spamFlags: agent.spamFlags,
+    lifecycleStatus: agent.lifecycleStatus,
+  });
 
-  const quickCheckData = compileQuickCheck(agent, breakdown, crossChainData, txStats, verdict);
-  const fullReportData = compileFullReport(agent, breakdown, crossChainData, eventCount, probes, txStats, feedback, verdict);
+  // Verifications — always emit all 9.
+  const verifications = computeVerifications({
+    agent,
+    txStats,
+    probeStats,
+    feedback,
+    metadataEventCount: eventCount,
+    chainPresence: crossChainData.count,
+  });
 
-  // Patch on-chain anchor proof into report (fetched in parallel above)
+  // Evidence basis.
+  const evidenceBasis = computeEvidenceBasis(txStats, attestationStats, probeStats, feedback, agent);
+
+  // Confidence — reuse the shared `buildConfidenceInput` helper from the
+  // pipeline so this file and the recalc path stay in lockstep. Consistency
+  // flags remain per-caller (the compiler knows about live probes/endpoints).
+  const endpointCount = normalizeEndpoints(agent.endpoints).length;
+  const confidence = computeConfidence(
+    buildConfidenceInput(agent, txStats, probeStats, attestationStats, feedback),
+    {
+      x402ActiveButNoTransactions: agent.x402Support === true && txStats.txCount === 0,
+      endpointsDeclaredButAllFail:
+        endpointCount > 0 && probes.length > 0 && probes.every(p => p.probeStatus !== "success"),
+    },
+  );
+
+  const quickCheckData = compileQuickCheck(
+    agent, breakdown, crossChainData, txStats, verdict, verifications, evidenceBasis,
+  );
+  const fullReportData = compileFullReport({
+    agent, breakdown, crossChainData, eventCount, probes,
+    txStats, txReportStats,
+    feedback, verdict, confidence, evidenceBasis, verifications,
+    preDampeningTotal,
+  });
+
+  // Patch anchor proof into provenance (if present).
   if (anchorRow) {
     const trustRootAddress = process.env.TRUST_ROOT_ADDRESS ?? null;
-    fullReportData.provenance.anchor = {
+    fullReportData.trustRating.provenance.anchor = {
       merkleRoot: anchorRow.merkleRoot,
       merkleProof: anchorRow.merkleProof as string[],
       leafHash: anchorRow.leafHash,
@@ -467,7 +702,8 @@ export async function compileAndCacheReport(agentId: string): Promise<TrustRepor
   const now = new Date();
   const expiresAt = new Date(now.getTime() + REPORT_TTL_MS);
 
-  // Upsert: one report per agent
+  // Upsert: one report per agent. `verdict` column stays lowercase for
+  // backward compat with existing SQL aggregation queries.
   const [report] = await db.insert(trustReports).values({
     agentId,
     lookupAddress: agent.primaryContractAddress.toLowerCase(),
@@ -520,8 +756,8 @@ export async function resolveAgentByAddress(address: string, chainId?: number): 
     `);
     const rows = (result as any).rows ?? [];
     if (rows.length > 0) {
-      // Re-fetch via storage to get proper typed object
-      return await storage.getAgent(rows[0].id);
+      // Re-fetch via storage to get a properly typed object.
+      return (await storage.getAgent(rows[0].id)) ?? null;
     }
   } catch {}
 
@@ -531,7 +767,7 @@ export async function resolveAgentByAddress(address: string, chainId?: number): 
       .where(sql`LOWER(payment_address) = ${addr}`)
       .limit(1);
     if (probeResult.length > 0) {
-      return await storage.getAgent(probeResult[0].agentId);
+      return (await storage.getAgent(probeResult[0].agentId)) ?? null;
     }
   } catch {}
 
@@ -540,29 +776,32 @@ export async function resolveAgentByAddress(address: string, chainId?: number): 
 
 /**
  * Get a cached report or compile on-demand if stale/missing.
- * Resolves the agent first (by any address type), then checks cache by agentId.
- * This ensures lookups by controller or payment address still hit the cache.
  */
 export async function getOrCompileReport(address: string, chainId?: number): Promise<{
   report: TrustReport;
   compiled: boolean;
 } | null> {
-  // Resolve agent first — handles contract, controller, and payment addresses
   const agent = await resolveAgentByAddress(address, chainId);
   if (!agent) return null;
 
-  // Check cache by agentId (unique index) — works regardless of which address was used for lookup
   try {
     const cached = await db.select().from(trustReports)
       .where(eq(trustReports.agentId, agent.id))
       .limit(1);
 
-    if (cached.length > 0 && new Date(cached[0].expiresAt) > new Date()) {
+    // Invalidate cache on both staleness AND report-version mismatch. After a
+    // methodology/report-shape bump, any cached v1/v2 blob is the wrong shape
+    // even if still within TTL — force recompile rather than return malformed
+    // data to paid x402 clients.
+    if (
+      cached.length > 0 &&
+      new Date(cached[0].expiresAt) > new Date() &&
+      cached[0].reportVersion === REPORT_VERSION
+    ) {
       return { report: cached[0], compiled: false };
     }
   } catch {}
 
-  // Compile and cache
   const report = await compileAndCacheReport(agent.id);
   if (!report) return null;
 
@@ -580,14 +819,13 @@ export function incrementAccessCount(reportId: number, tier: "quick" | "full"): 
 }
 
 /**
- * Batch recompile reports for agents whose scores changed.
+ * Batch recompile reports for agents whose cached reports are stale.
  * Called from Trigger.dev recalculate task.
  */
 export async function batchRecompileReports(options?: { limit?: number }): Promise<{ recompiled: number; elapsed: number }> {
   const start = Date.now();
   const limit = options?.limit ?? 500;
 
-  // Recompile reports that exist and are expired, or where score has changed
   const staleReports = await db.select({ agentId: trustReports.agentId }).from(trustReports)
     .where(lt(trustReports.expiresAt, new Date()))
     .limit(limit);

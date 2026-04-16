@@ -3,6 +3,67 @@
  * These represent known agent profiles with predictable scoring outcomes.
  */
 import type { Agent, CommunityFeedbackSummary } from "../../shared/schema.js";
+import type {
+  TxStats,
+  AttestationStats,
+  ProbeStats,
+} from "../../server/trust-score.js";
+
+// ─── v2 stat containers ──────────────────────────────────────────────────────
+
+/** Zero TxStats — the default for agents with no transaction data. */
+export const EMPTY_TX_STATS: TxStats = {
+  volumeUsd: 0,
+  txCount: 0,
+  uniquePayers: 0,
+  firstTxAt: null,
+};
+
+/** Zero AttestationStats — v2 always yields this until v3 pipeline lands. */
+export const EMPTY_ATTESTATION_STATS: AttestationStats = {
+  received: 0,
+  uniqueAttestors: 0,
+};
+
+/** Zero ProbeStats — no x402 probe evidence. */
+export const EMPTY_PROBE_STATS: ProbeStats = {
+  hasLive402: false,
+  paymentAddressVerified: false,
+};
+
+/** Rich TxStats — extensive transaction history (for VERIFIED-tier test agents). */
+export const RICH_TX_STATS: TxStats = {
+  volumeUsd: 5_000,        // >= $1,000 tier (+15)
+  txCount: 120,            // >= 50 tier (+8)
+  uniquePayers: 25,        // >= 10 tier (+5)
+  firstTxAt: new Date("2025-10-01T00:00:00Z"), // >= 90 days old (+5 longevity)
+};
+
+/** Mid-tier TxStats. */
+export const MEDIUM_TX_STATS: TxStats = {
+  volumeUsd: 150,          // >= $100 tier (+10)
+  txCount: 8,              // >= 5 tier (+3)
+  uniquePayers: 4,         // >= 3 tier (+3)
+  firstTxAt: new Date("2026-02-01T00:00:00Z"), // ~70 days ago (>=30d tier +3)
+};
+
+/** Rich AttestationStats. */
+export const RICH_ATTESTATION_STATS: AttestationStats = {
+  received: 30,            // >= 25 tier (+18)
+  uniqueAttestors: 12,     // >= 10 tier (+7)
+};
+
+/** Medium AttestationStats. */
+export const MEDIUM_ATTESTATION_STATS: AttestationStats = {
+  received: 7,             // >= 5 tier (+7)
+  uniqueAttestors: 4,      // >= 3 tier (+3)
+};
+
+/** ProbeStats with live 402 + verified payment address. */
+export const LIVE_PROBE_STATS: ProbeStats = {
+  hasLive402: true,
+  paymentAddressVerified: true,
+};
 
 /** Minimal valid agent with only required fields populated. */
 function baseAgent(overrides: Partial<Agent> = {}): Agent {

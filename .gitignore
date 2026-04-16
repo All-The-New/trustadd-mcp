@@ -1,19 +1,23 @@
-node_modules
-dist
-*.tsbuildinfo
-*.tar.gz
-
-# Environment
-.env
-.env.*
-
-# Vercel
-.vercel
-
-# OS
-.DS_Store
-Thumbs.db
 
 # Build artifacts
+# Environment
+# OS
+# Superpowers session state
+# Trigger.dev build tmp
+# Vercel
+*.tar.gz
+*.tsbuildinfo
+.DS_Store
+.env
+.env.*
+.superpowers
+.superpowers/
+.trigger
+.vercel
+.worktrees
+.worktrees/
+Thumbs.db
+dist
+node_modules
 server/public
 vite.config.ts.*

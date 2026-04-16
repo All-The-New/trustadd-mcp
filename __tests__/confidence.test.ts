@@ -1,64 +1,72 @@
 /**
- * Confidence Scoring Tests (P0)
+ * Confidence Scoring Tests (Methodology v2 — 6 sources, rebalanced weights).
  *
- * Tests the `computeConfidence()` function for all confidence levels,
- * source counting, and consistency penalty application.
+ * Tests the `computeConfidence()` function for levels, source counting,
+ * missing labels, and consistency penalty application.
+ *
+ * v2 weights: identity 0.20, transactions 0.25, attestations 0.15,
+ * probes 0.15, github 0.15, farcaster 0.10 — sum 1.0.
  */
 import { describe, it, expect } from "vitest";
 import { computeConfidence } from "../server/trust-confidence.js";
 
 describe("computeConfidence", () => {
   describe("Confidence levels", () => {
-    it("returns 'high' confidence when all sources are active", () => {
+    it("returns 'high' confidence when all 6 sources are active", () => {
       const result = computeConfidence({
         hasIdentity: true,
         hasProbes: true,
         hasTransactions: true,
+        hasAttestations: true,
         hasGithub: true,
         hasFarcaster: true,
       });
       expect(result.level).toBe("high");
-      expect(result.score).toBe(1.0);
-      expect(result.sourcesActive).toBe(5);
+      expect(result.score).toBeCloseTo(1.0, 5);
+      expect(result.sourcesActive).toBe(6);
       expect(result.missing).toHaveLength(0);
     });
 
-    it("returns 'medium' confidence with identity + transactions + github", () => {
+    it("returns 'medium' confidence with identity + transactions + attestations (behavioral-first = 0.60)", () => {
       const result = computeConfidence({
-        hasIdentity: true,   // 0.30
-        hasProbes: false,    // 0
-        hasTransactions: true, // 0.20
-        hasGithub: true,     // 0.20
-        hasFarcaster: false, // 0
+        hasIdentity: true,      // 0.20
+        hasProbes: false,
+        hasTransactions: true,  // 0.25
+        hasAttestations: true,  // 0.15
+        hasGithub: false,
+        hasFarcaster: false,
       });
-      expect(result.level).toBe("high"); // 0.70 exactly = high threshold
-      expect(result.score).toBe(0.7);
+      // 0.20 + 0.25 + 0.15 = 0.60 → medium (>=0.45, <0.7)
+      expect(result.level).toBe("medium");
+      expect(result.score).toBeCloseTo(0.60, 5);
       expect(result.sourcesActive).toBe(3);
     });
 
-    it("returns 'low' confidence with identity + probes only (floating-point: 0.30+0.15 < 0.45)", () => {
+    it("returns 'medium' with identity + transactions + github (= 0.60)", () => {
       const result = computeConfidence({
-        hasIdentity: true,   // 0.30
-        hasProbes: true,     // 0.15
-        hasTransactions: false,
-        hasGithub: false,
+        hasIdentity: true,      // 0.20
+        hasProbes: false,
+        hasTransactions: true,  // 0.25
+        hasAttestations: false,
+        hasGithub: true,        // 0.15
         hasFarcaster: false,
       });
-      // JS floating-point: 0.30 + 0.15 = 0.44999... which is < 0.45 threshold
-      expect(result.level).toBe("low");
-      expect(result.score).toBeCloseTo(0.45, 1);
+      expect(result.level).toBe("medium");
+      expect(result.score).toBeCloseTo(0.60, 5);
     });
 
-    it("returns 'low' confidence with identity only", () => {
+    it("returns 'low' confidence with identity only (0.20)", () => {
       const result = computeConfidence({
-        hasIdentity: true,   // 0.30
+        hasIdentity: true,
         hasProbes: false,
         hasTransactions: false,
+        hasAttestations: false,
         hasGithub: false,
         hasFarcaster: false,
       });
-      expect(result.level).toBe("low"); // 0.30
-      expect(result.score).toBe(0.3);
+      // 0.20 — exactly at low-tier boundary (>=0.2, <0.45)
+      expect(result.level).toBe("low");
+      expect(result.score).toBeCloseTo(0.20, 5);
     });
 
     it("returns 'minimal' confidence with no sources", () => {
@@ -66,73 +74,135 @@ describe("computeConfidence", () => {
         hasIdentity: false,
         hasProbes: false,
         hasTransactions: false,
+        hasAttestations: false,
         hasGithub: false,
         hasFarcaster: false,
       });
       expect(result.level).toBe("minimal");
       expect(result.score).toBe(0);
       expect(result.sourcesActive).toBe(0);
-      expect(result.missing).toHaveLength(5);
+      expect(result.missing).toHaveLength(6);
+    });
+
+    it("returns 'minimal' for farcaster-only (0.10 < 0.2 low threshold)", () => {
+      const result = computeConfidence({
+        hasIdentity: false,
+        hasProbes: false,
+        hasTransactions: false,
+        hasAttestations: false,
+        hasGithub: false,
+        hasFarcaster: true,
+      });
+      expect(result.level).toBe("minimal");
+      expect(result.score).toBeCloseTo(0.10, 5);
     });
   });
 
   describe("Missing sources", () => {
-    it("lists all missing sources by label", () => {
+    it("lists all 5 missing sources when only identity is active", () => {
       const result = computeConfidence({
         hasIdentity: true,
         hasProbes: false,
         hasTransactions: false,
+        hasAttestations: false,
         hasGithub: false,
         hasFarcaster: false,
       });
       expect(result.missing).toContain("x402_probes");
       expect(result.missing).toContain("transactions");
+      expect(result.missing).toContain("attestations");
       expect(result.missing).toContain("github");
       expect(result.missing).toContain("farcaster");
       expect(result.missing).not.toContain("identity");
+      expect(result.missing).toHaveLength(5);
+    });
+
+    it("lists attestations as a missing label when absent", () => {
+      const result = computeConfidence({
+        hasIdentity: true,
+        hasProbes: true,
+        hasTransactions: true,
+        hasAttestations: false,
+        hasGithub: true,
+        hasFarcaster: true,
+      });
+      expect(result.missing).toContain("attestations");
     });
   });
 
   describe("Consistency penalties", () => {
     it("applies penalty for x402 claimed but no transactions", () => {
       const result = computeConfidence(
-        { hasIdentity: true, hasProbes: true, hasTransactions: false, hasGithub: true, hasFarcaster: true },
+        {
+          hasIdentity: true,
+          hasProbes: true,
+          hasTransactions: false,
+          hasAttestations: true,
+          hasGithub: true,
+          hasFarcaster: true,
+        },
         { x402ActiveButNoTransactions: true },
       );
       expect(result.flags).toContain("x402_claimed_no_transactions");
-      // All except transactions: 0.30 + 0.15 + 0.20 + 0.15 = 0.80, minus penalty 0.05 = 0.75
-      expect(result.score).toBeCloseTo(0.75, 5);
+      // Everything except transactions: 0.20+0.15+0.15+0.15+0.10 = 0.75, -0.05 penalty = 0.70
+      expect(result.score).toBeCloseTo(0.70, 5);
     });
 
     it("applies penalty for endpoints declared but all fail", () => {
       const result = computeConfidence(
-        { hasIdentity: true, hasProbes: true, hasTransactions: true, hasGithub: true, hasFarcaster: true },
+        {
+          hasIdentity: true,
+          hasProbes: true,
+          hasTransactions: true,
+          hasAttestations: true,
+          hasGithub: true,
+          hasFarcaster: true,
+        },
         { endpointsDeclaredButAllFail: true },
       );
       expect(result.flags).toContain("endpoints_unreachable");
-      expect(result.score).toBe(1.0 - 0.05);
+      expect(result.score).toBeCloseTo(1.0 - 0.05, 5);
     });
 
     it("applies both penalties cumulatively", () => {
       const result = computeConfidence(
-        { hasIdentity: true, hasProbes: true, hasTransactions: true, hasGithub: true, hasFarcaster: true },
+        {
+          hasIdentity: true,
+          hasProbes: true,
+          hasTransactions: true,
+          hasAttestations: true,
+          hasGithub: true,
+          hasFarcaster: true,
+        },
         { x402ActiveButNoTransactions: true, endpointsDeclaredButAllFail: true },
       );
       expect(result.flags).toHaveLength(2);
-      expect(result.score).toBe(1.0 - 0.10);
+      expect(result.score).toBeCloseTo(1.0 - 0.10, 5);
     });
 
     it("does not apply penalties when flags are absent", () => {
-      const result = computeConfidence(
-        { hasIdentity: true, hasProbes: true, hasTransactions: true, hasGithub: true, hasFarcaster: true },
-      );
+      const result = computeConfidence({
+        hasIdentity: true,
+        hasProbes: true,
+        hasTransactions: true,
+        hasAttestations: true,
+        hasGithub: true,
+        hasFarcaster: true,
+      });
       expect(result.flags).toHaveLength(0);
-      expect(result.score).toBe(1.0);
+      expect(result.score).toBeCloseTo(1.0, 5);
     });
 
-    it("clamps score to 0 (never negative)", () => {
+    it("clamps score to 0 (never negative) even with penalties", () => {
       const result = computeConfidence(
-        { hasIdentity: false, hasProbes: false, hasTransactions: false, hasGithub: false, hasFarcaster: false },
+        {
+          hasIdentity: false,
+          hasProbes: false,
+          hasTransactions: false,
+          hasAttestations: false,
+          hasGithub: false,
+          hasFarcaster: false,
+        },
         { x402ActiveButNoTransactions: true, endpointsDeclaredButAllFail: true },
       );
       expect(result.score).toBe(0);
@@ -140,15 +210,28 @@ describe("computeConfidence", () => {
   });
 
   describe("sourcesTotal", () => {
-    it("always reports 5 total sources", () => {
+    it("always reports 6 total sources (v2 adds attestations)", () => {
       const result = computeConfidence({
         hasIdentity: false,
         hasProbes: false,
         hasTransactions: false,
+        hasAttestations: false,
         hasGithub: false,
         hasFarcaster: false,
       });
-      expect(result.sourcesTotal).toBe(5);
+      expect(result.sourcesTotal).toBe(6);
+    });
+
+    it("reports 6 total even when all sources active", () => {
+      const result = computeConfidence({
+        hasIdentity: true,
+        hasProbes: true,
+        hasTransactions: true,
+        hasAttestations: true,
+        hasGithub: true,
+        hasFarcaster: true,
+      });
+      expect(result.sourcesTotal).toBe(6);
     });
   });
 });

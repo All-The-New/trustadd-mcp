@@ -13,6 +13,8 @@ export interface ConfidenceInput {
   hasProbes: boolean;
   /** On-chain transactions are present for this agent */
   hasTransactions: boolean;
+  /** ERC-8004 reputation attestations are present for this agent */
+  hasAttestations: boolean;
   /** GitHub health data is available */
   hasGithub: boolean;
   /** Farcaster presence data is available */
@@ -43,14 +45,29 @@ export interface ConfidenceResult {
   flags: string[];
 }
 
-/** Source weights must sum to 1.0 */
+/**
+ * Source weights must sum to 1.0.
+ *
+ * v2 rebalance: behavioral sources (transactions + attestations) now total
+ * 0.40, up from 0.20 — matching the methodology v2 "behavioral-first"
+ * philosophy. Identity drops from 0.30 to 0.20 accordingly.
+ */
 const SOURCE_WEIGHTS: Array<{ key: keyof ConfidenceInput; label: string; weight: number }> = [
-  { key: "hasIdentity", label: "identity", weight: 0.30 },
-  { key: "hasTransactions", label: "transactions", weight: 0.20 },
-  { key: "hasGithub", label: "github", weight: 0.20 },
+  { key: "hasTransactions", label: "transactions", weight: 0.25 },
+  { key: "hasIdentity", label: "identity", weight: 0.20 },
+  { key: "hasAttestations", label: "attestations", weight: 0.15 },
   { key: "hasProbes", label: "x402_probes", weight: 0.15 },
-  { key: "hasFarcaster", label: "farcaster", weight: 0.15 },
+  { key: "hasGithub", label: "github", weight: 0.15 },
+  { key: "hasFarcaster", label: "farcaster", weight: 0.10 },
 ];
+
+// Sanity check: weights must sum to 1.0 (within float tolerance)
+{
+  const sum = SOURCE_WEIGHTS.reduce((a, s) => a + s.weight, 0);
+  if (Math.abs(sum - 1.0) > 1e-9) {
+    throw new Error(`trust-confidence SOURCE_WEIGHTS must sum to 1.0 (got ${sum})`);
+  }
+}
 
 const CONSISTENCY_PENALTY = 0.05;
 

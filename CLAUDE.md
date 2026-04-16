@@ -16,7 +16,7 @@ npm run dev                    # Express + Vite HMR on port 5001
 | Frontend | **Vercel** (static SPA) | React/Vite builds to `dist/public`, served as static files |
 | API | **Vercel** (serverless) | Express app wrapped in `api/[...path].ts` catch-all |
 | Database | **Supabase** PostgreSQL | Project `agfyfdhvgekekliujoxc` (us-east-2), Drizzle ORM |
-| Background Jobs | **Trigger.dev** | 10 tasks in `trigger/` directory (7 scheduled + 2 child tasks + 1 alert helper) |
+| Background Jobs | **Trigger.dev** | 11 tasks in `trigger/` directory (7 scheduled + 3 child tasks + 1 alert helper) |
 | Analytics | **Vercel Web Analytics** | `@vercel/analytics/react` in App.tsx, plus custom `api_request_log` table |
 | Error Tracking | **Sentry** | OTEL integration via `trigger.config.ts`, captures all task failures |
 | DNS/CDN | **Cloudflare** | trustadd.com → Vercel |
@@ -68,7 +68,7 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - `api/agent/[id].ts` — SSR meta tag injection for agent pages (SEO: serves index.html with per-agent title, description, OG tags, canonical, JSON-LD)
 - `api/health.ts` — Standalone health check with DB connection test
 - `server/lib/request-logger.ts` — Fire-and-forget API request logging middleware (path normalization, 90-day stochastic cleanup)
-- `trigger/` — 10 Trigger.dev tasks: `blockchain-indexer` (orchestrator, */2 cron) → `chain-indexer` (per-chain child, 2 cycles + 90s checkpointed wait), `community-feedback` (orchestrator, daily 4am) → `community-scrape` (per-platform child), `transaction-indexer`, `x402-prober`, `recalculate-scores` (scores + sybil dampening + slugs + classification + report recompilation), `watchdog`, `bazaar-indexer`, + `alert` helper
+- `trigger/` — 11 Trigger.dev tasks: `blockchain-indexer` (orchestrator, */2 cron) → `chain-indexer` (per-chain child, 2 cycles + 90s checkpointed wait), `community-feedback` (orchestrator, daily 4am) → `community-scrape` (per-platform child), `transaction-indexer`, `x402-prober`, `recalculate-scores` (scores + sybil dampening + slugs + classification + report recompilation) → `anchor-scores` (Merkle root publish on Base, fire-and-forget child), `watchdog`, `bazaar-indexer`, + `alert` helper
 - `server/trust-score.ts` — Trust scoring engine (17-signal explainability, provenance hash, confidence integration)
 - `server/trust-provenance.ts` — Signal provenance hashing (SHA-256 of canonical scoring inputs, METHODOLOGY_VERSION)
 - `server/trust-confidence.ts` — Confidence level computation (source coverage weighting, consistency flags)

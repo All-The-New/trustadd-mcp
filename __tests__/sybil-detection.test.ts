@@ -261,15 +261,25 @@ describe("computeDampeningMultiplier", () => {
 });
 
 describe("sybil dampening integration", () => {
-  it("dampened score can change verdict from CAUTION to UNTRUSTED", () => {
-    // Agent with raw score 45 → CAUTION normally
-    const rawVerdict = computeVerdict(45, "low", [], "active");
-    expect(rawVerdict).toBe("CAUTION");
+  it("dampened score can change verdict tier under v2 thresholds", () => {
+    // Agent with raw score 45 → BUILDING (40-59) normally.
+    const rawVerdict = computeVerdict({
+      score: 45,
+      qualityTier: "low",
+      spamFlags: [],
+      lifecycleStatus: "active",
+    });
+    expect(rawVerdict).toBe("BUILDING");
 
-    // After 50% dampening (high sybil risk) → score 23 → UNTRUSTED
+    // After 50% dampening → score 23 → INSUFFICIENT (0-39 under v2 consolidation).
     const dampenedScore = Math.round(45 * 0.5);
-    const dampenedVerdict = computeVerdict(dampenedScore, "low", [], "active");
-    expect(dampenedVerdict).toBe("UNTRUSTED");
+    const dampenedVerdict = computeVerdict({
+      score: dampenedScore,
+      qualityTier: "low",
+      spamFlags: [],
+      lifecycleStatus: "active",
+    });
+    expect(dampenedVerdict).toBe("INSUFFICIENT");
   });
 
   it("solo controller agent is not dampened", () => {
