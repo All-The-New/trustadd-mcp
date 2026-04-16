@@ -501,3 +501,20 @@ export type AgentTransaction = typeof agentTransactions.$inferSelect;
 export type InsertAgentTransaction = z.infer<typeof insertAgentTransactionSchema>;
 export type TransactionSyncState = typeof transactionSyncState.$inferSelect;
 export type InsertTransactionSyncState = z.infer<typeof insertTransactionSyncStateSchema>;
+
+// --- MPP (Machine Payments Protocol) ---
+export {
+  mppDirectoryServices,
+  mppDirectorySnapshots,
+  mppProbes,
+  insertMppDirectoryServiceSchema,
+  insertMppDirectorySnapshotSchema,
+  insertMppProbeSchema,
+  type MppDirectoryService,
+  type InsertMppDirectoryService,
+  type MppDirectorySnapshot,
+  type InsertMppDirectorySnapshot,
+  type MppProbe,
+  type InsertMppProbe,
+} from "./mpp-schema.js";
+// --- End MPP ---

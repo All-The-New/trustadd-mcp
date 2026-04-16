@@ -310,6 +310,39 @@ export const ECONOMY = {
   },
 };
 
+export const MPP = {
+  seo: {
+    title: "Machine Payments Protocol",
+    description:
+      "Stripe + Tempo Labs standard for agent-native payments. Launched March 2026 with Visa, Anthropic, Shopify, and 10+ partners. Track MPP adoption and cross-protocol presence alongside x402.",
+  },
+  overview: {
+    title: "Machine Payments Protocol",
+    description:
+      "Stripe + Tempo Labs standard for agent-native payments. Launched March 2026 with Visa, Anthropic, Shopify, and 10+ partners.",
+  },
+  methodology: {
+    crossProtocol:
+      "Agents present on both MPP and x402 show broader ecosystem engagement — a strong trust signal that is harder to fake than single-protocol presence.",
+  },
+  economySection: {
+    headline: "Cross-Protocol Payment Ecosystem",
+    subhead: "x402 (Base) and MPP (Tempo) — the two major agent payment standards",
+    adoptionLabel: "Agents on both protocols",
+  },
+  dashboard: {
+    preIndexerEmpty:
+      "MPP analytics coming online — first snapshot pending. Check back once the indexer runs.",
+    categoriesTitle: "Service Categories",
+    paymentMethodsTitle: "Payment Methods",
+    directoryGrowthTitle: "Directory Growth",
+    volumeTitle: "Tempo pathUSD Daily Volume",
+    directoryTitle: "MPP Directory",
+    topProvidersTitle: "Top Providers",
+    multiProtocolTitle: "Multi-Protocol Agents",
+  },
+};
+
 export const SKILLS = {
   seo: {
     title: "Agent Skills & Capabilities",

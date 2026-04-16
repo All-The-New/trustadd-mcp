@@ -78,6 +78,8 @@ Each category answers a distinct question about the agent:
 
 When transaction and attestation data reaches meaningful volume across the ecosystem, weights will shift to 70/30 (behavioral/supporting) in methodology v3. This is documented as an explicit forward direction. Starting at 60/40 provides sufficient differentiation in the current thin-data ecosystem while establishing the behavioral-first philosophy.
 
+**MPP integration (2026-04-16 update):** Methodology v3 will also integrate Machine Payments Protocol (MPP) signals — multi-protocol presence as a supporting-category bonus, MPP payment volume as an extension of §3.1 Transaction Activity, and Tempo-chain continuity in §3.4 Longevity. v2 ships with MPP **invisible to scoring** (Path A decision) so we can observe 4-6 weeks of data before calibrating weights. Full v3 plan: [`docs/roadmap-mpp.md`](../../roadmap-mpp.md) §3.
+
 ---
 
 ## 3. Signal Definitions

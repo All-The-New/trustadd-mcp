@@ -5,6 +5,7 @@ import { registerAgentRoutes } from "./routes/agents.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerTrustRoutes } from "./routes/trust.js";
+import { registerMppRoutes } from "./routes/mpp.js";
 
 // Re-export helpers used by tests and other modules
 export { verdictFor, redactAgentForPublic } from "./routes/helpers.js";
@@ -18,4 +19,5 @@ export async function registerRoutes(
   registerAnalyticsRoutes(app);
   registerAdminRoutes(app);
   registerTrustRoutes(app);
+  registerMppRoutes(app);
 }

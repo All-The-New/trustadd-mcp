@@ -14,6 +14,10 @@ export const STALENESS_SLAS: Record<string, { warningMinutes: number; criticalMi
   "transaction-indexer": { warningMinutes: 480,   criticalMinutes: 780 },
   "watchdog":            { warningMinutes: 30,    criticalMinutes: 60 },
   "bazaar-indexer":      { warningMinutes: 1560,  criticalMinutes: 1800 },
+  // MPP
+  "mpp-prober":              { warningMinutes: 1500, criticalMinutes: 2160 },
+  "mpp-directory-indexer":   { warningMinutes: 1560, criticalMinutes: 1800 },
+  "tempo-transaction-indexer": { warningMinutes: 480, criticalMinutes: 780 },
 };
 
 export async function recordSuccess(taskId: string, taskName: string): Promise<void> {

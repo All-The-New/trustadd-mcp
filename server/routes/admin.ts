@@ -350,4 +350,69 @@ export function registerAdminRoutes(app: Express): void {
       res.status(500).json({ error: "Failed to fetch audit log" });
     }
   });
+
+  app.post("/api/admin/mpp/probe-all", requireAdmin(), async (_req, res) => {
+    // Resolve the dispatch function BEFORE acknowledging — if the import fails
+    // (missing module, broken deps), we surface it as 500 rather than lying
+    // about "running". Only the actual probing is fire-and-forget.
+    let probeAllAgentsForMpp: () => Promise<unknown>;
+    try {
+      ({ probeAllAgentsForMpp } = await import("../mpp-prober.js") as { probeAllAgentsForMpp: () => Promise<unknown> });
+    } catch (err) {
+      logger.error("Failed to load mpp-prober", { error: (err as Error).message });
+      res.status(500).json({ error: "Failed to start MPP probe" });
+      return;
+    }
+    res.json({ message: "MPP probe started", status: "running" });
+    probeAllAgentsForMpp().catch((err) =>
+      logger.error("Manual MPP probe failed", { error: (err as Error).message }),
+    );
+  });
+
+  app.post("/api/admin/mpp/index-directory", requireAdmin(), async (_req, res) => {
+    let createDirectorySource: (mode: "api" | "scrape" | "auto") => { fetchServices(): Promise<any[]> };
+    try {
+      ({ createDirectorySource } = await import("../mpp-directory.js") as any);
+    } catch (err) {
+      logger.error("Failed to load mpp-directory", { error: (err as Error).message });
+      res.status(500).json({ error: "Failed to start directory index" });
+      return;
+    }
+    res.json({ message: "MPP directory index started", status: "running" });
+    (async () => {
+      const mode = (process.env.MPP_DIRECTORY_SOURCE as "api" | "scrape" | "auto") || "auto";
+      const source = createDirectorySource(mode);
+      const services = await source.fetchServices();
+      for (const s of services) {
+        await storage.upsertMppDirectoryService({
+          serviceUrl: s.serviceUrl,
+          serviceName: s.serviceName,
+          providerName: s.providerName,
+          description: s.description,
+          category: s.category,
+          pricingModel: s.pricingModel,
+          priceAmount: s.priceAmount,
+          priceCurrency: s.priceCurrency,
+          paymentMethods: s.paymentMethods as any,
+          recipientAddress: s.recipientAddress,
+          metadata: s.metadata,
+        });
+      }
+    })().catch((err) => logger.error("Manual directory index failed", { error: (err as Error).message }));
+  });
+
+  app.post("/api/admin/mpp/index-tempo", requireAdmin(), async (_req, res) => {
+    let syncAllTempoTransactions: () => Promise<unknown>;
+    try {
+      ({ syncAllTempoTransactions } = await import("../tempo-transaction-indexer.js") as { syncAllTempoTransactions: () => Promise<unknown> });
+    } catch (err) {
+      logger.error("Failed to load tempo-transaction-indexer", { error: (err as Error).message });
+      res.status(500).json({ error: "Failed to start Tempo sync" });
+      return;
+    }
+    res.json({ message: "Tempo sync started", status: "running" });
+    syncAllTempoTransactions().catch((err) =>
+      logger.error("Manual Tempo sync failed", { error: (err as Error).message }),
+    );
+  });
 }

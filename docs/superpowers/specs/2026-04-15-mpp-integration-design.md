@@ -436,11 +436,15 @@ Deferred to implementation discovery, not design blockers:
 
 ## 14. What I'd Revisit as the System Grows
 
-- **Directory scraper → formal API**: Swap source implementation when Tempo ships a directory API
-- **Unified probe table**: If adding a 3rd payment protocol, refactor `x402_probes` + `mpp_probes` → `agent_payment_probes` with `protocol` column
-- **Cross-protocol trust scoring (Phase 3)**: Add `crossProtocol` signal category in `trust-score.ts`; bump methodology version
-- **Tempo indexer scaling**: If volume hits 10K+ txs/day, add checkpoint-based resumption (mirror `chain-indexer.ts` 90s checkpoint wait pattern)
-- **Payment method normalization**: As MPP grows, convert `paymentMethods` jsonb to a dimension table for faster analytics
+> **Tracked in [`docs/roadmap-mpp.md`](../../roadmap-mpp.md)** — that document is the source of truth for post-launch iteration. Summary pointers below.
+
+- **Path A decision (2026-04-16):** Methodology v2 ships with MPP **invisible to scoring**. MPP data accumulates in the backend for 4-6 weeks before v3 integration. See roadmap §1.
+- **Methodology v3 MPP integration** — add `crossProtocol` signal category + extend Transaction Activity (§3.1 of methodology v2 spec) with MPP volume. See roadmap §3.
+- **Directory scraper → formal API:** Swap `MppScrapeSource` for `MppApiSource` when Tempo ships a directory API. Interface already defined — one-line change in factory. Roadmap §6.
+- **Unified probe table:** If adding a 3rd payment protocol, refactor `x402_probes` + `mpp_probes` → `agent_payment_probes` with `protocol` column. Roadmap §5.
+- **Tempo indexer scaling:** If volume hits 10K+ txs/day, add checkpoint-based resumption (mirror `chain-indexer.ts` 90s checkpoint wait pattern). Bitquery as alternative — roadmap §4.3.
+- **Payment method normalization:** Convert `paymentMethods` jsonb to a dimension table as MPP grows. Roadmap §7.
+- **Future data sources** (not scoped for launch): Stripe API for merchant-side MPP payments; Tempo block explorer API for rich tx metadata; Bitquery/GraphQL for pre-indexed chain data. See roadmap §4.
 
 ## 15. Effort Summary
 
