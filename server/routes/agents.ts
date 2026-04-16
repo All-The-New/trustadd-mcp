@@ -3,6 +3,7 @@ import { createLogger } from "../lib/logger.js";
 import { storage } from "../storage.js";
 import { verdictFor, redactAgentForPublic, cached, parseChainId } from "./helpers.js";
 import { deriveCategoryStrengths } from "../trust-categories.js";
+import { computeVerifications } from "../trust-verifications.js";
 
 const logger = createLogger("routes:agents");
 
@@ -182,25 +183,43 @@ export function registerAgentRoutes(app: Express): void {
     }
   });
 
-  // Free tier: leaderboard shows names + verdicts only, no numeric scores
+  // Free tier: leaderboard shows names + verdicts + aggregate score (for stamp) + verifications
   app.get("/api/trust-scores/top", async (req, res) => {
     try {
       const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string, 10), 20) : 20;
       const chainId = parseChainId(req.query.chain);
       const leaderboard = await storage.getTrustScoreLeaderboard(limit, chainId);
-      // Redact: strip numeric scores, show verdict only
-      const redacted = (leaderboard as any[]).map((entry: any) => ({
-        id: entry.id,
-        name: entry.name,
-        slug: entry.slug,
-        chainId: entry.chainId,
-        imageUrl: entry.imageUrl,
-        primaryContractAddress: entry.primaryContractAddress,
-        erc8004Id: entry.erc8004Id,
-        description: entry.description,
-        x402Support: entry.x402Support,
-        endpoints: entry.endpoints,
-        verdict: verdictFor(entry.trustScore ?? null, entry.qualityTier ?? null, entry.spamFlags ?? null, entry.lifecycleStatus ?? null),
+
+      const redacted = await Promise.all((leaderboard as any[]).map(async (entry: any) => {
+        const verdict = verdictFor(entry.trustScore ?? null, entry.qualityTier ?? null, entry.spamFlags ?? null, entry.lifecycleStatus ?? null);
+        // Compute verifications using the same pure function the compiler uses.
+        // Supply zeroed ancillary stats (tx/probe/feedback) since list endpoints
+        // don't have them; the stamp-displayable flags (OASF, IPFS, Active
+        // Maintainer, Early Adopter, x402) come from the agent row itself.
+        const fullAgent = await storage.getAgent(entry.id);
+        const verifications = fullAgent ? computeVerifications({
+          agent: fullAgent,
+          txStats: { volumeUsd: 0, txCount: 0, uniquePayers: 0, firstTxAt: null },
+          probeStats: { hasLive402: !!entry.x402Support, paymentAddressVerified: false },
+          feedback: null,
+          metadataEventCount: 0,
+          chainPresence: 1,
+        }).map(v => ({ name: v.name, earned: v.earned })) : [];
+        return {
+          id: entry.id,
+          name: entry.name,
+          slug: entry.slug,
+          chainId: entry.chainId,
+          imageUrl: entry.imageUrl,
+          primaryContractAddress: entry.primaryContractAddress,
+          erc8004Id: entry.erc8004Id,
+          description: entry.description,
+          x402Support: entry.x402Support,
+          endpoints: entry.endpoints,
+          verdict,
+          trustScoreForStamp: entry.trustScore ?? null,
+          verifications,
+        };
       }));
       res.set("X-TrustAdd-Tier", "free");
       res.json(redacted);
