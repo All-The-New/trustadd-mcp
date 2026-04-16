@@ -200,6 +200,100 @@ function HeroStats() {
   );
 }
 
+// --- Breakdown charts ---
+
+function BreakdownCharts() {
+  const { data: stats, isLoading, isError } = useQuery<MppDirectoryStats>({
+    queryKey: ["/api/mpp/directory/stats"],
+  });
+
+  if (isLoading) {
+    return (
+      <div className="grid md:grid-cols-2 gap-6">
+        <ChartSkeleton />
+        <ChartSkeleton />
+      </div>
+    );
+  }
+  if (isError) return <ChartError message="Failed to load MPP breakdown" />;
+  if (!stats) return null;
+
+  const categoryPieData = Object.entries(stats.categoryBreakdown).map(([category, count]) => ({
+    name: CATEGORY_LABELS[category] ?? category,
+    value: count,
+    category,
+  }));
+  const paymentMethodData = Object.entries(stats.paymentMethodBreakdown).map(([method, count]) => ({
+    name: method,
+    value: count,
+  }));
+
+  const categoryConfig: ChartConfig = Object.fromEntries(
+    Object.entries(CATEGORY_COLORS).map(([k, v]) => [k, { label: CATEGORY_LABELS[k] ?? k, color: v }])
+  );
+
+  return (
+    <div className="grid md:grid-cols-2 gap-6">
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Service Categories</CardTitle></CardHeader>
+        <CardContent>
+          {categoryPieData.length > 0 ? (
+            <ChartContainer config={categoryConfig} className="h-[280px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={categoryPieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={2}
+                    dataKey="value"
+                    nameKey="name"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {categoryPieData.map((entry) => (
+                      <Cell key={entry.category} fill={CATEGORY_COLORS[entry.category] ?? CATEGORY_COLORS.other} />
+                    ))}
+                  </Pie>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          ) : (
+            <EmptyState message="No categorized services yet." />
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Payment Methods</CardTitle></CardHeader>
+        <CardContent>
+          {paymentMethodData.length > 0 ? (
+            <ChartContainer config={{ value: { label: "Services", color: "#14b8a6" } }} className="h-[280px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={paymentMethodData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                    {paymentMethodData.map((entry) => (
+                      <Cell key={entry.name} fill={PAYMENT_METHOD_COLORS[entry.name] ?? PAYMENT_METHOD_COLORS.other} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          ) : (
+            <EmptyState message="No payment methods indexed yet." />
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // --- Page ---
 
 export default function MppPage() {
@@ -212,6 +306,7 @@ export default function MppPage() {
           <p className="text-muted-foreground mt-1">{MPP.overview.description}</p>
         </header>
         <HeroStats />
+        <BreakdownCharts />
         {/* Sections added in Tasks 6-12 */}
       </div>
     </Layout>
