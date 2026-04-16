@@ -25,6 +25,24 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { CHAIN_COLORS, CHAIN_NAMES } from "@shared/chains";
+import { TIER_ORDER } from "@/lib/verdict";
+
+function TrustTierStrip({ tiers }: { tiers: Array<{ tier: string; count: number; pct: number }> }) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2" data-testid="tier-strip">
+      {TIER_ORDER.slice().reverse().map(desc => {
+        const match = tiers.find(t => t.tier === desc.tier);
+        return (
+          <div key={desc.tier} className="p-3 rounded-md border-l-[3px]" style={{ borderLeftColor: desc.color }}>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{desc.label}</p>
+            <p className="text-lg font-bold">{(match?.count ?? 0).toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">{((match?.pct ?? 0)).toFixed(1)}%</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const QUALITY_COLORS = {
   complete: "#22c55e",
@@ -180,6 +198,12 @@ export default function Analytics() {
     queryKey: ["/api/analytics/top-agents"],
   });
 
+  const { data: tierData } = useQuery<{
+    tiers: Array<{ tier: string; count: number; pct: number; color: string }>;
+    buckets: Array<{ bucket: string; count: number; tier: string }>;
+    narrative: string;
+  }>({ queryKey: ["/api/analytics/trust-tiers"] });
+
   const pieData = chainDist?.map(c => ({
     name: CHAIN_NAMES[c.chainId] || `Chain ${c.chainId}`,
     value: c.total,
@@ -300,6 +324,30 @@ export default function Analytics() {
               subtitle={`of ${overview.totalNamed?.toLocaleString()} named`} iconColor="text-teal-500" />
           </div>
         ) : null}
+
+        {/* Trust Score Distribution */}
+        {tierData && (
+          <section className="space-y-4">
+            <SectionTitle>Trust Score Distribution</SectionTitle>
+            <TrustTierStrip tiers={tierData.tiers} />
+            <div className="space-y-1">
+              {tierData.buckets.map(b => {
+                const tierColor = tierData.tiers.find(t => t.tier === b.tier)?.color ?? "#a1a1aa";
+                const maxCount = Math.max(...tierData.buckets.map(x => x.count), 1);
+                return (
+                  <div key={b.bucket} className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono w-14 text-right">{b.bucket}</span>
+                    <div className="flex-1 h-3 rounded-sm overflow-hidden bg-muted">
+                      <div className="h-full" style={{ width: `${(b.count / maxCount) * 100}%`, background: tierColor }} />
+                    </div>
+                    <span className="text-[11px] text-muted-foreground w-16">{b.count.toLocaleString()}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-sm text-muted-foreground italic">{tierData.narrative}</p>
+          </section>
+        )}
 
         {/* Chain Distribution */}
         <section>
