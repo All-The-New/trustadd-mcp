@@ -125,6 +125,7 @@ export interface IStorage {
 
   getTrustScoreLeaderboard(limit?: number, chainId?: number): Promise<Array<{ id: string; name: string | null; imageUrl: string | null; chainId: number; trustScore: number; trustScoreBreakdown: any; slug: string | null; primaryContractAddress: string | null; erc8004Id: string | null; description: string | null; x402Support: boolean | null; endpoints: any; qualityTier: string | null; spamFlags: any; lifecycleStatus: string | null }>>;
   getTrustScoreDistribution(chainId?: number): Promise<Array<{ bucket: string; count: number }>>;
+  getTrustTierDistribution(): ReturnType<typeof import("./storage/agents.js").getTrustTierDistribution>;
   getTrustScoreStatsByChain(): Promise<Array<{ chainId: number; avgScore: number; agentCount: number }>>;
 
   getEconomyOverview(): Promise<{
@@ -263,6 +264,7 @@ export class DatabaseStorage implements IStorage {
   getAnalyticsTopAgents() { return agentQueries.getAnalyticsTopAgents(); }
   getTrustScoreLeaderboard(limit?: number, chainId?: number) { return agentQueries.getTrustScoreLeaderboard(limit, chainId); }
   getTrustScoreDistribution(chainId?: number) { return agentQueries.getTrustScoreDistribution(chainId); }
+  getTrustTierDistribution() { return agentQueries.getTrustTierDistribution(); }
   getTrustScoreStatsByChain() { return agentQueries.getTrustScoreStatsByChain(); }
   getEconomyOverview() { return agentQueries.getEconomyOverview(); }
   getTopX402Agents(limit?: number, chainId?: number) { return agentQueries.getTopX402Agents(limit, chainId); }

@@ -606,4 +606,24 @@ export function registerAnalyticsRoutes(app: Express): void {
       res.status(500).json({ message: "Failed to fetch bazaar crossref" });
     }
   });
+
+  app.get("/api/analytics/trust-tiers", async (_req, res) => {
+    try {
+      const { tiers, buckets } = await cached("analytics:trust-tiers", ANALYTICS_TTL, () => storage.getTrustTierDistribution());
+      const total = tiers.reduce((a, t) => a + t.count, 0);
+      const pct = (tier: string) => tiers.find(t => t.tier === tier)?.pct ?? 0;
+      const narrative =
+        `The agent economy is early: of ~${total.toLocaleString()} registered agents, ` +
+        `${pct("INSUFFICIENT").toFixed(0)}% are INSUFFICIENT, ` +
+        `${pct("FLAGGED").toFixed(0)}% are FLAGGED, ` +
+        `${pct("BUILDING").toFixed(0)}% are BUILDING, and fewer than ` +
+        `${Math.max(pct("TRUSTED"), 0.05).toFixed(2)}% have reached TRUSTED. ` +
+        `${tiers.find(t => t.tier === "VERIFIED")?.count === 0 ? "Zero" : "Few"} agents are VERIFIED.`;
+      res.set("Cache-Control", ANALYTICS_CACHE);
+      res.json({ tiers, buckets, narrative });
+    } catch (err) {
+      logger.error("trust-tiers failed", { error: (err as Error).message });
+      res.status(500).json({ message: "Failed to fetch trust tier distribution" });
+    }
+  });
 }
