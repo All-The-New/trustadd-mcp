@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createLogger } from "../lib/logger.js";
 import { storage } from "../storage.js";
 import { verdictFor, redactAgentForPublic, cached, parseChainId } from "./helpers.js";
+import { deriveCategoryStrengths } from "../trust-categories.js";
 
 const logger = createLogger("routes:agents");
 
@@ -161,12 +162,16 @@ export function registerAgentRoutes(app: Express): void {
       if (!agent) return res.status(404).json({ message: "Agent not found" });
 
       const verdict = verdictFor(agent.trustScore ?? null, agent.qualityTier ?? null, agent.spamFlags ?? null, agent.lifecycleStatus ?? null);
+      const categoryStrengths = agent.trustScoreBreakdown
+        ? deriveCategoryStrengths(agent.trustScoreBreakdown as any, agent.sybilRiskScore ?? 0)
+        : null;
 
       res.set("X-TrustAdd-Tier", "free");
       res.json({
         verdict,
         updatedAt: agent.trustScoreUpdatedAt ?? null,
         reportAvailable: true,
+        categoryStrengths,
         quickCheckPrice: "$0.01",
         fullReportPrice: "$0.05",
         message: "Full trust score and breakdown available via x402 Trust Report. See /api/v1/trust/:address",
