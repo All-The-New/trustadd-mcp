@@ -48,5 +48,18 @@ Run through this checklist on the Vercel preview URL before merging to `main`.
 - [ ] `GET /api/v1/trust/:address/exists` returns new verdict strings
 - [ ] `GET /api/analytics/trust-tiers` returns `{ tiers, buckets, narrative }`
 
+## Browser route smoke (MANDATORY — add to every release)
+Load each of these in a fresh browser tab and confirm:
+1. The page renders (not white/blank)
+2. Browser console has zero uncaught errors / React `type is invalid` warnings
+
+- [ ] `/` (landing) — known hazard: icon lookup maps in `landing.tsx` (`pillarIcons`, `featureIcons`) must contain every icon name referenced by `HOME.pillars` + `HOME.features` in `content-zones.ts`. A missing entry returns `undefined` and crashes the whole route with no DOM output.
+- [ ] `/agents`
+- [ ] `/agent/:id` (pick any agent)
+- [ ] `/analytics`
+- [ ] `/methodology`
+- [ ] `/trust-api`
+- [ ] `/principles`
+
 ## Console
 - [ ] No uncaught errors / missing imports in the browser console
