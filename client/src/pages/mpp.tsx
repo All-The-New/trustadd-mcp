@@ -159,7 +159,7 @@ function HeroStats() {
       <Alert className="my-2">
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
-          MPP analytics coming online — first snapshot pending. Check back once the indexer runs.
+          {MPP.dashboard.preIndexerEmpty}
         </AlertDescription>
       </Alert>
     );
@@ -241,7 +241,7 @@ function BreakdownCharts() {
   return (
     <div className="grid md:grid-cols-2 gap-6">
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Service Categories</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-base">{MPP.dashboard.categoriesTitle}</CardTitle></CardHeader>
         <CardContent>
           {categoryPieData.length > 0 ? (
             <ChartContainer config={categoryConfig} className="h-[280px] w-full">
@@ -273,7 +273,7 @@ function BreakdownCharts() {
       </Card>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Payment Methods</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-base">{MPP.dashboard.paymentMethodsTitle}</CardTitle></CardHeader>
         <CardContent>
           {paymentMethodData.length > 0 ? (
             <ChartContainer config={{ value: { label: "Services", color: "#14b8a6" } }} className="h-[280px] w-full">
@@ -337,7 +337,7 @@ function TrendCharts() {
   return (
     <div className="grid md:grid-cols-2 gap-6">
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Directory Growth</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-base">{MPP.dashboard.directoryGrowthTitle}</CardTitle></CardHeader>
         <CardContent>
           {dirLoading ? <ChartSkeleton />
             : dirError ? <ChartError message="Failed to load growth data" />
@@ -364,7 +364,7 @@ function TrendCharts() {
       </Card>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Tempo pathUSD Daily Volume</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-base">{MPP.dashboard.volumeTitle}</CardTitle></CardHeader>
         <CardContent>
           {volLoading ? <ChartSkeleton />
             : volError ? <ChartError message="Failed to load volume data" />
@@ -452,7 +452,7 @@ function DirectoryTable() {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">MPP Directory</CardTitle>
+        <CardTitle className="text-base">{MPP.dashboard.directoryTitle}</CardTitle>
         <div className="flex flex-wrap gap-2 mt-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
@@ -568,7 +568,7 @@ function TopProviders() {
 
   return (
     <Card>
-      <CardHeader className="pb-2"><CardTitle className="text-base">Top Providers</CardTitle></CardHeader>
+      <CardHeader className="pb-2"><CardTitle className="text-base">{MPP.dashboard.topProvidersTitle}</CardTitle></CardHeader>
       <CardContent>
         {isLoading ? (
           <div className="space-y-2">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-8" />)}</div>
@@ -618,7 +618,7 @@ function MultiProtocolAgents() {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Multi-Protocol Agents</CardTitle>
+        <CardTitle className="text-base">{MPP.dashboard.multiProtocolTitle}</CardTitle>
         <p className="text-sm text-muted-foreground mt-1">
           {MPP.methodology.crossProtocol}
         </p>

@@ -316,6 +316,17 @@ export const MPP = {
     subhead: "x402 (Base) and MPP (Tempo) — the two major agent payment standards",
     adoptionLabel: "Agents on both protocols",
   },
+  dashboard: {
+    preIndexerEmpty:
+      "MPP analytics coming online — first snapshot pending. Check back once the indexer runs.",
+    categoriesTitle: "Service Categories",
+    paymentMethodsTitle: "Payment Methods",
+    directoryGrowthTitle: "Directory Growth",
+    volumeTitle: "Tempo pathUSD Daily Volume",
+    directoryTitle: "MPP Directory",
+    topProvidersTitle: "Top Providers",
+    multiProtocolTitle: "Multi-Protocol Agents",
+  },
 };
 
 export const SKILLS = {
