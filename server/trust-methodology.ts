@@ -19,10 +19,12 @@ export interface Dimension {
 }
 
 export interface VerdictThresholds {
-  trusted: string;
-  caution: string;
-  untrusted: string;
-  unknown: string;
+  VERIFIED: string;
+  TRUSTED: string;
+  BUILDING: string;
+  INSUFFICIENT: string;
+  FLAGGED: string;
+  UNKNOWN: string;
 }
 
 export interface ChangelogEntry {
@@ -44,13 +46,15 @@ export interface Methodology {
 export function getMethodology(): Methodology {
   return {
     version: METHODOLOGY_VERSION,
-    lastUpdated: "2026-04-13",
+    lastUpdated: "2026-04-16",
     maxScore: 100,
     verdictThresholds: {
-      trusted: "score >= 60 AND tier in (high, medium) AND no spam flags",
-      caution: "All agents not meeting trusted or untrusted criteria",
-      untrusted: "score < 30 OR tier in (spam, archived) OR status = archived",
-      unknown: "Score has not yet been calculated",
+      VERIFIED: "score >= 80 AND no active negative evidence",
+      TRUSTED: "score >= 60 AND < 80 AND no active negative evidence",
+      BUILDING: "score >= 40 AND < 60 AND no active negative evidence",
+      INSUFFICIENT: "score < 40 AND no active negative evidence",
+      FLAGGED: "tier in (spam, archived) OR lifecycleStatus = archived OR (spam_flags present AND score < 10)",
+      UNKNOWN: "Score has not yet been calculated (API-only; UI renders as INSUFFICIENT with '—')",
     },
     dimensions: [
       {
@@ -260,6 +264,12 @@ export function getMethodology(): Methodology {
         date: "2026-04-13",
         summary:
           "Initial methodology. Five dimensions (Identity, History, Capability, Community, Transparency) with 17 signals covering agent metadata, on-chain history, capabilities, community reputation, and metadata transparency. Maximum score 100, with verdict thresholds for trusted, caution, untrusted, and unknown states.",
+      },
+      {
+        version: 2,
+        date: "2026-04-16",
+        summary:
+          "Consolidated verdict tiers from 6 to 5 (removed UNVERIFIED, renamed INSUFFICIENT_DATA → INSUFFICIENT). Added qualitative categoryStrengths output exposing Identity / Behavioral / Community / Attestation / Authenticity tiers on the free API surface while keeping raw category numerics gated behind the Full Report.",
       },
     ],
     disclaimer:

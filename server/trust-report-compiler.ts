@@ -635,7 +635,7 @@ export async function compileAndCacheReport(agentId: string): Promise<TrustRepor
   const dampenedTotal = Math.round(preDampeningTotal * sybilMultiplier);
   const breakdown: TrustScoreBreakdown = { ...rawBreakdown, total: dampenedTotal };
 
-  // Verdict — 6-tier v2.
+  // Verdict — 5-tier v2.
   const verdict = computeVerdict({
     score: breakdown.total,
     qualityTier: agent.qualityTier,

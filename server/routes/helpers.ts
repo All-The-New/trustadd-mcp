@@ -1,7 +1,7 @@
 import { computeVerdict, type Verdict } from "../trust-report-compiler.js";
 
 /**
- * Public-facing verdict union. The 6-tier v2 `Verdict` plus `"UNKNOWN"` for
+ * Public-facing verdict union. The 5-tier v2 `Verdict` plus `"UNKNOWN"` for
  * the unscored-agent case (where we have no trust_score at all yet).
  */
 export type PublicVerdict = Verdict | "UNKNOWN";
