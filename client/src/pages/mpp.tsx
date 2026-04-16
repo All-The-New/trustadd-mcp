@@ -294,6 +294,95 @@ function BreakdownCharts() {
   );
 }
 
+// --- Trend charts ---
+
+interface MppDirectorySnapshotRow {
+  snapshotDate: string;
+  totalServices: number;
+  activeServices: number;
+  categoryBreakdown?: Record<string, number>;
+}
+
+interface VolumeTrendPoint {
+  day: string;
+  volume: number;
+  tx_count: number;
+}
+
+function TrendCharts() {
+  const { data: dirTrends, isLoading: dirLoading, isError: dirError } = useQuery<MppDirectorySnapshotRow[]>({
+    queryKey: ["/api/mpp/directory/trends"],
+  });
+  const { data: volumeTrend, isLoading: volLoading, isError: volError } = useQuery<VolumeTrendPoint[]>({
+    queryKey: ["/api/mpp/chain/volume-trend"],
+  });
+
+  const dirChartData = (dirTrends ?? []).map((s) => ({
+    date: new Date(s.snapshotDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    total: s.totalServices,
+    active: s.activeServices,
+  }));
+  const volChartData = (volumeTrend ?? []).map((p) => ({
+    date: new Date(p.day).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    volume: p.volume,
+    tx: p.tx_count,
+  }));
+
+  return (
+    <div className="grid md:grid-cols-2 gap-6">
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Directory Growth</CardTitle></CardHeader>
+        <CardContent>
+          {dirLoading ? <ChartSkeleton />
+            : dirError ? <ChartError message="Failed to load growth data" />
+            : dirChartData.length > 1 ? (
+              <ChartContainer config={{
+                total: { label: "Total", color: "#3b82f6" },
+                active: { label: "Active", color: "#22c55e" },
+              }} className="h-[250px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={dirChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip />
+                    <Area type="monotone" dataKey="total" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} name="Total" />
+                    <Area type="monotone" dataKey="active" stroke="#22c55e" fill="#22c55e" fillOpacity={0.1} name="Active" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            ) : (
+              <EmptyState message="Growth trends appear after several days of snapshots." />
+            )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Tempo pathUSD Daily Volume</CardTitle></CardHeader>
+        <CardContent>
+          {volLoading ? <ChartSkeleton />
+            : volError ? <ChartError message="Failed to load volume data" />
+            : volChartData.length > 1 ? (
+              <ChartContainer config={{ volume: { label: "Volume (USD)", color: "#14b8a6" } }} className="h-[250px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={volChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Volume"]} />
+                    <Bar dataKey="volume" fill="#14b8a6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            ) : (
+              <EmptyState message="Volume data appears after the Tempo indexer runs." />
+            )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // --- Page ---
 
 export default function MppPage() {
@@ -307,6 +396,7 @@ export default function MppPage() {
         </header>
         <HeroStats />
         <BreakdownCharts />
+        <TrendCharts />
         {/* Sections added in Tasks 6-12 */}
       </div>
     </Layout>
