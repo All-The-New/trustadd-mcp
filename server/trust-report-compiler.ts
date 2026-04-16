@@ -20,6 +20,8 @@ import { computeConfidence, type ConfidenceResult } from "./trust-confidence.js"
 import { computeVerifications, type Verification } from "./trust-verifications.js";
 import { buildConfidenceInput } from "./trust-score-pipeline.js";
 import { computeDampeningMultiplier } from "./sybil-detection.js";
+import type { CategoryStrengths } from "./trust-categories.js";
+import { deriveCategoryStrengths } from "./trust-categories.js";
 import { storage } from "./storage.js";
 import { db } from "./db.js";
 import { eq, sql, lt } from "drizzle-orm";
@@ -65,6 +67,7 @@ export interface QuickCheckData {
   crossChainPresence: number;
   transactionCount: number;
   verificationCount: number;
+  categoryStrengths: CategoryStrengths;
   evidenceBasis: EvidenceBasis;
   reportAvailable: boolean;
   generatedAt: string;
@@ -91,6 +94,7 @@ export interface TrustRating {
   breakdown: TrustScoreBreakdown;
   evidenceBasis: EvidenceBasis;
   confidence: ConfidenceResult;
+  categoryStrengths: CategoryStrengths;
   provenance: {
     signalHash: string | null;
     /**
@@ -169,7 +173,7 @@ export interface FullReportData {
 
 // Report schema v3 (two-layer with evidenceBasis) pairs with methodology v2.
 // Schema version is independent of methodology version — bumped on any breaking shape change.
-export const REPORT_VERSION = 3;
+export const REPORT_VERSION = 4;
 const REPORT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 /** Normalize `agent.endpoints` (jsonb, shape varies) into an array form. */
@@ -435,6 +439,7 @@ export function compileQuickCheck(
     crossChainPresence: crossChainData.count,
     transactionCount: txStats.txCount,
     verificationCount: verifications.filter(v => v.earned).length,
+    categoryStrengths: deriveCategoryStrengths(breakdown, agent.sybilRiskScore ?? 0),
     evidenceBasis,
     reportAvailable: true,
     generatedAt: new Date().toISOString(),
@@ -511,6 +516,7 @@ export function compileFullReport(args: CompileFullReportArgs): FullReportData {
       breakdown,
       evidenceBasis,
       confidence,
+      categoryStrengths: deriveCategoryStrengths(breakdown, agent.sybilRiskScore ?? 0),
       provenance: {
         signalHash: agent.trustSignalHash ?? null,
         // Emit the methodology version ACTUALLY persisted for this agent.
