@@ -254,3 +254,28 @@ export function getRpcUrls(chain: ChainConfig): { primary: string; fallbacks: st
     fallbacks: urls.slice(1),
   };
 }
+
+// --- Tempo Chain (MPP) ---
+// Tempo is a purpose-built L1 for MPP payments. Not in CHAIN_CONFIGS
+// because the ERC-8004 indexer loop does not apply here.
+export const TEMPO_CHAIN_CONFIG = {
+  chainId: 4217,
+  name: "Tempo",
+  shortName: "tempo",
+  rpcUrl: process.env.TEMPO_RPC_URL || "https://rpc.tempo.xyz",
+  rpcUrlFallback: process.env.TEMPO_RPC_URL_FALLBACK,
+  explorer: "https://explore.mainnet.tempo.xyz",
+  // Tempo has no native gas token; native currency is a placeholder.
+  nativeCurrency: { name: "USD", symbol: "USD", decimals: 6 },
+  tokens: {
+    pathUSD: {
+      address: "0x20c0000000000000000000000000000000000000",
+      symbol: "pathUSD",
+      decimals: 6,
+    },
+  },
+  deploymentBlock: parseInt(process.env.TEMPO_PATHUSD_DEPLOYMENT_BLOCK || "0", 10),
+} as const;
+
+export const TEMPO_CHAIN_ID = 4217;
+// --- End Tempo Chain ---
