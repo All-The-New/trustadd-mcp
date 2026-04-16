@@ -163,3 +163,36 @@ npx vercel deploy --prod         # Manual deploy if needed
 - Tailwind CSS 3 with dark mode (`class` strategy)
 - Inter font, professional blue theme
 - Git author: `All The New <admin@allthenew.com>` (required for Vercel Hobby deploys)
+
+## MPP Integration (2026-04-15)
+
+MPP integration is feature-flagged. To enable:
+
+**Vercel env vars:**
+```bash
+printf 'true' | npx vercel env add ENABLE_MPP_UI production        # enables /api/mpp/* routes + /mpp page
+printf 'true' | npx vercel env add VITE_ENABLE_MPP_UI production   # shows MPP UI on /economy page
+printf 'https://rpc.tempo.xyz' | npx vercel env add TEMPO_RPC_URL production
+```
+
+**Trigger.dev env vars (dashboard → Settings → Environment Variables → Production):**
+```
+ENABLE_MPP_INDEXER=true
+TEMPO_RPC_URL=https://rpc.tempo.xyz
+TEMPO_RPC_URL_FALLBACK=<optional QuickNode/Chainstack URL>
+MPP_DIRECTORY_SOURCE=auto            # or api, scrape
+TEMPO_PATHUSD_DEPLOYMENT_BLOCK=0     # set after bootstrap resolves
+TEMPO_TRANSFER_WITH_MEMO_TOPIC=<topic hash if known>
+```
+
+**Schema migration:** Run the SQL in `migrations/0002_mpp_integration.sql`
+via Supabase SQL editor before enabling the flags (trustadd_app
+lacks ownership for direct `drizzle-kit push`).
+
+**Pipeline tasks:**
+- `mpp-prober` — daily 3:30 AM UTC
+- `mpp-directory-indexer` — daily 4:30 AM UTC
+- `tempo-transaction-indexer` — every 6 hours
+
+See `docs/superpowers/specs/2026-04-15-mpp-integration-design.md`
+and `docs/superpowers/plans/2026-04-15-mpp-integration.md`.
