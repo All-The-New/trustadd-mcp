@@ -725,7 +725,51 @@ export default function Economy() {
             </div>
           </CardContent>
         </Card>
+
+        {import.meta.env.VITE_ENABLE_MPP_UI === "true" && <MppSection />}
       </div>
     </Layout>
+  );
+}
+
+function MppSection() {
+  const { data: adoption } = useQuery<{ mpp: number; x402: number; both: number }>({
+    queryKey: ["/api/mpp/adoption"],
+  });
+  const { data: comparison } = useQuery<{
+    x402: { directoryServices: number; activeServices: number };
+    mpp: { directoryServices: number; activeServices: number; volume: number; txCount: number };
+  }>({
+    queryKey: ["/api/ecosystem/protocol-comparison"],
+  });
+
+  return (
+    <Card data-testid="card-mpp-section">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg">Cross-Protocol Payment Ecosystem</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-muted-foreground mb-4">
+          x402 (Base) and MPP (Tempo) — the two major agent payment standards
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="border rounded-lg p-4">
+            <div className="text-sm text-muted-foreground">x402 Services</div>
+            <div className="text-2xl font-semibold">{comparison?.x402.activeServices ?? "—"}</div>
+          </div>
+          <div className="border rounded-lg p-4">
+            <div className="text-sm text-muted-foreground">MPP Services</div>
+            <div className="text-2xl font-semibold">{comparison?.mpp.activeServices ?? "—"}</div>
+          </div>
+          <div className="border rounded-lg p-4">
+            <div className="text-sm text-muted-foreground">Multi-Protocol Agents</div>
+            <div className="text-2xl font-semibold">{adoption?.both ?? "—"}</div>
+          </div>
+        </div>
+        <a href="/mpp" className="text-primary hover:underline text-sm">
+          Explore the MPP ecosystem →
+        </a>
+      </CardContent>
+    </Card>
   );
 }
