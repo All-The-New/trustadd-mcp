@@ -743,6 +743,10 @@ function MppSection() {
     queryKey: ["/api/ecosystem/protocol-comparison"],
   });
 
+  const preIndexer =
+    (comparison?.mpp.activeServices ?? 0) === 0 &&
+    (adoption?.both ?? 0) === 0;
+
   return (
     <Card data-testid="card-mpp-section">
       <CardHeader className="pb-3">
@@ -766,6 +770,11 @@ function MppSection() {
             <div className="text-2xl font-semibold">{adoption?.both ?? "—"}</div>
           </div>
         </div>
+        {preIndexer && (
+          <p className="text-xs text-muted-foreground mb-3">
+            MPP indexer is coming online — first snapshot pending.
+          </p>
+        )}
         <a href="/mpp" className="text-primary hover:underline text-sm">
           Explore the MPP ecosystem →
         </a>
