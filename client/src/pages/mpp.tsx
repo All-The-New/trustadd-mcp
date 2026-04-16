@@ -105,6 +105,101 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
+// --- Hero KPIs ---
+
+interface MppDirectoryStats {
+  totalServices: number;
+  activeServices: number;
+  categoryBreakdown: Record<string, number>;
+  pricingModelBreakdown: Record<string, number>;
+  paymentMethodBreakdown: Record<string, number>;
+  priceStats: { median: number; mean: number; min: number; max: number } | null;
+  snapshotDate: string | null;
+}
+
+interface MppChainStats {
+  volume: number;
+  txCount: number;
+  uniquePayers: number;
+  activeRecipients: number;
+}
+
+interface MppAdoptionStats {
+  mpp: number;
+  x402: number;
+  both: number;
+}
+
+function HeroStats() {
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery<MppDirectoryStats>({
+    queryKey: ["/api/mpp/directory/stats"],
+  });
+  const { data: chain } = useQuery<MppChainStats>({
+    queryKey: ["/api/mpp/chain/stats"],
+  });
+  const { data: adoption } = useQuery<MppAdoptionStats>({
+    queryKey: ["/api/mpp/adoption"],
+  });
+
+  if (statsLoading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}
+      </div>
+    );
+  }
+  if (statsError) {
+    return (
+      <Alert className="my-2">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertDescription>
+          MPP analytics coming online — first snapshot pending. Check back once the indexer runs.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  const categoryCount = stats ? Object.keys(stats.categoryBreakdown).length : 0;
+  const snapshotLabel = stats?.snapshotDate
+    ? `Snapshot: ${new Date(stats.snapshotDate).toLocaleDateString()}`
+    : "Awaiting first snapshot";
+
+  return (
+    <>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard
+          label="Services Indexed"
+          value={stats?.activeServices ?? 0}
+          subtitle={`${stats?.totalServices ?? 0} all-time`}
+          icon={Store}
+          iconColor="text-teal-500"
+        />
+        <KpiCard
+          label="Categories"
+          value={categoryCount}
+          subtitle={snapshotLabel}
+          icon={TrendingUp}
+          iconColor="text-blue-500"
+        />
+        <KpiCard
+          label="Tempo pathUSD Volume"
+          value={chain?.volume != null ? `$${chain.volume.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}
+          subtitle={chain?.txCount != null ? `${chain.txCount.toLocaleString()} transfers` : undefined}
+          icon={Coins}
+          iconColor="text-emerald-500"
+        />
+        <KpiCard
+          label="Multi-Protocol Agents"
+          value={adoption?.both ?? 0}
+          subtitle={`${adoption?.mpp ?? 0} MPP · ${adoption?.x402 ?? 0} x402`}
+          icon={Network}
+          iconColor="text-purple-500"
+        />
+      </div>
+    </>
+  );
+}
+
 // --- Page ---
 
 export default function MppPage() {
@@ -116,7 +211,8 @@ export default function MppPage() {
           <h1 className="text-3xl font-bold tracking-tight">{MPP.overview.title}</h1>
           <p className="text-muted-foreground mt-1">{MPP.overview.description}</p>
         </header>
-        {/* Sections added in Tasks 5-12 */}
+        <HeroStats />
+        {/* Sections added in Tasks 6-12 */}
       </div>
     </Layout>
   );
