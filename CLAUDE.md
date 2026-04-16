@@ -194,5 +194,8 @@ lacks ownership for direct `drizzle-kit push`).
 - `mpp-directory-indexer` — daily 4:30 AM UTC
 - `tempo-transaction-indexer` — every 6 hours
 
-See `docs/superpowers/specs/2026-04-15-mpp-integration-design.md`
-and `docs/superpowers/plans/2026-04-15-mpp-integration.md`.
+**Scoring integration:** Path A — Methodology v2 ships with **MPP invisible to scoring**. MPP data accumulates in the backend for 4-6 weeks; v3 integrates MPP signals (cross-protocol presence, pathUSD volume, Tempo longevity). See `docs/roadmap-mpp.md` for the full v3 plan + external integration roadmap (Stripe API, Tempo block explorer, Bitquery/GraphQL).
+
+See `docs/superpowers/specs/2026-04-15-mpp-integration-design.md`,
+`docs/superpowers/plans/2026-04-15-mpp-integration.md`,
+and `docs/roadmap-mpp.md`.
