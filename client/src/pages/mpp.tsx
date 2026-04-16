@@ -49,6 +49,12 @@ const PAYMENT_METHOD_COLORS: Record<string, string> = {
   lightning: "#f7931a",
   other: "#6b7280",
 };
+const VERDICT_BADGE_CLASSES: Record<string, string> = {
+  TRUSTED: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  CAUTION: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  UNTRUSTED: "bg-red-500/10 text-red-600 border-red-500/20",
+  UNKNOWN: "bg-muted text-muted-foreground",
+};
 
 // --- Primitives ---
 
@@ -588,6 +594,75 @@ function TopProviders() {
   );
 }
 
+// --- Multi-protocol agents ---
+
+interface PublicAgent {
+  id: string;
+  name?: string | null;
+  slug?: string | null;
+  imageUrl?: string | null;
+  chainId?: number | null;
+  verdict?: string | null;
+}
+
+interface MultiProtocolResponse {
+  total: number;
+  agents: PublicAgent[];
+}
+
+function MultiProtocolAgents() {
+  const { data, isLoading, isError } = useQuery<MultiProtocolResponse>({
+    queryKey: ["/api/ecosystem/multi-protocol-agents"],
+  });
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Multi-Protocol Agents</CardTitle>
+        <p className="text-sm text-muted-foreground mt-1">
+          {MPP.methodology.crossProtocol}
+        </p>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-14" />)}
+          </div>
+        ) : isError ? (
+          <ChartError message="Failed to load multi-protocol agents" />
+        ) : !data?.agents.length ? (
+          <EmptyState message="No agents yet detected on both MPP and x402." />
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {data.agents.slice(0, 16).map((a) => (
+                <Link key={a.id} href={a.slug ? `/agent/${a.slug}` : `/agent/${a.id}`}>
+                  <div className="border rounded-md px-3 py-2 hover:bg-muted/40 transition cursor-pointer">
+                    <div className="text-sm font-medium truncate">{a.name ?? "Unnamed agent"}</div>
+                    {a.verdict && (
+                      <Badge
+                        variant="outline"
+                        className={`text-xs mt-1 ${VERDICT_BADGE_CLASSES[a.verdict] ?? VERDICT_BADGE_CLASSES.UNKNOWN}`}
+                      >
+                        {a.verdict}
+                      </Badge>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+            {data.total > 16 && (
+              <p className="text-xs text-muted-foreground mt-3">
+                Showing 16 of {data.total} multi-protocol agents.
+              </p>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // --- Page ---
 
 export default function MppPage() {
@@ -604,7 +679,8 @@ export default function MppPage() {
         <TrendCharts />
         <DirectoryTable />
         <TopProviders />
-        {/* Sections added in Tasks 6-12 */}
+        <MultiProtocolAgents />
+        {/* Sections added in Tasks 11-12 */}
       </div>
     </Layout>
   );
