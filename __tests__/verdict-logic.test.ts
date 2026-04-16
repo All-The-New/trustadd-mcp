@@ -1,5 +1,5 @@
 /**
- * Verdict Logic Tests (Methodology v2 — 6-tier verdict).
+ * Verdict Logic Tests (Methodology v2 — 5-tier verdict).
  *
  * Tests the `computeVerdict()` function with the v2 `VerdictInput` object.
  * Also tests `classifyAgent()` for quality tier + spam-flag assignment
@@ -56,21 +56,18 @@ describe("computeVerdict", () => {
     });
   });
 
-  describe("INSUFFICIENT_DATA (20-39)", () => {
-    it("returns INSUFFICIENT_DATA at boundary 20", () => {
-      expect(verdict(20, { qualityTier: "low" })).toBe("INSUFFICIENT_DATA");
+  describe("INSUFFICIENT (0-39)", () => {
+    it("returns INSUFFICIENT at boundary 0", () => {
+      expect(verdict(0, { qualityTier: "low" })).toBe("INSUFFICIENT");
     });
-    it("returns INSUFFICIENT_DATA at 39", () => {
-      expect(verdict(39, { qualityTier: "low" })).toBe("INSUFFICIENT_DATA");
+    it("returns INSUFFICIENT at 5", () => {
+      expect(verdict(5, { qualityTier: "low" })).toBe("INSUFFICIENT");
     });
-  });
-
-  describe("UNVERIFIED (5-19)", () => {
-    it("returns UNVERIFIED at boundary 5", () => {
-      expect(verdict(5, { qualityTier: "low" })).toBe("UNVERIFIED");
+    it("returns INSUFFICIENT at 20", () => {
+      expect(verdict(20, { qualityTier: "low" })).toBe("INSUFFICIENT");
     });
-    it("returns UNVERIFIED at 19", () => {
-      expect(verdict(19, { qualityTier: "low" })).toBe("UNVERIFIED");
+    it("returns INSUFFICIENT at 39 (upper boundary)", () => {
+      expect(verdict(39, { qualityTier: "low" })).toBe("INSUFFICIENT");
     });
   });
 
@@ -92,14 +89,14 @@ describe("computeVerdict", () => {
     });
 
     it("does NOT return FLAGGED for low score alone (benefit of doubt)", () => {
-      expect(verdict(3, { spamFlags: [] })).toBe("UNVERIFIED");
-      expect(verdict(0, { spamFlags: [] })).toBe("UNVERIFIED");
+      expect(verdict(3, { spamFlags: [] })).toBe("INSUFFICIENT");
+      expect(verdict(0, { spamFlags: [] })).toBe("INSUFFICIENT");
     });
     it("does NOT return FLAGGED for score >= 10 with spam flags", () => {
-      expect(verdict(15, { spamFlags: ["test_agent"] })).toBe("UNVERIFIED");
+      expect(verdict(15, { spamFlags: ["test_agent"] })).toBe("INSUFFICIENT");
     });
     it("does NOT return FLAGGED for score exactly 10 with spam flags", () => {
-      expect(verdict(10, { spamFlags: ["test_agent"] })).toBe("UNVERIFIED");
+      expect(verdict(10, { spamFlags: ["test_agent"] })).toBe("INSUFFICIENT");
     });
   });
 
@@ -122,14 +119,24 @@ describe("computeVerdict", () => {
     it("handles null lifecycleStatus", () => {
       expect(verdict(70, { lifecycleStatus: null as unknown as string })).toBe("TRUSTED");
     });
-    it("score 0 with no negative evidence = UNVERIFIED", () => {
+    it("score 0 with no negative evidence = INSUFFICIENT", () => {
       expect(
         verdict(0, {
           qualityTier: null as unknown as string,
           spamFlags: null as unknown as string[],
           lifecycleStatus: null as unknown as string,
         }),
-      ).toBe("UNVERIFIED");
+      ).toBe("INSUFFICIENT");
+    });
+  });
+
+  describe("Deprecated tier removal", () => {
+    it("never returns UNVERIFIED (removed in v2 consolidation)", () => {
+      for (let score = 0; score <= 100; score += 5) {
+        const v = verdict(score, { qualityTier: "low" });
+        expect(v).not.toBe("UNVERIFIED");
+        expect(v).not.toBe("INSUFFICIENT_DATA");
+      }
     });
   });
 });
