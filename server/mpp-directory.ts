@@ -73,12 +73,19 @@ export class MppApiSource implements MppDirectorySource {
     const url = entry.url || entry.serviceUrl;
     const name = entry.name || entry.serviceName || null;
     const description = entry.description ?? null;
+    // API returns provider as { name, url } object; extract the name string.
+    const providerName = typeof entry.provider === "object" && entry.provider !== null
+      ? (entry.provider.name ?? null)
+      : (entry.provider ?? null);
+    const category = typeof entry.category === "string"
+      ? entry.category
+      : (Array.isArray(entry.categories) && entry.categories[0]) || classifyMppService(description, url);
     return {
       serviceUrl: url,
       serviceName: name,
-      providerName: entry.provider || null,
+      providerName,
       description,
-      category: typeof entry.category === "string" ? entry.category : classifyMppService(description, url),
+      category,
       pricingModel: entry.pricingModel || entry.intent || null,
       priceAmount: entry.price != null ? String(entry.price) : (entry.amount != null ? String(entry.amount) : null),
       priceCurrency: entry.currency || entry.priceCurrency || null,
@@ -190,6 +197,7 @@ export function classifyMppService(description: string | null, url: string | nul
 export function createDirectorySource(mode: "api" | "scrape" | "auto" = "auto"): MppDirectorySource {
   if (mode === "api") return new MppApiSource();
   if (mode === "scrape") return new MppScrapeSource();
-  // auto: default to scrape (safer initial bet per the spec)
-  return new MppScrapeSource();
+  // auto: prefer API — mpp.dev/api/services returns structured JSON.
+  // Scrape is kept as an explicit opt-in; the HTML page has no data-url attributes.
+  return new MppApiSource();
 }

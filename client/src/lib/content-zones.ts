@@ -400,7 +400,7 @@ export const METHODOLOGY = {
     ],
   },
   ecosystemNotice:
-    "The AI agent economy is in its earliest stages. Most agents have limited or no transaction history, which means most Trust Ratings reflect profile data rather than verified behavioral evidence. As x402 payments and ERC-8004 attestations grow, Trust Ratings will become increasingly meaningful. TrustAdd is building the measurement infrastructure now so it's ready when the data arrives.",
+    "The AI agent economy is in its earliest stages. Most agents have limited or no transaction history, which means most Trust Ratings reflect profile data rather than verified behavioral evidence. As x402 payments and ERC-8004 attestations grow, Trust Ratings will become increasingly meaningful. TrustAdd is building the measurement infrastructure now so it's ready when the data arrives. Multi-Protocol Payments (MPP) activity is now being indexed across supported networks and will be incorporated into Trust Ratings in a future methodology version.",
   categories: ([
     {
       name: "Transaction Activity",

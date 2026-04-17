@@ -16,7 +16,7 @@ npm run dev                    # Express + Vite HMR on port 5001
 | Frontend | **Vercel** (static SPA) | React/Vite builds to `dist/public`, served as static files |
 | API | **Vercel** (serverless) | Express app wrapped in `api/[...path].ts` catch-all |
 | Database | **Supabase** PostgreSQL | Project `agfyfdhvgekekliujoxc` (us-east-2), Drizzle ORM |
-| Background Jobs | **Trigger.dev** | 11 tasks in `trigger/` directory (7 scheduled + 3 child tasks + 1 alert helper) |
+| Background Jobs | **Trigger.dev** | 13 tasks in `trigger/` directory (10 scheduled + 3 child tasks) + `alert.ts` helper function |
 | Analytics | **Vercel Web Analytics** | `@vercel/analytics/react` in App.tsx, plus custom `api_request_log` table |
 | Error Tracking | **Sentry** | OTEL integration via `trigger.config.ts`, captures all task failures |
 | DNS/CDN | **Cloudflare** | trustadd.com → Vercel |
@@ -44,31 +44,42 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - **Multi-chain**: 9 EVM chains share the same contract addresses; chain config in `shared/chains.ts`
 - **API tiering**: Free tier = ecosystem analytics + redacted agent directory (verdict badges, no scores). Paid tier (x402) = per-agent trust intelligence (scores, breakdowns, community signals, transactions). See `docs/api-tiering.md`
 - **ESM imports**: All relative imports use `.js` extensions for Vercel serverless compatibility
-- **Testing**: Vitest with 184 tests in `__tests__/` — trust scoring, verdict logic, free tier redaction, confidence, sybil detection. Run `npm test`. Architecture assessment in `docs/superpowers/specs/2026-04-13-architecture-adr1-fortify.md` (all 9 items complete)
+- **Testing**: Vitest with 294 node tests + 20 browser tests in `__tests__/` — trust scoring, verdict logic, free tier redaction, confidence, sybil detection, MPP, Tempo. Run `npm test`. Architecture assessment in `docs/superpowers/specs/2026-04-13-architecture-adr1-fortify.md` (all 9 items complete)
 
 ## Important Files
 
-- `shared/schema.ts` — All 12 database tables, insert schemas, and TypeScript types
-- `shared/chains.ts` — Multi-chain configuration (9 EVM chains, RPC URLs, contract addresses)
-- `server/storage.ts` — Database abstraction layer (IStorage interface + thin DatabaseStorage delegator, ~340 lines)
-- `server/storage/agents.ts` — Agent CRUD, events, analytics, quality, skills, protocol queries (~1600 lines)
+- `shared/schema.ts` — 19 tables: 12 core (agents, events, indexer, feedback, x402, transactions, admin) + 4 operational (alerts, health, rate-limits, api-log) + 2 marketplace (bazaar ×2) + trust_reports cache. Insert schemas and TypeScript types for all.
+- `shared/mpp-schema.ts` — 3 MPP tables (mppDirectoryServices, mppProbes, mppDirectorySnapshots) + insert schemas
+- `shared/chains.ts` — Multi-chain configuration (9 EVM chains + Tempo L1, RPC URLs, contract addresses)
+- `server/storage.ts` — Database abstraction layer (IStorage interface + thin DatabaseStorage delegator, ~384 lines)
+- `server/storage/agents.ts` — Agent CRUD, events, analytics, quality, skills, protocol queries (~1900 lines)
 - `server/storage/indexer.ts` — Indexer state, events, metrics queries (~130 lines)
 - `server/storage/feedback.ts` — Community feedback queries (~130 lines)
 - `server/storage/analytics.ts` — Probes, transactions, bazaar, status queries (~560 lines)
-- `server/routes.ts` — Route orchestrator (~20 lines) — calls 5 domain route files
+- `server/storage/mpp.ts` — MPP directory, probes, Tempo transaction queries (~280 lines)
+- `server/routes.ts` — Route orchestrator (~23 lines) — calls 6 domain route files
 - `server/routes/helpers.ts` — Shared route utilities (verdictFor, redactAgentForPublic, cached, parseChainId)
 - `server/routes/status.ts` — Status, health, chains, sitemap routes
 - `server/routes/agents.ts` — Agent CRUD, trust-scores, per-agent feedback routes
 - `server/routes/analytics.ts` — Analytics, economy, skills, bazaar, quality routes
 - `server/routes/admin.ts` — Admin routes (auth, sync, usage, dashboard, audit)
 - `server/routes/trust.ts` — Trust Data Product API v1 (x402-gated)
+- `server/routes/mpp.ts` — MPP directory, probes, Tempo stats routes (feature-flagged: ENABLE_MPP_UI)
 - `server/index.ts` — Local dev entry point (starts Vite HMR + background services)
 - `server/db.ts` — Lazy PostgreSQL pool + Drizzle setup (Supabase pooler compatible)
 - `api/[...path].ts` — Vercel serverless catch-all (wraps Express app)
 - `api/agent/[id].ts` — SSR meta tag injection for agent pages (SEO: serves index.html with per-agent title, description, OG tags, canonical, JSON-LD)
 - `api/health.ts` — Standalone health check with DB connection test
 - `server/lib/request-logger.ts` — Fire-and-forget API request logging middleware (path normalization, 90-day stochastic cleanup)
-- `trigger/` — 11 Trigger.dev tasks: `blockchain-indexer` (orchestrator, */2 cron) → `chain-indexer` (per-chain child, 2 cycles + 90s checkpointed wait), `community-feedback` (orchestrator, daily 4am) → `community-scrape` (per-platform child), `transaction-indexer`, `x402-prober`, `recalculate-scores` (scores + sybil dampening + slugs + classification + report recompilation) → `anchor-scores` (Merkle root publish on Base, fire-and-forget child), `watchdog`, `bazaar-indexer`, + `alert` helper
+- `server/lib/request-context.ts` — Request context tracking (request ID, user IP)
+- `server/lib/admin-audit.ts` — Admin action audit trail logging
+- `server/lib/time-budget.ts` — Time budget tracking for Trigger.dev tasks
+- `server/tempo-transaction-indexer.ts` — Tempo chain pathUSD transfer indexing logic
+- `server/mpp-prober.ts` — MPP endpoint prober (Payment Required header detection)
+- `server/mpp-directory.ts` — MPP directory discovery and indexing
+- `server/bazaar-classify.ts` — x402 Bazaar service classification
+- `server/anchor.ts` — Merkle root publishing on Base (fire-and-forget helper)
+- `trigger/` — 13 Trigger.dev tasks: `blockchain-indexer` (orchestrator, */2 cron) → `chain-indexer` (per-chain child, 2 cycles + 90s checkpointed wait), `community-feedback` (orchestrator, daily 4am) → `community-scrape` (per-platform child), `transaction-indexer` (every 6h), `tempo-transaction-indexer` (every 6h), `x402-prober` (daily 3am), `mpp-prober` (daily 3:30am), `mpp-directory-indexer` (daily 4:30am), `bazaar-indexer` (every 6h), `recalculate-scores` (daily 5am: scores + sybil dampening + slugs + classification + report recompilation) → `anchor-scores` (Merkle root publish on Base, fire-and-forget child), `watchdog` (every 15min), + `alert.ts` helper function
 - `server/trust-score.ts` — Trust scoring engine (5 categories, 21 signals, centralized thresholds, pure — no DB imports)
 - `server/trust-score-pipeline.ts` — DB orchestration: prefetchers, batch updates, recalc entry points (splits pipeline from pure scorer)
 - `server/trust-categories.ts` — `deriveCategoryStrengths()` — maps internal 5-category breakdown + sybilRiskScore to public `{identity, behavioral, community, attestation, authenticity}` qualitative tiers
@@ -105,8 +116,10 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - `client/src/pages/methodology.tsx` — Scoring methodology page (5 categories, 21 signals, 5-tier table, data sources, new `<EcosystemDistribution />` section)
 - `client/src/pages/analytics.tsx` — Analytics dashboard (includes 5-tier strip + 10-bucket histogram driven by `/api/analytics/trust-tiers`)
 - `client/src/pages/principles.tsx` — Design principles page (10 principles distilled from trust oracle research)
-- `client/src/App.tsx` — React routing (21 pages: 15 public + 6 admin)
-- `vitest.config.ts` — Node-env test suite (278 tests: trust scoring, verdict, sybil, confidence, category-strengths, free-tier, provenance, …)
+- `client/src/pages/bazaar.tsx` — Bazaar marketplace dashboard (/bazaar)
+- `client/src/pages/mpp.tsx` — Multi-Protocol Payments page (/mpp, feature-flagged: VITE_ENABLE_MPP_UI)
+- `client/src/App.tsx` — React routing (22 routes: 16 public + 6 admin)
+- `vitest.config.ts` — Node-env test suite (294 tests: trust scoring, verdict, sybil, confidence, category-strengths, free-tier, provenance, MPP, Tempo, …)
 - `vitest.browser.config.ts` — jsdom-env test suite for `__tests__/browser/*.browser.test.tsx` (20 tests: TrustStamp, VerificationChips, ScoreRail). Run via `npm run test:browser`
 
 ## Required Environment Variables
