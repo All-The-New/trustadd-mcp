@@ -42,28 +42,28 @@ export function TrustStamp({ verdict, score, size, methodologyVersion, scoredAt,
     return (
       <div
         className={cn("flex rounded-md overflow-hidden shadow-sm", className)}
-        style={{ width: 340, height: 101, background: desc.tintBg }}
+        style={{ width: 256, height: 76, background: desc.tintBg }}
         data-testid="trust-stamp-hero"
         data-tier={desc.tier}
       >
         <div
           className="flex flex-col items-center justify-center shrink-0"
-          style={{ width: 100, background: desc.color, color: "white" }}
+          style={{ width: 76, background: desc.color, color: "white" }}
         >
-          <Icon className="w-11 h-11" strokeWidth={2} />
-          <span className="mt-1 text-[28px] font-extrabold tabular-nums leading-none">{displayScore}</span>
+          <Icon className="w-8 h-8" strokeWidth={2} />
+          <span className="mt-0.5 text-[21px] font-extrabold tabular-nums leading-none">{displayScore}</span>
         </div>
-        <div className="flex-1 p-3 flex flex-col justify-between" style={{ color: desc.color }}>
-          <div className="flex items-center gap-1.5">
-            <ShieldLockup px={16} />
-            <span className="text-[11px] font-extrabold tracking-[2px]" style={{ color: "#0a59d0" }}>TRUST RATING</span>
+        <div className="flex-1 px-2.5 py-2 flex flex-col justify-between" style={{ color: desc.color }}>
+          <div className="flex items-center gap-1">
+            <ShieldLockup px={13} />
+            <span className="text-[9px] font-extrabold tracking-[2px]" style={{ color: "#0a59d0" }}>TRUST RATING</span>
           </div>
           <div
-            className={cn("font-black leading-none", isLongTier ? "text-[38px] tracking-normal" : "text-[42px] tracking-tight")}
+            className={cn("font-black leading-none", isLongTier ? "text-[28px] tracking-normal" : "text-[31px] tracking-tight")}
           >
             {desc.label}
           </div>
-          <div className="text-[9px] font-semibold tracking-wider opacity-70 flex items-center gap-2">
+          <div className="text-[8px] font-semibold tracking-wider opacity-70 flex items-center gap-1.5">
             <span>METHODOLOGY v{methodologyVersion ?? 2}</span>
             {scoredAt && <span>· {formatMonth(scoredAt)}</span>}
           </div>
