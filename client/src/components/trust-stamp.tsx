@@ -53,17 +53,17 @@ export function TrustStamp({ verdict, score, size, methodologyVersion, scoredAt,
           <Icon className="w-8 h-8" strokeWidth={2} />
           <span className="mt-0.5 text-[21px] font-extrabold tabular-nums leading-none">{displayScore}</span>
         </div>
-        <div className="flex-1 px-2.5 py-2 flex flex-col justify-center gap-1" style={{ color: desc.color }}>
-          <div className="flex items-center gap-1">
+        <div className="flex-1 px-2.5 py-1.5 flex flex-col justify-center gap-0.5" style={{ color: desc.color }}>
+          <div className="flex items-center gap-1 leading-none">
             <ShieldLockup px={13} />
-            <span className="text-[9px] font-extrabold tracking-[2px]" style={{ color: "#0a59d0" }}>TRUST RATING</span>
+            <span className="text-[9px] font-extrabold tracking-[2px] leading-none" style={{ color: "#0a59d0" }}>TRUST RATING</span>
           </div>
           <div
             className={cn("font-black leading-none", isLongTier ? "text-[28px] tracking-normal" : "text-[31px] tracking-tight")}
           >
             {desc.label}
           </div>
-          <div className="text-[8px] font-semibold tracking-wider opacity-70 flex items-center gap-1.5">
+          <div className="text-[8px] font-semibold tracking-wider opacity-70 leading-none flex items-center gap-1.5">
             <span>METHODOLOGY v{methodologyVersion ?? 2}</span>
             {scoredAt && <span>· {formatMonth(scoredAt)}</span>}
           </div>
