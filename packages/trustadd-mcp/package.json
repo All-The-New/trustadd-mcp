@@ -1,8 +1,8 @@
 {
   "name": "@trustadd/mcp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
-  "description": "MCP server for TrustAdd — AI agent trust oracle. Check trust scores before transacting with agents.",
+  "description": "MCP server for TrustAdd — AI agent trust oracle. Trust scoring, MPP ecosystem analytics, cross-chain agent discovery.",
   "bin": {
     "trustadd-mcp": "./build/index.js"
   },
@@ -35,6 +35,8 @@
     "agent",
     "erc8004",
     "x402",
+    "mpp",
+    "tempo",
     "claude",
     "ai-agent",
     "blockchain"
