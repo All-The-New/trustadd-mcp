@@ -86,11 +86,13 @@ export class MppApiSource implements MppDirectorySource {
       providerName,
       description,
       category,
-      pricingModel: entry.pricingModel || entry.intent || null,
+      pricingModel: entry.pricingModel || entry.intent
+        || (entry.methods?.tempo?.intents?.[0] ?? null),
       priceAmount: entry.price != null ? String(entry.price) : (entry.amount != null ? String(entry.amount) : null),
       priceCurrency: entry.currency || entry.priceCurrency || null,
       paymentMethods: Array.isArray(entry.paymentMethods) ? entry.paymentMethods : [],
-      recipientAddress: entry.recipient || entry.payTo || null,
+      recipientAddress: entry.recipient || entry.payTo
+        || (entry.methods?.tempo?.assets?.[0] ?? null),
       metadata: entry,
     };
   };
