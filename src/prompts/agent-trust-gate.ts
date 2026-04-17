@@ -30,11 +30,12 @@ export function registerAgentTrustGatePrompt(server: McpServer): void {
               `\n\nRun the trust gate:\n` +
               `1. Call lookup_agent with address=${counterparty} (free). If found=false, the agent is unknown — warn the user.\n` +
               `2. If found, call check_agent_trust with address=${counterparty} ($0.01). If the verdict is 402 (payment-required), inform the user and stop.\n` +
-              `3. Based on the verdict:\n` +
-              `   - TRUSTED (score ≥ 80): proceed, briefly cite the score.\n` +
-              `   - CAUTION (score 40–79): call get_trust_report for detailed evidence ($0.05) and summarize risk factors before deciding.\n` +
-              `   - UNTRUSTED (score < 40): recommend the user abort. Cite the top red flags from the breakdown.\n` +
-              `   - UNKNOWN: recommend caution and small-amount testing.\n` +
+              `3. Based on the verdict (TrustAdd uses 5 tiers: VERIFIED ≥80, TRUSTED ≥60, BUILDING ≥20, INSUFFICIENT <20, FLAGGED=active negative evidence):\n` +
+              `   - VERIFIED (score ≥ 80): proceed confidently, cite the score.\n` +
+              `   - TRUSTED (score ≥ 60): proceed, briefly cite the score and any flags.\n` +
+              `   - BUILDING (score ≥ 20): call get_trust_report for detailed evidence ($0.05) and summarize risk factors before deciding.\n` +
+              `   - INSUFFICIENT (score < 20) or FLAGGED: recommend the user abort or use extreme caution. Cite the top red flags from the breakdown.\n` +
+              `   - Agent not found (UNKNOWN): recommend caution and small-amount testing.\n` +
               `4. Always include the score, verdict, and any flags in your summary.\n` +
               `\nStart with step 1.`,
           },
