@@ -21,3 +21,7 @@ dist
 node_modules
 server/public
 vite.config.ts.*
+
+# Playwright
+test-results/
+playwright-report/

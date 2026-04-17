@@ -12,7 +12,8 @@
     "db:generate": "drizzle-kit generate",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:browser": "vitest run --config vitest.browser.config.ts"
+    "test:browser": "vitest run --config vitest.browser.config.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@coinbase/x402": "^2.1.0",
@@ -91,6 +92,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "^4.1.18",
     "@testing-library/dom": "^10.4.1",
