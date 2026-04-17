@@ -3,6 +3,7 @@ import { schedules, logger, metadata, usage } from "@trigger.dev/sdk/v3";
 export const recalculateTask = schedules.task({
   id: "recalculate-scores",
   cron: "0 5 * * *",
+  machine: { preset: "large-1x" },
   maxDuration: 600,
   run: async (payload) => {
     metadata.set("status", "running");
