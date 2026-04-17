@@ -197,39 +197,28 @@ npx vercel deploy --prod         # Manual deploy if needed
 
 ## MPP Integration (launched 2026-04-16, Path A)
 
-**Current state:** Indexer LIVE in production; UI still client-hidden. Shipped via PR #4 merge commit `e82a691`.
+**Current state:** FULLY LIVE. Indexer + UI both live as of 2026-04-17. PR #4 (`e82a691`) + runbook Steps 7–8 completed.
 
 **Flags in production (as of 2026-04-17):**
 
 | Flag | Scope | Value | Meaning |
 |---|---|---|---|
 | `ENABLE_MPP_INDEXER` | Trigger.dev prod | `true` | 3 MPP tasks run on schedule |
-| `ENABLE_MPP_UI` | Vercel prod | unset (false) | `/api/mpp/*` routes return 404 |
-| `VITE_ENABLE_MPP_UI` | Vercel prod | unset (false) | `/mpp` page + `/economy` MPP card + header nav all hidden |
+| `ENABLE_MPP_UI` | Vercel prod | `true` | `/api/mpp/*` routes live |
+| `VITE_ENABLE_MPP_UI` | Vercel prod | `true` | `/mpp` page + `/economy` MPP card + header nav visible |
 | `TEMPO_RPC_URL` | Vercel + Trigger.dev prod | `https://rpc.tempo.xyz` | Primary Tempo RPC |
 | `TEMPO_RPC_URL_FALLBACK` | Trigger.dev prod | (same as primary; no real fallback yet) | Swap to QuickNode/Chainstack when provisioned |
-| `MPP_DIRECTORY_SOURCE` | Vercel + Trigger.dev prod | `auto` | Tries API first, falls back to scrape |
+| `MPP_DIRECTORY_SOURCE` | Vercel prod | `api` | Uses `mpp.dev/api/services` JSON endpoint |
+| `MPP_DIRECTORY_SOURCE` | Trigger.dev prod | `auto` (→ api) | **Manual update needed in dashboard** → set to `api` |
 | `TEMPO_PATHUSD_DEPLOYMENT_BLOCK` | Trigger.dev prod | `5172409` | First pathUSD Transfer at this block (resolved 2026-04-16) |
 | `TEMPO_TRANSFER_WITH_MEMO_TOPIC` | Trigger.dev prod | unset | Memo decoding deferred for launch |
 
-**To complete the rollout (after 24–48h observation):**
-
-```bash
-# Step 7: API routes go live, page still client-hidden
-printf 'true' | npx vercel env add ENABLE_MPP_UI production
-npx vercel deploy --prod
-
-# Step 8: Page + /economy card + header nav go live
-printf 'true' | npx vercel env add VITE_ENABLE_MPP_UI production
-npx vercel deploy --prod
-```
+**Directory scraper resolved:** `mpp.dev/services` is JS-rendered (Waku). `mpp.dev/api/services` returns structured JSON. Switched `MPP_DIRECTORY_SOURCE=api` on Vercel. Trigger.dev still uses `auto` (which also resolves to API source via `createDirectorySource`). Confirm by running `mpp-directory-indexer` one-shot after 24h and checking `mpp_directory_services` row count.
 
 **Pipeline tasks (all deployed in `v20260416.3`):**
 - `mpp-prober` — daily 3:30 AM UTC
 - `mpp-directory-indexer` — daily 4:30 AM UTC
 - `tempo-transaction-indexer` — every 6 hours
-
-**Known issue (non-blocking):** `server/mpp-directory.ts` scrapes `mpp.dev/services` but matched zero services on the one-shot smoke test. Scraper ran without error — site format likely differs from expectations, or the directory is genuinely empty (MPP is 4 weeks old). The indexer still writes a snapshot with `totalServices: 0` safely, so `/mpp` renders the empty-state gracefully. Follow-up: inspect what the site returns and patch `MppScrapeSource`, or swap to `MppApiSource` once MPP publishes an API.
 
 **Scoring integration:** Path A — Methodology v2 ships with **MPP invisible to scoring**. MPP data accumulates in the backend for 4-6 weeks; v3 integrates MPP signals (cross-protocol presence, pathUSD volume, Tempo longevity). See `docs/roadmap-mpp.md` for the full v3 plan + external integration roadmap (Stripe API, Tempo block explorer, Bitquery/GraphQL).
 
