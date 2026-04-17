@@ -24,6 +24,8 @@ const SYNC_VARS = [
   "ENABLE_RERESOLVE",
   "ENABLE_PROBER",
   "SENTRY_DSN",
+  "MPP_PAY_TO_ADDRESS",
+  "TEMPO_RPC_URL",
 ];
 
 async function main() {
