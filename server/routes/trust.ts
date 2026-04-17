@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createLogger } from "../lib/logger.js";
-import { createTrustProductGate } from "../lib/x402-gate.js";
+import { createPaymentGate } from "../lib/payment-gate/index.js";
 import {
   resolveAgentByAddress,
   getOrCompileReport,
@@ -20,6 +20,33 @@ const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 const trustProductEnabled = process.env.TRUST_PRODUCT_ENABLED?.toLowerCase() === "true";
 
 export function registerTrustRoutes(app: Express): void {
+  function buildPaymentAdvertisement() {
+    const methods: Array<Record<string, unknown>> = [];
+    if (process.env.CDP_API_KEY_ID && process.env.CDP_PRIVATE_KEY && process.env.TRUST_PRODUCT_PAY_TO) {
+      methods.push({
+        scheme: "x402",
+        network: "eip155:8453",
+        asset: "USDC",
+        payTo: process.env.TRUST_PRODUCT_PAY_TO,
+      });
+    }
+    if (process.env.MPP_PAY_TO_ADDRESS) {
+      methods.push({
+        scheme: "mpp",
+        method: "tempo",
+        chainId: 4217,
+        asset: "pathUSD",
+        assetAddress: "0x20c000000000000000000000b9537d11c60e8b50",
+        payTo: process.env.MPP_PAY_TO_ADDRESS.toLowerCase(),
+      });
+    }
+    return {
+      quickCheckPrice: "$0.01",
+      fullReportPrice: "$0.05",
+      paymentMethods: methods,
+    };
+  }
+
   // Free endpoint — methodology description for the trust scoring rubric
   app.get("/api/v1/trust/methodology", (_req, res) => {
     res.json(getMethodology());
@@ -61,11 +88,8 @@ export function registerTrustRoutes(app: Express): void {
           found: false,
           name: null,
           verdict: "UNKNOWN",
-          x402Required: true,
-          quickCheckPrice: "$0.01",
-          fullReportPrice: "$0.05",
-          paymentNetwork: "eip155:8453",
-          paymentToken: "USDC",
+          paymentRequired: true,
+          ...buildPaymentAdvertisement(),
         });
       }
 
@@ -83,11 +107,8 @@ export function registerTrustRoutes(app: Express): void {
         found: true,
         name: agent.name,
         verdict,
-        x402Required: true,
-        quickCheckPrice: "$0.01",
-        fullReportPrice: "$0.05",
-        paymentNetwork: "eip155:8453",
-        paymentToken: "USDC",
+        paymentRequired: true,
+        ...buildPaymentAdvertisement(),
       });
     } catch (err) {
       logger.error("Trust exists check failed", { error: (err as Error).message });
@@ -95,13 +116,13 @@ export function registerTrustRoutes(app: Express): void {
     }
   });
 
-  // x402 payment gate — mounted globally because the x402 middleware uses req.path
+  // Payment gate — mounted globally because the middleware uses req.path
   // for route matching, and Express strips the mount prefix when using app.use(prefix, fn).
   if (trustProductEnabled) {
-    const gate = createTrustProductGate();
+    const gate = createPaymentGate();
     if (gate) {
       app.use(gate);
-      logger.info("Trust Data Product x402 gate active");
+      logger.info("Trust Data Product payment gate active");
     }
   }
 
