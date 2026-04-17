@@ -6,7 +6,19 @@ The TrustAdd Trust API is an **agent trust oracle** — a paid data service that
 
 **Analogy:** A credit check for the agent economy. Before Agent A pays Agent B for a service, Agent A pays TrustAdd $0.01 to verify Agent B is trustworthy.
 
-**Payment protocol:** [x402](https://x402.org) — the HTTP 402 Payment Required standard. Payments are gasless for the payer (EIP-3009 USDC on Base), settled on-chain by the Coinbase CDP facilitator.
+**Payment protocols:**
+- **x402** — USDC on Base (chain 8453), settled by the Coinbase CDP facilitator. EIP-3009 authorization — gasless for the payer.
+- **MPP** — pathUSD on Tempo (chain 4217). Direct transfer; client submits the tx hash on retry (`Authorization: MPP 0x<hash>`). TrustAdd verifies on-chain via the Tempo RPC and replay-guards for 1h.
+
+Both rails price the same: $0.01 Quick Check, $0.05 Full Report. The 402 response advertises every configured rail in a single `WWW-Authenticate` header set.
+
+### MPP request flow
+
+1. Client requests `GET /api/v1/trust/0xabc...` with no payment.
+2. Server returns `HTTP 402` with `WWW-Authenticate: Payment id="...", realm="trustadd.com", method="tempo", intent="charge", request="<base64url-JSON>"`. Decoded payload contains `{recipient, asset, amount, chainId}`.
+3. Client sends a pathUSD transfer on Tempo to `recipient` for at least `amount` base units.
+4. Client retries with `Authorization: MPP 0x<txHash>`.
+5. TrustAdd fetches the tx receipt via Tempo RPC, validates the `Transfer` log (asset, recipient, amount ≥ price), records `(txHash, logIndex)` in a 1h replay cache, then serves the JSON.
 
 ---
 
