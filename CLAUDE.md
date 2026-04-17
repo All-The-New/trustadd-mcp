@@ -195,38 +195,57 @@ npx vercel deploy --prod         # Manual deploy if needed
 - Inter font, professional blue theme
 - Git author: `All The New <admin@allthenew.com>` (required for Vercel Hobby deploys)
 
-## MPP Integration (2026-04-15)
+## MPP Integration (launched 2026-04-16, Path A)
 
-MPP integration is feature-flagged. To enable:
+**Current state:** Indexer LIVE in production; UI still client-hidden. Shipped via PR #4 merge commit `e82a691`.
 
-**Vercel env vars:**
+**Flags in production (as of 2026-04-17):**
+
+| Flag | Scope | Value | Meaning |
+|---|---|---|---|
+| `ENABLE_MPP_INDEXER` | Trigger.dev prod | `true` | 3 MPP tasks run on schedule |
+| `ENABLE_MPP_UI` | Vercel prod | unset (false) | `/api/mpp/*` routes return 404 |
+| `VITE_ENABLE_MPP_UI` | Vercel prod | unset (false) | `/mpp` page + `/economy` MPP card + header nav all hidden |
+| `TEMPO_RPC_URL` | Vercel + Trigger.dev prod | `https://rpc.tempo.xyz` | Primary Tempo RPC |
+| `TEMPO_RPC_URL_FALLBACK` | Trigger.dev prod | (same as primary; no real fallback yet) | Swap to QuickNode/Chainstack when provisioned |
+| `MPP_DIRECTORY_SOURCE` | Vercel + Trigger.dev prod | `auto` | Tries API first, falls back to scrape |
+| `TEMPO_PATHUSD_DEPLOYMENT_BLOCK` | Trigger.dev prod | `5172409` | First pathUSD Transfer at this block (resolved 2026-04-16) |
+| `TEMPO_TRANSFER_WITH_MEMO_TOPIC` | Trigger.dev prod | unset | Memo decoding deferred for launch |
+
+**To complete the rollout (after 24–48h observation):**
+
 ```bash
-printf 'true' | npx vercel env add ENABLE_MPP_UI production        # enables /api/mpp/* routes + /mpp page
-printf 'true' | npx vercel env add VITE_ENABLE_MPP_UI production   # shows MPP UI on /economy page
-printf 'https://rpc.tempo.xyz' | npx vercel env add TEMPO_RPC_URL production
+# Step 7: API routes go live, page still client-hidden
+printf 'true' | npx vercel env add ENABLE_MPP_UI production
+npx vercel deploy --prod
+
+# Step 8: Page + /economy card + header nav go live
+printf 'true' | npx vercel env add VITE_ENABLE_MPP_UI production
+npx vercel deploy --prod
 ```
 
-**Trigger.dev env vars (dashboard → Settings → Environment Variables → Production):**
-```
-ENABLE_MPP_INDEXER=true
-TEMPO_RPC_URL=https://rpc.tempo.xyz
-TEMPO_RPC_URL_FALLBACK=<optional QuickNode/Chainstack URL>
-MPP_DIRECTORY_SOURCE=auto            # or api, scrape
-TEMPO_PATHUSD_DEPLOYMENT_BLOCK=0     # set after bootstrap resolves
-TEMPO_TRANSFER_WITH_MEMO_TOPIC=<topic hash if known>
-```
-
-**Schema migration:** Run the SQL in `migrations/0002_mpp_integration.sql`
-via Supabase SQL editor before enabling the flags (trustadd_app
-lacks ownership for direct `drizzle-kit push`).
-
-**Pipeline tasks:**
+**Pipeline tasks (all deployed in `v20260416.3`):**
 - `mpp-prober` — daily 3:30 AM UTC
 - `mpp-directory-indexer` — daily 4:30 AM UTC
 - `tempo-transaction-indexer` — every 6 hours
 
+**Known issue (non-blocking):** `server/mpp-directory.ts` scrapes `mpp.dev/services` but matched zero services on the one-shot smoke test. Scraper ran without error — site format likely differs from expectations, or the directory is genuinely empty (MPP is 4 weeks old). The indexer still writes a snapshot with `totalServices: 0` safely, so `/mpp` renders the empty-state gracefully. Follow-up: inspect what the site returns and patch `MppScrapeSource`, or swap to `MppApiSource` once MPP publishes an API.
+
 **Scoring integration:** Path A — Methodology v2 ships with **MPP invisible to scoring**. MPP data accumulates in the backend for 4-6 weeks; v3 integrates MPP signals (cross-protocol presence, pathUSD volume, Tempo longevity). See `docs/roadmap-mpp.md` for the full v3 plan + external integration roadmap (Stripe API, Tempo block explorer, Bitquery/GraphQL).
 
-See `docs/superpowers/specs/2026-04-15-mpp-integration-design.md`,
-`docs/superpowers/plans/2026-04-15-mpp-integration.md`,
-and `docs/roadmap-mpp.md`.
+**Smoke-test inspection queries:**
+
+```sql
+SELECT 'services' AS tbl, COUNT(*) FROM mpp_directory_services
+UNION ALL SELECT 'snapshots', COUNT(*) FROM mpp_directory_snapshots
+UNION ALL SELECT 'probes', COUNT(*) FROM mpp_probes
+UNION ALL SELECT 'tempo_sync_state', COUNT(*) FROM transaction_sync_state WHERE chain_id = 4217
+UNION ALL SELECT 'tempo_txs', COUNT(*) FROM agent_transactions WHERE chain_id = 4217;
+```
+
+See:
+- `docs/superpowers/runbooks/2026-04-16-mpp-launch.md` — step-by-step launch operator runbook
+- `docs/superpowers/plans/2026-04-16-mpp-launch.md` — launch implementation plan (20 tasks)
+- `docs/superpowers/specs/2026-04-15-mpp-integration-design.md` — original design spec
+- `docs/superpowers/plans/2026-04-15-mpp-integration.md` — Phase 1+2 build plan
+- `docs/roadmap-mpp.md` — Path A decision + v3 integration roadmap
