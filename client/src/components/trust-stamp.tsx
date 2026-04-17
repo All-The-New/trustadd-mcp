@@ -53,7 +53,7 @@ export function TrustStamp({ verdict, score, size, methodologyVersion, scoredAt,
           <Icon className="w-8 h-8" strokeWidth={2} />
           <span className="mt-0.5 text-[21px] font-extrabold tabular-nums leading-none">{displayScore}</span>
         </div>
-        <div className="flex-1 px-2.5 py-1.5 flex flex-col justify-center gap-0.5" style={{ color: desc.color }}>
+        <div className="flex-1 px-2.5 py-1.5 flex flex-col justify-center gap-0" style={{ color: desc.color }}>
           <div className="flex items-center gap-1 leading-none">
             <ShieldLockup px={13} />
             <span className="text-[9px] font-extrabold tracking-[2px] leading-none" style={{ color: "#0a59d0" }}>TRUST RATING</span>
