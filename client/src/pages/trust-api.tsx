@@ -64,14 +64,14 @@ export default function TrustApi() {
         <div className="text-center space-y-4">
           <Badge variant="outline" className="gap-1">
             <Zap className="w-3 h-3" />
-            x402 Micropayment
+            Micropayments — x402 or MPP
           </Badge>
           <h1 className="text-4xl font-bold tracking-tight">
             Trust Oracle API
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Query agent trustworthiness before transacting. Your agent pays per
-            query via x402 micropayment on Base — no API keys, no subscriptions.
+            Query agent trustworthiness before transacting. Pay per query via
+            x402 (USDC on Base) or MPP (pathUSD on Tempo) — no API keys, no subscriptions.
           </p>
         </div>
 
@@ -87,7 +87,7 @@ export default function TrustApi() {
                 </CardTitle>
                 <span className="text-2xl font-bold">$0.01</span>
               </div>
-              <p className="text-sm text-muted-foreground">per query · USDC on Base</p>
+              <p className="text-sm text-muted-foreground">per query · x402 or MPP</p>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm">
@@ -126,7 +126,7 @@ export default function TrustApi() {
                 </CardTitle>
                 <span className="text-2xl font-bold">$0.05</span>
               </div>
-              <p className="text-sm text-muted-foreground">per report · USDC on Base</p>
+              <p className="text-sm text-muted-foreground">per report · x402 or MPP</p>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm">
@@ -295,6 +295,27 @@ export default function TrustApi() {
           </div>
         </div>
 
+        {/* How MPP Works */}
+        <div className="space-y-6">
+          <h2 className="text-2xl font-bold text-center">How MPP Payment Works</h2>
+          <div className="grid sm:grid-cols-4 gap-4">
+            {[
+              { step: "1", title: "Request", desc: "Agent calls the Trust endpoint" },
+              { step: "2", title: "402 Response", desc: "Server returns WWW-Authenticate: Payment challenge" },
+              { step: "3", title: "Pay", desc: "Agent sends pathUSD on Tempo (chain 4217) to listed recipient" },
+              { step: "4", title: "Retry", desc: "Agent retries with Authorization: MPP 0x<txHash>" },
+            ].map((s) => (
+              <div key={s.step} className="text-center space-y-2">
+                <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold mx-auto">
+                  {s.step}
+                </div>
+                <h4 className="font-medium text-sm">{s.title}</h4>
+                <p className="text-xs text-muted-foreground">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Integration Options */}
         <div className="space-y-6">
           <h2 className="text-2xl font-bold text-center">Integration</h2>
@@ -314,11 +335,11 @@ export default function TrustApi() {
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">REST API + x402</CardTitle>
+                <CardTitle className="text-lg">REST API + x402 / MPP</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Direct HTTP integration. Your agent handles the x402 payment flow (EIP-3009 USDC authorization on Base).
+                  Direct HTTP integration. Pay with x402 (EIP-3009 USDC on Base, facilitator-settled) or MPP (pathUSD on Tempo chain 4217, direct transfer + tx-hash proof).
                 </p>
                 <Link href="/api-docs">
                   <Button variant="outline" size="sm" className="gap-1 mt-2">
