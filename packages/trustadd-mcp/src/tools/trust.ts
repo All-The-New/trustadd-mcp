@@ -10,7 +10,7 @@ export function registerTrustTools(server: McpServer): void {
     {
       description:
         "Check if TrustAdd has trust data for an AI agent address. Free, no payment required. " +
-        "Returns whether the agent is found, a verdict preview (TRUSTED/CAUTION/UNTRUSTED/UNKNOWN), " +
+        "Returns whether the agent is found, a verdict preview (VERIFIED/TRUSTED/BUILDING/INSUFFICIENT/FLAGGED), " +
         "and pricing for paid endpoints. Use this before check_agent_trust to see if data exists.",
       inputSchema: { address: AddressSchema },
     },
@@ -30,7 +30,7 @@ export function registerTrustTools(server: McpServer): void {
     "check_agent_trust",
     {
       description:
-        "Get a trust verdict for an AI agent. Returns score (0-100), verdict (TRUSTED/CAUTION/UNTRUSTED), " +
+        "Get a trust verdict for an AI agent. Returns score (0-100), verdict (VERIFIED ≥80 / TRUSTED ≥60 / BUILDING ≥20 / INSUFFICIENT <20 / FLAGGED), " +
         "score breakdown across 5 categories, flags, and key metrics. " +
         "Costs $0.01 USDC on Base via x402 protocol. " +
         "If x402 payment is not configured, returns the 402 payment requirements so you can inform the user. " +
