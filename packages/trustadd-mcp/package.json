@@ -7,7 +7,8 @@
     "trustadd-mcp": "./build/index.js"
   },
   "files": [
-    "build"
+    "build",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && chmod 755 build/index.js",
