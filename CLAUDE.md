@@ -100,6 +100,7 @@ All core services have MCP integrations. **Prefer MCP tools over CLI/dashboard**
 - `server/lib/admin-auth.ts` — Cookie-based admin auth (HMAC tokens, IP whitelist, session middleware)
 - `client/src/components/admin-layout.tsx` — Admin shell with nav, session guard, logout
 - `client/src/pages/admin/*.tsx` — 6 admin pages: login, dashboard, usage, status-details, tasks, audit-log
+- `packages/trustadd-mcp/` — Published MCP server (`@trustadd/mcp` on npm). 11 tools (3 trust, 4 MPP, 3 analytics, 1 status) + 1 prompt (`agent_trust_gate`). Modular structure under `src/{lib,tools,prompts}`. API versioning via `src/lib/versioning.ts`. Tests via vitest. Publish on git tag `mcp-v*`.
 - `vercel.json` — Vercel routing and build configuration
 - `client/src/lib/content-zones.ts` — Centralized copy for all public pages (marketing, pillars, METHODOLOGY categories, verdict list)
 - `client/src/lib/verdict.ts` — Single source of truth for 5-tier `VerdictDescriptor` (color, icon, label, shortLabel, score range). Imported by every stamp/badge/strip

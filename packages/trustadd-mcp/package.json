@@ -1,17 +1,21 @@
 {
   "name": "@trustadd/mcp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
-  "description": "MCP server for TrustAdd — AI agent trust oracle. Check trust scores before transacting with agents.",
+  "description": "MCP server for TrustAdd — AI agent trust oracle. Trust scoring, MPP ecosystem analytics, cross-chain agent discovery.",
   "bin": {
     "trustadd-mcp": "./build/index.js"
   },
   "files": [
-    "build"
+    "build",
+    "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc && chmod 755 build/index.js",
-    "prepublishOnly": "npm run build"
+    "build": "tsc -p tsconfig.build.json && chmod 755 build/index.js",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run test:run && npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -19,7 +23,9 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "typescript": "^5.7.0"
+    "@vitest/coverage-v8": "^2.1.9",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.9"
   },
   "engines": {
     "node": ">=18"
@@ -30,6 +36,8 @@
     "agent",
     "erc8004",
     "x402",
+    "mpp",
+    "tempo",
     "claude",
     "ai-agent",
     "blockchain"
