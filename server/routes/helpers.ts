@@ -50,7 +50,14 @@ export function redactAgentForPublic(agent: Record<string, unknown>): Record<str
     sybilSignals: _ss,
     ...publicFields
   } = agent;
-  return { ...publicFields, verdict, categoryStrengths, reportAvailable: true };
+  return {
+    ...publicFields,
+    verdict,
+    categoryStrengths,
+    reportAvailable: true,
+    // AgentCard reads trustScoreForStamp; map from trustScore so /api/agents renders scores.
+    trustScoreForStamp: (agent.trustScore as number | null) ?? null,
+  };
 }
 
 // Lightweight in-memory TTL cache for expensive query results.
