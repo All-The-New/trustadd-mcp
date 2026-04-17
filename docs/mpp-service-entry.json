@@ -1,0 +1,29 @@
+{
+  "name": "TrustAdd Trust API",
+  "description": "Agent trust oracle — query a machine-readable trust verdict for any ERC-8004 agent across 9 EVM chains. Pay per query with pathUSD on Tempo.",
+  "category": "data",
+  "tags": ["trust", "reputation", "agents", "erc-8004", "oracle"],
+  "website": "https://trustadd.com",
+  "documentation": "https://trustadd.com/trust-api",
+  "endpoints": [
+    {
+      "url": "https://trustadd.com/api/v1/trust/{address}",
+      "method": "GET",
+      "description": "Quick trust check",
+      "price": { "amount": "0.01", "currency": "USD", "asset": "pathUSD" }
+    },
+    {
+      "url": "https://trustadd.com/api/v1/trust/{address}/report",
+      "method": "GET",
+      "description": "Full trust report",
+      "price": { "amount": "0.05", "currency": "USD", "asset": "pathUSD" }
+    }
+  ],
+  "payment": {
+    "method": "tempo",
+    "chainId": 4217,
+    "asset": "0x20c000000000000000000000b9537d11c60e8b50",
+    "recipient": "<MPP_PAY_TO_ADDRESS — fill in after creating Tempo wallet>"
+  },
+  "contact": "admin@allthenew.com"
+}
