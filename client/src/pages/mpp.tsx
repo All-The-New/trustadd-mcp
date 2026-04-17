@@ -21,7 +21,7 @@ import {
 } from "recharts";
 import {
   Store, DollarSign, Users, TrendingUp, AlertTriangle,
-  Search, ChevronLeft, ChevronRight, Network, Coins,
+  Search, ChevronLeft, ChevronRight, Network, Coins, Info,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -674,6 +674,18 @@ export default function MppPage() {
           <h1 className="text-3xl font-bold tracking-tight">{MPP.overview.title}</h1>
           <p className="text-muted-foreground mt-1">{MPP.overview.description}</p>
         </header>
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 flex gap-3">
+          <Info className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <div className="text-sm font-semibold text-amber-300 mb-1">Early Protocol Notice</div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              MPP launched in early 2026 and is still in its earliest stage. Directory coverage,
+              payment volume, and agent adoption data reflect a very new ecosystem — numbers will
+              grow significantly as more services and agents adopt the standard. Scoring integration
+              is planned for methodology v3.
+            </p>
+          </div>
+        </div>
         <HeroStats />
         <BreakdownCharts />
         <TrendCharts />
