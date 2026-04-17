@@ -209,11 +209,11 @@ npx vercel deploy --prod         # Manual deploy if needed
 | `TEMPO_RPC_URL` | Vercel + Trigger.dev prod | `https://rpc.tempo.xyz` | Primary Tempo RPC |
 | `TEMPO_RPC_URL_FALLBACK` | Trigger.dev prod | (same as primary; no real fallback yet) | Swap to QuickNode/Chainstack when provisioned |
 | `MPP_DIRECTORY_SOURCE` | Vercel prod | `api` | Uses `mpp.dev/api/services` JSON endpoint |
-| `MPP_DIRECTORY_SOURCE` | Trigger.dev prod | `auto` (→ api) | **Manual update needed in dashboard** → set to `api` |
+| `MPP_DIRECTORY_SOURCE` | Trigger.dev prod | `api` | Uses `mpp.dev/api/services` JSON endpoint |
 | `TEMPO_PATHUSD_DEPLOYMENT_BLOCK` | Trigger.dev prod | `5172409` | First pathUSD Transfer at this block (resolved 2026-04-16) |
 | `TEMPO_TRANSFER_WITH_MEMO_TOPIC` | Trigger.dev prod | unset | Memo decoding deferred for launch |
 
-**Directory scraper resolved:** `mpp.dev/services` is JS-rendered (Waku). `mpp.dev/api/services` returns structured JSON. Switched `MPP_DIRECTORY_SOURCE=api` on Vercel. Trigger.dev still uses `auto` (which also resolves to API source via `createDirectorySource`). Confirm by running `mpp-directory-indexer` one-shot after 24h and checking `mpp_directory_services` row count.
+**Directory scraper resolved:** `mpp.dev/services` is JS-rendered (Waku). `mpp.dev/api/services` returns structured JSON. `MPP_DIRECTORY_SOURCE=api` set on both Vercel and Trigger.dev (confirmed 2026-04-17). 89 services indexed on first successful run.
 
 **Pipeline tasks (all deployed in `v20260416.3`):**
 - `mpp-prober` — daily 3:30 AM UTC
