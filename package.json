@@ -44,8 +44,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/All-The-New/trustadd",
-    "directory": "packages/trustadd-mcp"
+    "url": "https://github.com/All-The-New/trustadd-mcp"
   },
   "license": "MIT"
 }
