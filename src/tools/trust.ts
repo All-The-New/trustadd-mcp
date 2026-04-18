@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { apiGet, formatError, paidHandler } from "../lib/api.js";
+import { formatError, freeHandler, paidHandler } from "../lib/api.js";
 import { errorResult } from "../lib/responses.js";
 import { apiPath } from "../lib/versioning.js";
 import { AddressSchema, ChainIdSchema } from "../lib/schemas.js";
@@ -16,10 +16,7 @@ export function registerTrustTools(server: McpServer): void {
     },
     async ({ address }) => {
       try {
-        const { status, data } = await apiGet(apiPath("trust", `/${address}/exists`));
-        if (status === 400) return errorResult("Invalid address format");
-        if (status >= 500) return errorResult(`TrustAdd API error (HTTP ${status})`);
-        return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+        return await freeHandler(apiPath("trust", `/${address}/exists`));
       } catch (err) {
         return errorResult(formatError(err));
       }

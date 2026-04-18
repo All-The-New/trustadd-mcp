@@ -1,16 +1,4 @@
-/**
- * API version registry.
- *
- * Maps API group → URL version segment. `null` means the group is currently
- * unversioned at the URL level (e.g. /api/mpp/...). Versioned groups support
- * override via TRUSTADD_API_VERSION_OVERRIDE env var (for testing v2 before
- * its default promotion).
- *
- * When adding a v2 endpoint:
- *   1. Bump the map entry: `trust: 'v2'`
- *   2. Add a CHANGELOG entry describing the upgrade
- *   3. Bump the package minor version
- */
+// null = unversioned at URL level (e.g. /api/mpp/...); versioned groups support TRUSTADD_API_VERSION_OVERRIDE
 export const API_VERSIONS = {
   trust: "v1",
   mpp: null,

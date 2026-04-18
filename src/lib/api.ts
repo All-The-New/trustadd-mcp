@@ -22,7 +22,6 @@ export function formatError(err: unknown): string {
   return `Request failed: ${err instanceof Error ? err.message : String(err)}`;
 }
 
-/** Map common HTTP statuses to user-friendly errors. Returns null if status is a 2xx success. */
 function mapStatusToError(status: number): string | null {
   if (status === 400) return "Invalid address format";
   if (status === 404) return null; // caller decides: usually textResult({ verdict: 'UNKNOWN' })
@@ -32,7 +31,6 @@ function mapStatusToError(status: number): string | null {
   return null;
 }
 
-/** Shared handler for x402-gated endpoints. 402 → payment-required structure; otherwise status mapping. */
 export async function paidHandler(path: string, price: string): Promise<ToolResult> {
   const { status, data } = await apiGet(path);
 
@@ -54,7 +52,6 @@ export async function paidHandler(path: string, price: string): Promise<ToolResu
   return textResult(data);
 }
 
-/** Free endpoint handler: map errors, return data on success. */
 export async function freeHandler(path: string): Promise<ToolResult> {
   const { status, data } = await apiGet(path);
   const mapped = mapStatusToError(status);
