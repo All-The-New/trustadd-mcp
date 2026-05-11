@@ -1,16 +1,15 @@
+// packages/trustadd-mcp/tests/lib/api.test.ts
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { apiGet, formatError, paidHandler } from "../../src/lib/api.js";
+import { apiGet, apiHandler, formatError } from "../../src/lib/api.js";
 
 describe("apiGet", () => {
-  const originalFetch = globalThis.fetch;
-
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
   });
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
     vi.unstubAllGlobals();
+    delete process.env.TRUSTADD_API_URL;
+    delete process.env.TRUSTADD_API_KEY;
   });
 
   it("returns status + parsed JSON on success", async () => {
@@ -42,7 +41,28 @@ describe("apiGet", () => {
       "https://staging.trustadd.com/foo",
       expect.objectContaining({ signal: expect.anything() })
     );
-    delete process.env.TRUSTADD_API_URL;
+  });
+
+  it("sends Authorization: Bearer when TRUSTADD_API_KEY is set", async () => {
+    const spy = globalThis.fetch as any;
+    spy.mockResolvedValueOnce({ status: 200, json: async () => ({}) });
+    process.env.TRUSTADD_API_KEY = "test_bearer_xyz";
+    await apiGet("/foo");
+    expect(spy).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer test_bearer_xyz" }),
+      })
+    );
+  });
+
+  it("omits Authorization header when TRUSTADD_API_KEY is unset", async () => {
+    const spy = globalThis.fetch as any;
+    spy.mockResolvedValueOnce({ status: 200, json: async () => ({}) });
+    await apiGet("/foo");
+    const call = spy.mock.calls[0];
+    const headers = (call[1]?.headers ?? {}) as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
   });
 });
 
@@ -62,38 +82,13 @@ describe("formatError", () => {
   });
 });
 
-describe("paidHandler", () => {
+describe("apiHandler", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
   });
-  afterEach(() => vi.unstubAllGlobals());
-
-  it("returns payment-required structure on 402", async () => {
-    (globalThis.fetch as any).mockResolvedValueOnce({
-      status: 402,
-      json: async () => ({ accepts: [{ maxAmountRequired: "10000" }] }),
-    });
-    const result = await paidHandler("/api/v1/trust/0xabc", "$0.01");
-    expect(result.content[0].text).toContain("paymentRequired");
-    expect(result.content[0].text).toContain("$0.01");
-  });
-
-  it("returns UNKNOWN verdict on 404", async () => {
-    (globalThis.fetch as any).mockResolvedValueOnce({
-      status: 404,
-      json: async () => null,
-    });
-    const result = await paidHandler("/x", "$0.01");
-    expect(result.content[0].text).toContain("UNKNOWN");
-  });
-
-  it("returns isError on 429", async () => {
-    (globalThis.fetch as any).mockResolvedValueOnce({
-      status: 429,
-      json: async () => null,
-    });
-    const result = await paidHandler("/x", "$0.01");
-    expect((result as any).isError).toBe(true);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.TRUSTADD_API_KEY;
   });
 
   it("returns parsed data on 200", async () => {
@@ -101,8 +96,33 @@ describe("paidHandler", () => {
       status: 200,
       json: async () => ({ score: 88, verdict: "TRUSTED" }),
     });
-    const result = await paidHandler("/x", "$0.01");
+    const result = await apiHandler("/x");
     expect(result.content[0].text).toContain("88");
     expect(result.content[0].text).toContain("TRUSTED");
+  });
+
+  it("returns UNKNOWN verdict on 404 when notFoundReturnsUnknown=true", async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({ status: 404, json: async () => null });
+    const result = await apiHandler("/x", { notFoundReturnsUnknown: true });
+    expect(result.content[0].text).toContain("UNKNOWN");
+  });
+
+  it("returns isError on 404 when notFoundReturnsUnknown=false (default)", async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({ status: 404, json: async () => null });
+    const result = await apiHandler("/x");
+    expect((result as any).isError).toBe(true);
+  });
+
+  it("returns isError with registration hint on 429 (anonymous)", async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({ status: 429, json: async () => null });
+    const result = await apiHandler("/x");
+    expect((result as any).isError).toBe(true);
+    expect(result.content[0].text).toMatch(/rate limit|register/i);
+  });
+
+  it("returns isError on 5xx", async () => {
+    (globalThis.fetch as any).mockResolvedValueOnce({ status: 503, json: async () => null });
+    const result = await apiHandler("/x");
+    expect((result as any).isError).toBe(true);
   });
 });

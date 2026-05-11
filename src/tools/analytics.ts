@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { freeHandler } from "../lib/api.js";
+import { apiHandler } from "../lib/api.js";
 import { apiPath } from "../lib/versioning.js";
 
 export function registerAnalyticsTools(server: McpServer): void {
@@ -12,7 +12,7 @@ export function registerAnalyticsTools(server: McpServer): void {
         "Free endpoint. Good starting point for ecosystem-level research.",
       inputSchema: {},
     },
-    async () => freeHandler(apiPath("analytics", "/overview"))
+    async () => apiHandler(apiPath("analytics", "/overview"))
   );
 
   server.registerTool(
@@ -23,7 +23,7 @@ export function registerAnalyticsTools(server: McpServer): void {
         "and recent activity. Useful for understanding chain adoption. Free endpoint.",
       inputSchema: {},
     },
-    async () => freeHandler(apiPath("analytics", "/chain-distribution"))
+    async () => apiHandler(apiPath("analytics", "/chain-distribution"))
   );
 
   server.registerTool(
@@ -35,6 +35,6 @@ export function registerAnalyticsTools(server: McpServer): void {
         "other tools. Free endpoint.",
       inputSchema: {},
     },
-    async () => freeHandler(apiPath("status", "/chains"))
+    async () => apiHandler(apiPath("status", "/chains"))
   );
 }

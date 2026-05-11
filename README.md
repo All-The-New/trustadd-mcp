@@ -14,7 +14,8 @@ Add to your project's `.mcp.json`:
     "trustadd": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@trustadd/mcp"]
+      "args": ["-y", "@trustadd/mcp"],
+      "env": { "TRUSTADD_API_KEY": "your_bearer_token_here" }
     }
   }
 }
@@ -26,7 +27,8 @@ Add to your project's `.mcp.json`:
 {
   "trustadd": {
     "command": "npx",
-    "args": ["-y", "@trustadd/mcp"]
+    "args": ["-y", "@trustadd/mcp"],
+    "env": { "TRUSTADD_API_KEY": "your_bearer_token_here" }
   }
 }
 ```
@@ -35,34 +37,34 @@ Add to your project's `.mcp.json`:
 
 ### Trust (agent due-diligence)
 
-| Tool | Cost | Purpose |
-|------|------|---------|
-| `lookup_agent` | Free | Check if TrustAdd has data + verdict preview |
-| `check_agent_trust` | $0.01 USDC | Score (0-100), verdict, 5-category breakdown |
-| `get_trust_report` | $0.05 USDC | Full profile: identity, on-chain, economic, community |
+| Tool | Purpose |
+|------|---------|
+| `lookup_agent` | Check if TrustAdd has data + verdict preview |
+| `check_agent_trust` | Score (0-100), verdict, 5-category breakdown |
+| `get_trust_report` | Full profile: identity, on-chain, economic, community |
 
 ### MPP (Multi-Protocol Payment ecosystem)
 
-| Tool | Cost | Purpose |
-|------|------|---------|
-| `mpp_directory_stats` | Free | Directory aggregate stats |
-| `mpp_adoption_stats` | Free | Cross-protocol adoption counts (MPP vs x402) |
-| `mpp_chain_stats` | Free | Tempo chain volume/tx/payer metrics |
-| `mpp_search_services` | Free | Paginated directory search (category, method, text) |
+| Tool | Purpose |
+|------|---------|
+| `mpp_directory_stats` | Directory aggregate stats |
+| `mpp_adoption_stats` | Cross-protocol adoption counts (MPP vs x402) |
+| `mpp_chain_stats` | Tempo chain volume/tx/payer metrics |
+| `mpp_search_services` | Paginated directory search (category, method, text) |
 
 ### Analytics (ecosystem research)
 
-| Tool | Cost | Purpose |
-|------|------|---------|
-| `ecosystem_overview` | Free | Aggregate ecosystem metrics |
-| `chain_distribution` | Free | Agent counts per chain |
-| `list_supported_chains` | Free | Chain metadata registry |
+| Tool | Purpose |
+|------|---------|
+| `ecosystem_overview` | Aggregate ecosystem metrics |
+| `chain_distribution` | Agent counts per chain |
+| `list_supported_chains` | Chain metadata registry |
 
 ### Status
 
-| Tool | Cost | Purpose |
-|------|------|---------|
-| `trustadd_status` | Free | Service health, pipeline breakers, API versions |
+| Tool | Purpose |
+|------|---------|
+| `trustadd_status` | Service health, pipeline breakers, API versions |
 
 ## Prompts
 
@@ -70,21 +72,40 @@ Add to your project's `.mcp.json`:
 
 Guides an agent framework through a trust-gated transaction decision flow (lookup → check → decision). Args: `counterparty: 0x-address`, `context?: string`.
 
-## x402 Payment
+## Rate Limits & API Key
 
-The paid tools (`check_agent_trust`, `get_trust_report`) are gated by the x402 protocol. When called without payment, they return the payment requirements (price, network, token) so you or your agent framework can complete payment via the REST API directly.
+All tools are free. Anonymous callers get a generous best-effort quota; setting a free API key (`TRUSTADD_API_KEY`) raises the daily ceiling 10–50×.
 
-**Payment details:**
-- Network: Base (Chain ID 8453)
-- Token: USDC
-- Protocol: x402 (gasless for the payer)
+**Get a key:**
 
-For automated payment, use an x402-compatible HTTP client against the TrustAdd REST API at `https://trustadd.com/api/v1/trust/`.
+1. Visit https://trustadd.com/register
+2. Enter your email
+3. Open the registration email — it contains your bearer key + a verification link
+4. Click the verification link to activate the key (the page confirms activation; the key itself is only delivered by email)
+
+**Use the key:**
+
+```json
+{
+  "mcpServers": {
+    "trustadd": {
+      "command": "npx",
+      "args": ["-y", "@trustadd/mcp"],
+      "env": { "TRUSTADD_API_KEY": "your_bearer_token_here" }
+    }
+  }
+}
+```
+
+When the key is set, every API call is sent with `Authorization: Bearer <key>` and the server applies the registered-tier limits. If you hit a rate limit, the tool returns an actionable error including the registration link.
+
+See [docs/api-rate-limits.md](https://github.com/All-The-New/trustadd/blob/main/docs/api-rate-limits.md) for the full bucket table.
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `TRUSTADD_API_KEY` | (none) | Optional bearer token for the registered rate-limit tier. Register at https://trustadd.com/register. |
 | `TRUSTADD_API_URL` | `https://trustadd.com` | Override API base URL (for testing) |
 | `TRUSTADD_API_VERSION_OVERRIDE` | (none) | Override versioned-group API version (e.g. `v2`). Only affects groups registered as versioned in `lib/versioning.ts`. |
 
@@ -114,5 +135,5 @@ npm run build
 
 - [TrustAdd](https://trustadd.com)
 - [API Docs](https://trustadd.com/docs/trust-api)
-- [Product Spec](https://github.com/All-The-New/trustadd/blob/main/docs/trust-product.md)
+- [Rate Limits](https://github.com/All-The-New/trustadd/blob/main/docs/api-rate-limits.md)
 - [Changelog](./CHANGELOG.md)

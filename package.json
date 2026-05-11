@@ -1,6 +1,6 @@
 {
   "name": "@trustadd/mcp",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "type": "module",
   "description": "MCP server for TrustAdd — AI agent trust oracle. Trust scoring, MPP ecosystem analytics, cross-chain agent discovery.",
   "bin": {
@@ -35,7 +35,6 @@
     "trust",
     "agent",
     "erc8004",
-    "x402",
     "mpp",
     "tempo",
     "claude",

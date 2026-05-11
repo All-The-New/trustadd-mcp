@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { freeHandler } from "../lib/api.js";
+import { apiHandler } from "../lib/api.js";
 import { apiPath } from "../lib/versioning.js";
 
 export function registerMppTools(server: McpServer): void {
@@ -13,7 +13,7 @@ export function registerMppTools(server: McpServer): void {
         "Free endpoint. Use to understand the MPP ecosystem size and composition.",
       inputSchema: {},
     },
-    async () => freeHandler(apiPath("mpp", "/directory/stats"))
+    async () => apiHandler(apiPath("mpp", "/directory/stats"))
   );
 
   server.registerTool(
@@ -24,7 +24,7 @@ export function registerMppTools(server: McpServer): void {
         "how many support x402, and how many support both. Free endpoint.",
       inputSchema: {},
     },
-    async () => freeHandler(apiPath("mpp", "/adoption"))
+    async () => apiHandler(apiPath("mpp", "/adoption"))
   );
 
   server.registerTool(
@@ -35,7 +35,7 @@ export function registerMppTools(server: McpServer): void {
         "transaction count, unique payers, active recipients. Free endpoint.",
       inputSchema: {},
     },
-    async () => freeHandler(apiPath("mpp", "/chain/stats"))
+    async () => apiHandler(apiPath("mpp", "/chain/stats"))
   );
 
   server.registerTool(
@@ -60,7 +60,7 @@ export function registerMppTools(server: McpServer): void {
       if (page !== undefined) params.set("page", String(page));
       if (limit !== undefined) params.set("limit", String(limit));
       const qs = params.toString();
-      return freeHandler(apiPath("mpp", `/directory/services${qs ? `?${qs}` : ""}`));
+      return apiHandler(apiPath("mpp", `/directory/services${qs ? `?${qs}` : ""}`));
     }
   );
 }

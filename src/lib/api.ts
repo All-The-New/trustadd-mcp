@@ -1,4 +1,6 @@
+// packages/trustadd-mcp/src/lib/api.ts
 import { textResult, errorResult, type ToolResult } from "./responses.js";
+import { readApiKey } from "./auth.js";
 
 const DEFAULT_API_BASE = "https://trustadd.com";
 const TIMEOUT_MS = 15_000;
@@ -7,9 +9,17 @@ function apiBase(): string {
   return process.env.TRUSTADD_API_URL || DEFAULT_API_BASE;
 }
 
+function buildHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const key = readApiKey();
+  if (key) headers.Authorization = `Bearer ${key}`;
+  return headers;
+}
+
 export async function apiGet(path: string): Promise<{ status: number; data: unknown }> {
   const res = await fetch(`${apiBase()}${path}`, {
     signal: AbortSignal.timeout(TIMEOUT_MS),
+    headers: buildHeaders(),
   });
   const data = await res.json().catch(() => null);
   return { status: res.status, data };
@@ -22,39 +32,31 @@ export function formatError(err: unknown): string {
   return `Request failed: ${err instanceof Error ? err.message : String(err)}`;
 }
 
-function mapStatusToError(status: number): string | null {
+function mapStatusToError(status: number, hasKey: boolean): string | null {
   if (status === 400) return "Invalid address format";
-  if (status === 404) return null; // caller decides: usually textResult({ verdict: 'UNKNOWN' })
-  if (status === 429) return "Rate limit exceeded — retry after a short delay";
-  if (status === 503) return "Trust Data Product is temporarily unavailable";
+  if (status === 404) return null; // caller decides
+  if (status === 429) {
+    return hasKey
+      ? "Rate limit exceeded for your API key — retry after the window resets (see X-RateLimit-Reset header)"
+      : "Anonymous rate limit exceeded — register a free API key at https://trustadd.com/register for higher limits";
+  }
+  if (status === 503) return "TrustAdd API is temporarily unavailable";
   if (status >= 500) return `TrustAdd API error (HTTP ${status})`;
   return null;
 }
 
-export async function paidHandler(path: string, price: string): Promise<ToolResult> {
-  const { status, data } = await apiGet(path);
-
-  if (status === 402) {
-    return textResult({
-      paymentRequired: true,
-      price,
-      message:
-        `This endpoint requires x402 payment (${price} USDC on Base). ` +
-        "The TrustAdd MCP server does not handle x402 payments directly — " +
-        "use the REST API with an x402-compatible HTTP client, or visit trustadd.com.",
-      details: data,
-    });
-  }
-  if (status === 404) return textResult({ verdict: "UNKNOWN", message: "No agent found for this address" });
-
-  const mapped = mapStatusToError(status);
-  if (mapped) return errorResult(mapped);
-  return textResult(data);
+export interface HandlerOptions {
+  /** If true, a 404 returns a textResult({ verdict: 'UNKNOWN' }) instead of an error. Default: false. */
+  notFoundReturnsUnknown?: boolean;
 }
 
-export async function freeHandler(path: string): Promise<ToolResult> {
+export async function apiHandler(path: string, opts: HandlerOptions = {}): Promise<ToolResult> {
   const { status, data } = await apiGet(path);
-  const mapped = mapStatusToError(status);
+  if (status === 404 && opts.notFoundReturnsUnknown) {
+    return textResult({ verdict: "UNKNOWN", message: "No agent found for this address" });
+  }
+  const hasKey = readApiKey() !== undefined;
+  const mapped = mapStatusToError(status, hasKey);
   if (mapped) return errorResult(mapped);
   if (status === 404) return errorResult("Not found");
   return textResult(data);
